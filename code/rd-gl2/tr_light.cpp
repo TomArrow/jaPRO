@@ -384,14 +384,13 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 		ent->ambientLight[1] += tr.identityLight * 96;
 		ent->ambientLight[2] += tr.identityLight * 96;
 	}
-	//DT EDIT: DF2 - START - Set minimum lighting to 16 for more darkness on all entities for no lights/dark areas in a map
+	//DF2Mod - Remove minimum lighting on all entities
 	/*else {
 		// give everything a minimum light add
 		ent->ambientLight[0] += tr.identityLight * 16;
 		ent->ambientLight[1] += tr.identityLight * 16;
 		ent->ambientLight[2] += tr.identityLight * 16;
 	}*/
-	//DT EDIT: DF2 - END
 
 	//
 	// modify the light by dynamic lights
@@ -405,14 +404,12 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 		
 		if (r_pbr->integer) {
 			d = VectorNormalize(dir);
-			float sqrd = d * d;
-			float sqrr = dl->radius * dl->radius;
-			float factor = sqrd / sqrr;
-			factor = Com_Clamp(0.0f, 1.0f, (1.0f - (factor*factor)));
+			float factor = pow(d / dl->radius, 4.0f);
+			factor = Com_Clamp(0.0f, 1.0f, (1.0f - factor));
 			factor *= factor;
 
-			d = factor / d;
-			d *= DLIGHT_AT_RADIUS * dl->radius;
+			d = factor / (d * d + 1.0f);
+			d *= dl->radius * DLIGHT_AT_RADIUS * DLIGHT_AT_RADIUS;
 		}
 		else 
 		{
@@ -456,6 +453,31 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	ent->modelLightDir[0] = DotProduct( lightDir, ent->e.axis[0] );
 	ent->modelLightDir[1] = DotProduct( lightDir, ent->e.axis[1] );
 	ent->modelLightDir[2] = DotProduct( lightDir, ent->e.axis[2] );
+}
+
+//pass in origin
+qboolean RE_GetLighting(const vec3_t origin, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir) {
+	trRefEntity_t tr_ent;
+
+	if (!tr.world || !tr.world->lightGridData) {
+		ambientLight[0] = ambientLight[1] = ambientLight[2] = 255.0;
+		directedLight[0] = directedLight[1] = directedLight[2] = 255.0;
+		VectorCopy(tr.sunDirection, lightDir);
+		return qfalse;
+	}
+	memset(&tr_ent, 0, sizeof(tr_ent));
+
+	if (ambientLight[0] == 666)
+	{//HAX0R
+		tr_ent.e.hModel = -1;
+	}
+
+	VectorCopy(origin, tr_ent.e.origin);
+	R_SetupEntityLightingGrid(&tr_ent, tr.world);
+	VectorCopy(tr_ent.ambientLight, ambientLight);
+	VectorCopy(tr_ent.directedLight, directedLight);
+	VectorCopy(tr_ent.lightDir, lightDir);
+	return qtrue;
 }
 
 /*
@@ -515,6 +537,34 @@ int R_CubemapForPoint( vec3_t point )
 			float length;
 
 			VectorSubtract(point, tr.cubemaps[i].origin, diff);
+			length = DotProduct(diff, diff);
+
+			if (shortest > length)
+			{
+				shortest = length;
+				cubemapIndex = i;
+			}
+		}
+	}
+
+	return cubemapIndex + 1;
+}
+
+int R_SHForPoint(vec3_t point)
+{
+	int cubemapIndex = -1;
+
+	if (r_cubeMapping->integer && tr.numSphericalHarmonics)
+	{
+		int i;
+		float shortest = (float)WORLD_SIZE * (float)WORLD_SIZE;
+
+		for (i = 0; i < tr.numSphericalHarmonics; i++)
+		{
+			vec3_t diff;
+			float length;
+
+			VectorSubtract(point, tr.sphericalHarmonicsCoefficients[i].origin, diff);
 			length = DotProduct(diff, diff);
 
 			if (shortest > length)

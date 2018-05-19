@@ -229,6 +229,12 @@ void RB_InstantQuad2(vec4_t quadVerts[4], vec2_t texCoords[4])
 	tess.useInternalVBO = qfalse;
 }
 
+void RB_InstantScreenQuad()
+{
+	RB_CheckVBOandIBO(tr.screenQuad.vbo, tr.screenQuad.ibo);
+	GLSL_VertexAttribsState(ATTR_POSITION, NULL);
+	qglDrawElementsInstanced(GL_TRIANGLES, tr.screenQuad.numIndexes, GL_UNSIGNED_INT, 0, 1);
+}
 
 void RB_InstantQuad(vec4_t quadVerts[4])
 {
@@ -714,7 +720,7 @@ static void DoSprite( vec3_t origin, float radius, float rotation )
 	{
 		VectorSubtract( vec3_origin, left, left );
 	}
-
+	
 	VectorScale4(backEnd.currentEntity->e.shaderRGBA, 1.0f / 255.0f, color);
 
 	RB_AddQuadStamp( origin, left, up, color );
@@ -2072,6 +2078,12 @@ void RB_SurfaceVBOMDVMesh(srfVBOMDVMesh_t * surface)
 
 	GLimp_LogComment("--- RB_SurfaceVBOMDVMesh ---\n");
 
+	if (ShaderRequiresCPUDeforms(tess.shader))
+	{
+		RB_SurfaceMesh(surface->mdvSurface);
+		return;
+	}
+
 	if(!surface->vbo || !surface->ibo)
 		return;
 
@@ -2082,6 +2094,26 @@ void RB_SurfaceVBOMDVMesh(srfVBOMDVMesh_t * surface)
 
 	if (refEnt->renderfx & RF_DISTORTION) {
 		rb_surfaceTable[SF_REFRACTIVE](surface);
+		return;
+	}
+
+	if (refEnt->oldframe || refEnt->frame)
+	{
+		if (refEnt->oldframe == refEnt->frame)
+		{
+			glState.vertexAttribsInterpolation = 0;
+		}
+		else
+		{
+			glState.vertexAttribsInterpolation = refEnt->backlerp;
+		}
+
+		glState.vertexAttribsOldFrame = refEnt->oldframe;
+		glState.vertexAttribsNewFrame = refEnt->frame;
+		glState.vertexAnimation = qtrue;
+
+		//FIXME: Use GPU deforming instead of CPU one
+		RB_SurfaceMesh(surface->mdvSurface);
 		return;
 	}
 
@@ -2101,22 +2133,6 @@ void RB_SurfaceVBOMDVMesh(srfVBOMDVMesh_t * surface)
 	//mdvModel = surface->mdvModel;
 	//mdvSurface = surface->mdvSurface;
 
-	if ( refEnt->oldframe || refEnt->frame )
-	{
-		if(refEnt->oldframe == refEnt->frame)
-		{
-			glState.vertexAttribsInterpolation = 0;
-		}
-		else
-		{
-			glState.vertexAttribsInterpolation = refEnt->backlerp;
-		}
-
-		glState.vertexAttribsOldFrame = refEnt->oldframe;
-		glState.vertexAttribsNewFrame = refEnt->frame;
-		glState.vertexAnimation = qtrue;
-	}
-
 	RB_EndSurface();
 
 	// So we don't lerp surfaces that shouldn't be lerped
@@ -2129,9 +2145,7 @@ static void RB_SurfaceSkip( void *surf ) {
 static void RB_SurfaceSprites( srfSprites_t *surf )
 {
 	if ( !r_surfaceSprites->integer )
-	{
 		return;
-	}
 
 	RB_EndSurface();
 
@@ -2161,30 +2175,55 @@ static void RB_SurfaceSprites( srfSprites_t *surf )
 	shaderProgram_t *program = programGroup + shaderFlags;
 	assert(program->uniformBlocks & (1 << UNIFORM_BLOCK_SURFACESPRITE));
 
-	SurfaceSpriteBlock data = {};
-	data.width = ss->width;
-	data.height = (ss->facing == SURFSPRITE_FACING_DOWN)
-					? -ss->height : ss->height;
-	data.fadeStartDistance = ss->fadeDist;
-	data.fadeEndDistance = ss->fadeMax;
-	data.fadeScale = ss->fadeScale;
-	data.widthVariance = ss->variance[0];
-	data.heightVariance = ss->variance[1];
-
-	GLSL_BindProgram(program);
-	GL_State(firstStage->stateBits);
-	GL_Cull(CT_TWO_SIDED);
-	GL_VertexAttribPointers(surf->numAttributes, surf->attributes);
-	R_BindAnimatedImageToTMU(&firstStage->bundle[0], TB_DIFFUSEMAP);
-	RB_UpdateUniformBlock(UNIFORM_BLOCK_SURFACESPRITE, &data);
-	GLSL_SetUniformMatrix4x4(program,
-			UNIFORM_MODELVIEWPROJECTIONMATRIX, glState.modelviewProjection);
-	GLSL_SetUniformVec3(program,
-			UNIFORM_VIEWORIGIN, backEnd.viewParms.ori.origin);
-
-	R_BindIBO(surf->ibo);
+	SurfaceSpriteBlock *surfaceSpriteBlock = ojkAlloc<SurfaceSpriteBlock>(*backEndData->perFrameMemory);
+	*surfaceSpriteBlock = {};
+	surfaceSpriteBlock->width = ss->width;
+	surfaceSpriteBlock->height =
+	(ss->facing == SURFSPRITE_FACING_DOWN) ? -ss->height : ss->height;
+	surfaceSpriteBlock->fadeStartDistance = ss->fadeDist;
+	surfaceSpriteBlock->fadeEndDistance = ss->fadeMax;
+	surfaceSpriteBlock->fadeScale = ss->fadeScale;
+	surfaceSpriteBlock->widthVariance = ss->variance[0];
+	surfaceSpriteBlock->heightVariance = ss->variance[1];
+	
+	UniformDataWriter uniformDataWriter;
+	uniformDataWriter.Start(program);
+	uniformDataWriter.SetUniformMatrix4x4(UNIFORM_MODELVIEWPROJECTIONMATRIX, glState.modelviewProjection);
+	uniformDataWriter.SetUniformVec3(UNIFORM_VIEWORIGIN, backEnd.viewParms.ori.origin);
+	
+	SamplerBindingsWriter samplerBindingsWriter;
+	samplerBindingsWriter.AddAnimatedImage(&firstStage->bundle[0], TB_COLORMAP);
+	samplerBindingsWriter.AddStaticImage(tr.screenShadowImage, TB_SHADOWMAP);
+	
+	DrawItem item = {};
+	item.stateBits = firstStage->stateBits;
+	item.cullType = CT_TWO_SIDED;
+	item.program = program;
+	item.depthRange = DepthRange{ 0.0f, 1.0f };
+	item.ibo = surf->ibo;
 	tess.externalIBO = surf->ibo;
-	qglDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0, surf->numSprites);
+
+	item.numAttributes = surf->numAttributes;
+	item.attributes = ojkAllocArray<vertexAttribute_t>(*backEndData->perFrameMemory, surf->numAttributes);
+	memcpy(item.attributes, surf->attributes, sizeof(*item.attributes)*surf->numAttributes);
+	
+	item.numUniformBlockBindings = 1;
+	item.uniformBlockBindings = ojkAllocArray<UniformBlockBinding>(*backEndData->perFrameMemory, item.numUniformBlockBindings);
+	item.uniformBlockBindings[0].data = surfaceSpriteBlock;
+	item.uniformBlockBindings[0].block = UNIFORM_BLOCK_SURFACESPRITE;
+	
+	item.uniformData = uniformDataWriter.Finish(*backEndData->perFrameMemory);
+	item.samplerBindings = samplerBindingsWriter.Finish(*backEndData->perFrameMemory, (int *)&item.numSamplerBindings);
+	
+	item.draw.type = DRAW_COMMAND_INDEXED;
+	item.draw.primitiveType = GL_TRIANGLES;
+	item.draw.numInstances = surf->numSprites;
+	item.draw.params.indexed.indexType = GL_UNSIGNED_SHORT;
+	item.draw.params.indexed.firstIndex = 0;
+	item.draw.params.indexed.numIndices = 6;
+	
+	uint32_t key = RB_CreateSortKey(item, 0, surf->shader->sort);
+	RB_AddDrawItem(backEndData->currentPass, key, item);
 }
 
 void RB_Refractive(srfVBOMDVMesh_t * surface)
@@ -2212,9 +2251,7 @@ void RB_Refractive(srfVBOMDVMesh_t * surface)
 	newRefractiveItem.depthRange.maxDepth = 1.0f;
 	newRefractiveItem.numSamplerBindings = 1;
 	newRefractiveItem.ibo = surface->ibo;
-
-	newRefractiveItem.isLightmapped = (qboolean)(shader->lightmapIndex > 0);
-
+	
 	VertexArraysProperties vertexArrays;
 	vertexAttribute_t attribs[ATTR_INDEX_MAX] = {};
 	

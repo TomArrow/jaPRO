@@ -383,14 +383,13 @@ void GL_VertexAttribPointers(
 				BUFFER_OFFSET(attrib.offset));
 		}
 
-		if (attrib.index != glState.attrIndex || attrib.stepRate != glState.attrStepRate)
+		if (attrib.stepRate != glState.attrStepRate)
 		{
 			glState.attrIndex = attrib.index;
 			glState.attrStepRate = attrib.stepRate;
 			qglVertexAttribDivisor(attrib.index, attrib.stepRate);
-
 		}
-		
+
 		glState.currentVaoAttribs[attrib.index] = attrib;
 	}
 
@@ -416,6 +415,7 @@ void GL_VertexAttribPointers(
 void GL_DrawIndexed(
 		GLenum primitiveType,
 		int numIndices,
+		GLenum indexType,
 		int offset,
 		int numInstances,
 		int baseVertex)
@@ -424,7 +424,7 @@ void GL_DrawIndexed(
 	qglDrawElementsInstancedBaseVertex(
 			primitiveType,
 			numIndices,
-			GL_INDEX_TYPE,
+			indexType,
 			BUFFER_OFFSET(offset),
 			numInstances,
 			baseVertex);
@@ -534,11 +534,16 @@ void RB_BeginDrawingView (void) {
 		// FIXME: hack for cubemap testing
 		if (tr.renderCubeFbo != NULL && backEnd.viewParms.targetFbo == tr.renderCubeFbo)
 		{
-			cubemap_t *cubemap = &tr.cubemaps[backEnd.viewParms.targetFboCubemapIndex];
-			qglFramebufferTexture2D(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_CUBE_MAP_POSITIVE_X + backEnd.viewParms.targetFboLayer, cubemap->image->texnum, 0);
+			cubemap_t *cubemap = &backEnd.viewParms.cubemapSelection[backEnd.viewParms.targetFboCubemapIndex];
+			qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + backEnd.viewParms.targetFboLayer, cubemap->image->texnum, 0);
+		}
+		else if (tr.shadowCubeFbo != NULL && backEnd.viewParms.targetFbo == tr.shadowCubeFbo)
+		{
+			cubemap_t *cubemap = &backEnd.viewParms.cubemapSelection[backEnd.viewParms.targetFboCubemapIndex];
+			qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_CUBE_MAP_POSITIVE_X + backEnd.viewParms.targetFboLayer, cubemap->image->texnum, 0);
 		}
 	}
-
+	
 	//
 	// set the modelview matrix for the viewer
 	//
@@ -614,10 +619,18 @@ void RB_BeginDrawingView (void) {
 	if (tr.renderCubeFbo != NULL && backEnd.viewParms.targetFbo == tr.renderCubeFbo)
 	{
 		clearBits |= GL_COLOR_BUFFER_BIT;
-		qglClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+		if (tr.world && tr.world->globalFog)
+		{
+			const fog_t		*fog = tr.world->globalFog;
+			qglClearColor(fog->parms.color[0], fog->parms.color[1], fog->parms.color[2], 1.0f);
+		}
+		else
+		{
+			qglClearColor(0.3f, 0.3f, 0.3f, 1.0);
+		}
 	}
 
-	qglClear( clearBits );
+	qglClear(clearBits);
 
 	if (backEnd.viewParms.targetFbo == NULL)
 	{
@@ -981,9 +994,21 @@ static void RB_BindTextures( size_t numBindings, const SamplerBinding *bindings 
 	}
 }
 
+static void RB_BindAndUpdateUniformBlocks( size_t numBindings, const UniformBlockBinding *bindings )
+{
+	for (size_t i = 0; i < numBindings; ++i)
+	{
+		const UniformBlockBinding& binding = bindings[i];
+		if (binding.data)
+			RB_BindAndUpdateUniformBlock(binding.block, binding.data);
+		else
+			RB_BindUniformBlock(binding.block);
+	}
+}
+
 static void RB_DrawItems( int numDrawItems, const DrawItem *drawItems, uint32_t *drawOrder )
 {
-	for (int i = 0; i < numDrawItems; ++i)
+	for ( int i = 0; i < numDrawItems; ++i )
 	{
 		const DrawItem& drawItem = drawItems[drawOrder[i]];
 
@@ -993,19 +1018,11 @@ static void RB_DrawItems( int numDrawItems, const DrawItem *drawItems, uint32_t 
 		if (drawItem.ibo != nullptr)
 			R_BindIBO(drawItem.ibo);
 
-		if (backEnd.deferredPass) {
-			if (!drawItem.isLightmapped)
-				qglStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-			else
-				qglStencilOp(GL_KEEP, GL_KEEP, GL_ZERO);
-		}
-
 		GLSL_BindProgram(drawItem.program);
 
-		// FIXME: There was a reason I didn't have const on attributes. Can't remember at the moment
-		// what the reason was though.
 		GL_VertexAttribPointers(drawItem.numAttributes, drawItem.attributes);
 		RB_BindTextures(drawItem.numSamplerBindings, drawItem.samplerBindings);
+		RB_BindAndUpdateUniformBlocks(drawItem.numUniformBlockBindings, drawItem.uniformBlockBindings);
 
 		GLSL_SetUniforms(drawItem.program, drawItem.uniformData);
 
@@ -1024,6 +1041,7 @@ static void RB_DrawItems( int numDrawItems, const DrawItem *drawItems, uint32_t 
 			{
 				GL_DrawIndexed(drawItem.draw.primitiveType,
 					drawItem.draw.params.indexed.numIndices,
+					drawItem.draw.params.indexed.indexType,
 					drawItem.draw.params.indexed.firstIndex,
 					drawItem.draw.numInstances, 0);
 				break;
@@ -1152,126 +1170,7 @@ static void RB_PrepareForEntity(int entityNum, int *oldDepthRange, float origina
 	}
 }
 
-static void RB_LightSolidSurfaces(dlight_t *dlights, int numDlights)
-{
-	const float zmax = backEnd.viewParms.zFar;
-	const float zmin = r_znear->value;
-	vec4_t viewInfo = { zmax / zmin, zmax, 0.0f, 0.0f };
-	FBO_t *fbo = glState.currentFBO;
-	FBO_Bind(tr.deferredLightFbo);
-	//
-	// Light grid lighting
-	//
-
-	const float ymax = zmax * tanf(backEnd.viewParms.fovY * M_PI / 360.0f);
-	const float xmax = zmax * tanf(backEnd.viewParms.fovX * M_PI / 360.0f);
-
-	vec3_t viewBasis[3];
-	VectorScale(backEnd.refdef.viewaxis[0], zmax, viewBasis[0]);
-	VectorScale(backEnd.refdef.viewaxis[1], xmax, viewBasis[1]);
-	VectorScale(backEnd.refdef.viewaxis[2], ymax, viewBasis[2]);
-
-	//if (backEnd.refdef.num_entities)
-	//{
-	//	vec2_t lightScales;
-
-	//	GL_State(GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE);
-	//	// Only affect non-world entities
-	//	qglEnable(GL_STENCIL_TEST);
-	//	qglStencilFunc(GL_EQUAL, 1, 0xff);
-	//	qglStencilMask(0);
-
-	//	GLSL_BindProgram(&tr.lightall_deferredShader[DEFERREDDEF_USE_LIGHT_GRID]);
-
-	//	GLSL_SetUniformVec3(&tr.lightall_deferredShader[DEFERREDDEF_USE_LIGHT_GRID], UNIFORM_VIEWFORWARD, viewBasis[0]);
-	//	GLSL_SetUniformVec3(&tr.lightall_deferredShader[DEFERREDDEF_USE_LIGHT_GRID], UNIFORM_VIEWLEFT, viewBasis[1]);
-	//	GLSL_SetUniformVec3(&tr.lightall_deferredShader[DEFERREDDEF_USE_LIGHT_GRID], UNIFORM_VIEWUP, viewBasis[2]);
-
-	//	lightScales[0] = r_ambientScale->value;
-	//	lightScales[1] = r_directedScale->value;
-
-	//	GLSL_SetUniformVec3(&tr.lightall_deferredShader[DEFERREDDEF_USE_LIGHT_GRID], UNIFORM_LIGHTGRIDORIGIN, tr.world->lightGridOrigin);
-	//	GLSL_SetUniformVec3(&tr.lightall_deferredShader[DEFERREDDEF_USE_LIGHT_GRID], UNIFORM_LIGHTGRIDCELLINVERSESIZE, tr.world->lightGridInverseSize);
-	//	GLSL_SetUniformVec2(&tr.lightall_deferredShader[DEFERREDDEF_USE_LIGHT_GRID], UNIFORM_LIGHTGRIDLIGHTSCALE, lightScales);
-
-	//	GLSL_SetUniformVec3(&tr.lightall_deferredShader[DEFERREDDEF_USE_LIGHT_GRID], UNIFORM_VIEWORIGIN, backEnd.viewParms.ori.origin);
-	//	GLSL_SetUniformVec4(&tr.lightall_deferredShader[DEFERREDDEF_USE_LIGHT_GRID], UNIFORM_VIEWINFO, viewInfo);
-
-	//	GL_BindToTMU(tr.renderImage, 0);
-	//	GL_BindToTMU(tr.renderDepthImage, 1);
-	//	GL_BindToTMU(tr.gbufferNormals, 2);
-	//	GL_BindToTMU(tr.gbufferSpecularAndGloss, 3);
-	//	GL_BindToTMU(tr.world->directionImages, 4);
-	//	GL_BindToTMU(tr.world->directionalLightImages[0], 5);
-	//	GL_BindToTMU(tr.world->ambientLightImages[0], 6);
-
-	//	qglDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-
-	//	qglDisable(GL_STENCIL_TEST);
-	//}
-
-	//
-	// Point lighting
-	//
-	if (numDlights)
-	{
-		vec4_t dlightTransforms[MAX_DLIGHTS];
-		vec3_t dlightColors[MAX_DLIGHTS];
-		matrix_t viewProjectionMatrix;
-
-		GL_State(GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE);
-
-		for (int i = 0; i < numDlights; i++)
-		{
-			dlight_t *dlight = dlights + i;
-
-			dlightTransforms[i][0] = dlight->origin[0];
-			dlightTransforms[i][1] = dlight->origin[1];
-			dlightTransforms[i][2] = dlight->origin[2];
-			dlightTransforms[i][3] = dlight->radius;
-
-			dlightColors[i][0] = dlight->color[0];
-			dlightColors[i][1] = dlight->color[1];
-			dlightColors[i][2] = dlight->color[2];
-		}
-
-		Matrix16Multiply(
-			backEnd.viewParms.projectionMatrix,
-			backEnd.viewParms.world.modelViewMatrix,
-			viewProjectionMatrix);
-
-		tess.useInternalVBO = qfalse;
-		R_BindVBO(tr.screenQuad.vbo);
-		R_BindIBO(tr.screenQuad.ibo);
-		GLSL_VertexAttribsState(ATTR_POSITION, NULL);
-		GLSL_BindProgram(tr.screenQuad.program);
-
-		GLSL_SetUniformVec3(tr.screenQuad.program, UNIFORM_VIEWFORWARD, viewBasis[0]);
-		GLSL_SetUniformVec3(tr.screenQuad.program, UNIFORM_VIEWLEFT, viewBasis[1]);
-		GLSL_SetUniformVec3(tr.screenQuad.program, UNIFORM_VIEWUP, viewBasis[2]);
-
-		GLSL_SetUniformVec3(tr.screenQuad.program, UNIFORM_VIEWORIGIN, backEnd.viewParms.ori.origin);
-		GLSL_SetUniformVec4(tr.screenQuad.program, UNIFORM_VIEWINFO, viewInfo);
-		GLSL_SetUniformVec3N(tr.screenQuad.program, UNIFORM_DLIGHTCOLORS, dlightColors, numDlights);
-		GLSL_SetUniformVec4N(tr.screenQuad.program, UNIFORM_DLIGHTTRANSFORMS, dlightTransforms, numDlights);
-		GLSL_SetUniformMatrix4x4(tr.screenQuad.program, UNIFORM_MODELVIEWPROJECTIONMATRIX, viewProjectionMatrix);
-
-		GL_BindToTMU(tr.renderImage, 0);
-		GL_BindToTMU(tr.renderDepthImage, 1);
-		GL_BindToTMU(tr.gbufferNormals, 2);
-		GL_BindToTMU(tr.gbufferSpecularAndGloss, 3);
-
-		qglDrawElementsInstanced(GL_TRIANGLES, tr.screenQuad.numIndexes, GL_UNSIGNED_INT, 0, numDlights);
-	}
-
-	GL_Bind(tr.renderImage);
-	qglReadBuffer(GL_COLOR_ATTACHMENT0);
-	qglCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, glConfig.vidWidth, glConfig.vidHeight);
-
-	FBO_Bind(fbo);
-}
-
-static void RB_SubmitDrawSurfsSolidsOnly(
+static void RB_SubmitDrawSurfsForDepthFill(
 	drawSurf_t *drawSurfs,
 	int numDrawSurfs,
 	float originalTime)
@@ -1289,9 +1188,8 @@ static void RB_SubmitDrawSurfsSolidsOnly(
 		int postRender;
 		int entityNum;
 
-		R_DecomposeSort(drawSurf->sort, &shader, &cubemapIndex, &postRender);
+		R_DecomposeSort(drawSurf->sort, &entityNum, &shader, &cubemapIndex, &postRender);
 		assert(shader != nullptr);
-		entityNum = drawSurf->entityNum;
 
 		if (shader == oldShader &&	entityNum == oldEntityNum)
 		{
@@ -1308,78 +1206,6 @@ static void RB_SubmitDrawSurfsSolidsOnly(
 			(entityNum != oldEntityNum && !shader->entityMergable))
 		{
 			if (shader->sort != SS_OPAQUE)
-			{
-				// Don't draw yet, let's see what's to come
-				continue;
-			}
-
-			if (oldShader != nullptr)
-			{
-				RB_EndSurface();
-			}
-
-			RB_BeginSurface(shader, 0, 0);
-			backEnd.pc.c_surfBatches++;
-			oldShader = shader;
-		}
-
-		oldSort = drawSurf->sort;
-
-		// change the modelview matrix if needed
-		if (entityNum != oldEntityNum)
-		{
-			RB_PrepareForEntity(entityNum, &oldDepthRange, originalTime);
-			oldEntityNum = entityNum;
-		}
-
-		// add the triangles for this surface
-		rb_surfaceTable[*drawSurf->surface](drawSurf->surface);
-	}
-
-	// draw the contents of the last shader batch
-	if (oldShader != nullptr)
-	{
-		RB_EndSurface();
-	}
-}
-
-static void RB_SubmitDrawSurfsNonSolidsOnly(
-	drawSurf_t *drawSurfs,
-	int numDrawSurfs,
-	float originalTime)
-{
-	shader_t *oldShader = nullptr;
-	int oldEntityNum = -1;
-	int oldSort = -1;
-	int oldDepthRange = 0;
-
-	drawSurf_t *drawSurf = drawSurfs;
-	for (int i = 0; i < numDrawSurfs; i++, drawSurf++)
-	{
-		shader_t *shader;
-		int cubemapIndex;
-		int postRender;
-		int entityNum;
-
-		R_DecomposeSort(drawSurf->sort, &shader, &cubemapIndex, &postRender);
-		assert(shader != nullptr);
-		entityNum = drawSurf->entityNum;
-
-		if (shader == oldShader &&	entityNum == oldEntityNum)
-		{
-			// fast path, same as previous sort
-			rb_surfaceTable[*drawSurf->surface](drawSurf->surface);
-			continue;
-		}
-
-		// change the tess parameters if needed
-		// a "entityMergable" shader is a shader that can have surfaces from
-		// seperate entities merged into a single batch, like smoke and blood
-		// puff sprites
-		if (shader != oldShader ||
-			(entityNum != oldEntityNum && !shader->entityMergable))
-		{
-			if (shader->sort == SS_OPAQUE)
 			{
 				// Don't draw yet, let's see what's to come
 				continue;
@@ -1439,10 +1265,9 @@ static void RB_SubmitDrawSurfs(
 		int fogNum;
 		int dlighted;
 
-		R_DecomposeSort(drawSurf->sort, &shader, &cubemapIndex, &postRender);
+		R_DecomposeSort(drawSurf->sort, &entityNum, &shader, &cubemapIndex, &postRender);
 		assert(shader != nullptr);
 		fogNum = drawSurf->fogIndex;
-		entityNum = drawSurf->entityNum;
 		dlighted = drawSurf->dlightBits;
 
 		if (shader == oldShader &&
@@ -1513,8 +1338,7 @@ static void RB_SubmitDrawSurfs(
 
 static void RB_SubmitRenderPass(
 	Pass& renderPass,
-	Allocator& allocator,
-	int type)
+	Allocator& allocator)
 {
 	uint32_t *drawOrder = ojkAllocArray<uint32_t>(
 		allocator, renderPass.numDrawItems);
@@ -1537,7 +1361,7 @@ static void RB_SubmitRenderPass(
 RB_RenderDrawSurfList
 ==================
 */
-static void RB_RenderDrawSurfList(drawSurf_t *drawSurfs, int numDrawSurfs, int type)
+static void RB_RenderDrawSurfList(drawSurf_t *drawSurfs, int numDrawSurfs)
 {
 	/*
 	merging surfaces together that share the same shader (e.g. polys, patches)
@@ -1582,26 +1406,19 @@ static void RB_RenderDrawSurfList(drawSurf_t *drawSurfs, int numDrawSurfs, int t
 	backEnd.currentEntity = &tr.worldEntity;
 	backEnd.pc.c_surfaces += numDrawSurfs;
 
-	switch (type) {
-	case RT_DEFERRED_SOLID:
-	case RT_DEPTH:
-		RB_SubmitDrawSurfsSolidsOnly(drawSurfs, numDrawSurfs, originalTime);
-		break;
-	case RT_FORWARD:
+	if (backEnd.depthFill)
+	{
+		RB_SubmitDrawSurfsForDepthFill(drawSurfs, numDrawSurfs, originalTime);
+	}
+	else
+	{
 		RB_SubmitDrawSurfs(drawSurfs, numDrawSurfs, originalTime);
-		break;
-	case RT_FORWARD_TRANPARENT:
-		RB_SubmitDrawSurfsNonSolidsOnly(drawSurfs, numDrawSurfs, originalTime);
-		break;
-	default:
-		break;
 	}
 
 	// Do the drawing and release memory
 	RB_SubmitRenderPass(
 		*backEndData->currentPass,
-		*backEndData->perFrameMemory,
-		type);
+		*backEndData->perFrameMemory);
 
 	backEndData->perFrameMemory->ResetTo(allocMark);
 	backEndData->currentPass = nullptr;
@@ -2123,9 +1940,9 @@ static const void *RB_PrefilterEnvMap(const void *data) {
 
 	RB_SetGL2D();
 
-	cubemap_t *cubemap = &tr.cubemaps[cmd->cubemap];
+	cubemap_t *cubemap = &cmd->cubemaps[cmd->cubemap];
 
-	if (!cubemap)
+	if (!cubemap || !cmd)
 		return (const void *)(cmd + 1);
 
 	int cubeMipSize = cubemap->image->width;
@@ -2134,25 +1951,12 @@ static const void *RB_PrefilterEnvMap(const void *data) {
 	int width = cubemap->image->width;
 	int height = cubemap->image->height;
 
-	vec4_t quadVerts[4];
-	vec2_t texCoords[4];
-
-	VectorSet4(quadVerts[0], -1, 1, 0, 1);
-	VectorSet4(quadVerts[1], 1, 1, 0, 1);
-	VectorSet4(quadVerts[2], 1, -1, 0, 1);
-	VectorSet4(quadVerts[3], -1, -1, 0, 1);
-
-	texCoords[0][0] = 0; texCoords[0][1] = 0;
-	texCoords[1][0] = 1; texCoords[1][1] = 0;
-	texCoords[2][0] = 1; texCoords[2][1] = 1;
-	texCoords[3][0] = 0; texCoords[3][1] = 1;
-
 	while (cubeMipSize)
 	{
 		cubeMipSize >>= 1;
 		numMips++;
 	}
-	numMips = MAX(1, numMips - 4);
+	numMips = MAX(1, numMips - 2);
 
 	FBO_Bind(tr.preFilterEnvMapFbo);
 	GL_BindToTMU(cubemap->image, TB_CUBEMAP);
@@ -2165,14 +1969,12 @@ static const void *RB_PrefilterEnvMap(const void *data) {
 		height = height / 2.0;
 		qglViewport(0, 0, width, height);
 		qglScissor(0, 0, width, height);
-		for (int cubemapSide = 0; cubemapSide < 6; cubemapSide++) 
-		{
-			vec4_t viewInfo;
-			VectorSet4(viewInfo, cubemapSide, level, numMips, 0.0);
-			GLSL_SetUniformVec4(&tr.prefilterEnvMapShader, UNIFORM_VIEWINFO, viewInfo);
-			RB_InstantQuad2(quadVerts, texCoords);
-			qglCopyTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + cubemapSide, level, 0, 0, 0, 0, width, height);
-		}
+
+		vec4_t viewInfo;
+		VectorSet4(viewInfo, cmd->cubeSide, level, numMips - 2, 0.0f);
+		GLSL_SetUniformVec4(&tr.prefilterEnvMapShader, UNIFORM_VIEWINFO, viewInfo);
+		RB_InstantScreenQuad();
+		qglCopyTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + cmd->cubeSide, level, 0, 0, 0, 0, width, height);
 	}
 
 	GL_SelectTexture(0);
@@ -2332,7 +2134,7 @@ static void RB_RenderDepthOnly(drawSurf_t *drawSurfs, int numDrawSurfs)
 {
 	backEnd.depthFill = qtrue;
 	qglColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-	RB_RenderDrawSurfList(drawSurfs, numDrawSurfs, RT_DEPTH);
+	RB_RenderDrawSurfList(drawSurfs, numDrawSurfs);
 	qglColorMask(
 		!backEnd.colorMask[0],
 		!backEnd.colorMask[1],
@@ -2390,25 +2192,7 @@ static void RB_RenderMainPass(drawSurf_t *drawSurfs, int numDrawSurfs)
 		GL_BindToTMU(tr.world->directionalLightImages[0], TB_LGLIGHTCOLOR);
 	}
 
-	if (r_deferredShading->integer && backEnd.viewParms.targetFbo != tr.renderCubeFbo)
-	{
-		backEnd.deferredPass = qtrue;
-		qglStencilMask(0xff);
-		qglClear(GL_STENCIL_BUFFER_BIT);
-
-		qglEnable(GL_STENCIL_TEST);
-		qglStencilFunc(GL_ALWAYS, 1, 0xff);
-		qglStencilMask(0xff);
-		RB_RenderDrawSurfList(drawSurfs, numDrawSurfs, RT_DEFERRED_SOLID );
-		qglDisable(GL_STENCIL_TEST);
-		backEnd.deferredPass = qfalse;
-
-		RB_LightSolidSurfaces(backEnd.refdef.dlights, backEnd.refdef.num_dlights);
-		
-		RB_RenderDrawSurfList(drawSurfs, numDrawSurfs, RT_FORWARD_TRANPARENT);
-	}
-	else
-		RB_RenderDrawSurfList(drawSurfs, numDrawSurfs, RT_FORWARD);
+	RB_RenderDrawSurfList(drawSurfs, numDrawSurfs);
 
 	if (r_drawSun->integer)
 	{
@@ -2545,7 +2329,7 @@ static const void	*RB_DrawSurfs( const void *data ) {
 	// clear the z buffer, set the modelview, etc
 	RB_BeginDrawingView();
 
-	RB_TransformAllAnimations(cmd->drawSurfs, cmd->numDrawSurfs);
+	//RB_TransformAllAnimations(cmd->drawSurfs, cmd->numDrawSurfs);
 
 	RB_RenderAllDepthRelatedPasses(cmd->drawSurfs, cmd->numDrawSurfs);
 
@@ -2799,9 +2583,9 @@ static const void *RB_CaptureShadowMap(const void *data)
 		GL_SelectTexture(0);
 		if (cmd->cubeSide != -1)
 		{
-			if (tr.shadowCubemaps[cmd->map] != NULL)
+			if (tr.shadowCubemaps[cmd->map].image != NULL)
 			{
-				GL_Bind(tr.shadowCubemaps[cmd->map]);
+				GL_Bind(tr.shadowCubemaps[cmd->map].image);
 				qglCopyTexSubImage2D( GL_TEXTURE_CUBE_MAP_POSITIVE_X + cmd->cubeSide, 0, 0, 0, backEnd.refdef.x, glConfig.vidHeight - ( backEnd.refdef.y + PSHADOW_MAP_SIZE ), PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE );
 			}
 		}
@@ -2981,19 +2765,6 @@ const void *RB_PostProcess(const void *data)
 		FBO_BlitFromTexture(tr.pshadowMaps[3], NULL, NULL, NULL, dstBox, NULL, NULL, 0);
 	}
 
-	if (1 && r_deferredShading->integer)
-	{
-		ivec4_t dstBox;
-		VectorSet4(dstBox, 512 + 0, glConfig.vidHeight - 256, 256, 256);
-		FBO_BlitFromTexture(tr.gbufferLight, NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-		VectorSet4(dstBox, 512 + 256, glConfig.vidHeight - 256, 256, 256);
-		FBO_BlitFromTexture(tr.gbufferNormals, NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-		VectorSet4(dstBox, 512 + 512, glConfig.vidHeight - 256, 256, 256);
-		FBO_BlitFromTexture(tr.gbufferSpecularAndGloss, NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-		VectorSet4(dstBox, 512 + 768, glConfig.vidHeight - 256, 256, 256);
-		FBO_BlitFromTexture(tr.renderDepthImage, NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-	}
-
 	if (r_dynamicGlow->integer != 0)
 	{
 		// Composite the glow/bloom texture
@@ -3106,7 +2877,7 @@ const void *RB_ExportCubemaps(const void *data)
 			for (j = 0; j < 6; j++)
 			{
 				//FBO_AttachImage(tr.renderCubeFbo, cubemap->image, GL_COLOR_ATTACHMENT0_EXT, j);
-				qglFramebufferTexture2D(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_CUBE_MAP_POSITIVE_X + j, cubemap->image->texnum, 0);
+				qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + j, cubemap->image->texnum, 0);
 
 				qglReadPixels(0, 0, r_cubemapSize->integer, r_cubemapSize->integer, GL_RGBA, GL_UNSIGNED_BYTE, p);
 				p += sideSize;
@@ -3133,6 +2904,150 @@ const void *RB_ExportCubemaps(const void *data)
 	return (const void *)(cmd + 1);
 }
 
+/*
+=============
+RB_StartBuildingSphericalHarmonics
+
+=============
+*/
+const void *RB_StartBuildingSphericalHarmonics(const void *data)
+{
+	const startBuildingSphericalHarmonicsCommand_t *cmd = (startBuildingSphericalHarmonicsCommand_t *)data;
+
+	tr.numfinishedSphericalHarmonics = 0;
+	tr.buildingSphericalHarmonics = qtrue;
+
+	return (const void *)(cmd + 1);
+}
+
+/*
+=============
+RB_BuildSphericalHarmonics
+
+=============
+*/
+const void *RB_BuildSphericalHarmonics(const void *data)
+{
+	const buildSphericalHarmonicsCommand_t *cmd = (buildSphericalHarmonicsCommand_t *)data;
+
+	// finish any 2D drawing if needed
+	if (tess.numIndexes)
+		RB_EndSurface();
+
+	if (!tr.world || tr.numSphericalHarmonics == 0 || !r_cubeMapping->integer)
+	{
+		// do nothing
+		ri->Printf(PRINT_ALL, "No world or no cubemapping enabled!\n");
+		return (const void *)(cmd + 1);
+	}
+
+	if (cmd)
+	{
+		const int shSize = 32;
+		const int sideSize = shSize * shSize * 4;
+		const int batchSize = 32;
+
+		GLenum cubemapFormat = GL_RGBA8;
+
+		if (r_hdr->integer)
+		{
+			cubemapFormat = GL_RGBA16F;
+		}
+		image_t *bufferImage = R_FindImageFile("*sphericalHarmonic_buffer_image", IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP | IMGFLAG_CUBEMAP);
+		if (!bufferImage)
+			bufferImage = R_CreateImage("*sphericalHarmonic_buffer_image", NULL, shSize, shSize, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP | IMGFLAG_CUBEMAP, cubemapFormat);
+		cubemap_t *currentSH = (cubemap_t *)R_Malloc(sizeof(*tr.cubemaps), TAG_TEMP_WORKSPACE);
+		currentSH[0].image = bufferImage;
+		int buildedSphericalHarmonics = 0;
+
+		float *cubemapPixels = (float *)R_Malloc(sideSize * sizeof(float), TAG_TEMP_WORKSPACE);
+
+		for (int i = tr.numfinishedSphericalHarmonics; i < (tr.numfinishedSphericalHarmonics + batchSize); i++)
+		{
+			if (i == tr.numSphericalHarmonics)
+				break;
+
+			VectorCopy(tr.sphericalHarmonicsCoefficients[i].origin, currentSH[0].origin);
+			
+			for (int j = 0; j < 6; j++)
+			{
+				RE_ClearScene();
+				R_RenderCubemapSide(currentSH, 0, j, qfalse, qtrue);
+				R_IssuePendingRenderCommands();
+				R_InitNextFrame();
+			}
+
+			//Convolve the cubemaps & build SH Coefficients
+			//paper: http://www.graphics.stanford.edu/papers/envmap/envmap.pdf
+			cubemap_t *sh = currentSH;
+			sphericalHarmonic_t *shC = &tr.sphericalHarmonicsCoefficients[i];
+
+			int numSamples = 0;
+			for (int j = 0; j < 6; j++)
+			{
+				//read pixels into byte buffer
+				float *p = cubemapPixels;
+				qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + j, sh[0].image->texnum, 0);
+				qglReadPixels(0, 0, shSize, shSize, GL_RGBA, GL_FLOAT, p);
+
+				//build coefficients for current face
+				for (int u = 0; u < shSize; u++)
+				{
+					for (int v = 0; v < shSize; v++)
+					{
+						vec2_t uv;
+						vec3_t colorSample;
+						vec3_t normal;
+						float shBasis[9];
+
+						VectorSet2(uv, (float)u / (float)shSize, (float)v / (float)shSize);
+						VectorSet(colorSample,
+							pow((p[0]), 2.f),
+							pow((p[1]), 2.f),
+							pow((p[2]), 2.f)
+							);
+
+						//TODO: weight with solid angle!
+						GetTextureAngle(uv, j, normal);
+						GetSHBasis(normal, shBasis);
+
+						vec3_t sample;
+						for (int k = 0; k < 9; k++)
+						{
+							VectorScale(colorSample, shBasis[k], sample);
+							VectorAdd(shC->coefficents[k], sample, shC->coefficents[k]);
+						}
+						numSamples++;
+						p += 4;
+					}
+				}
+			}
+			// scale spherical harmonics coefficients by number of samples
+			for (int i = 0; i < 9; i++)
+			{
+				VectorScale(shC->coefficents[i], M_PI/(float)numSamples, shC->coefficents[i]);
+			}
+			buildedSphericalHarmonics++;
+		}
+		tr.numfinishedSphericalHarmonics += buildedSphericalHarmonics;
+		//TODO: Export them somehow. json file?
+		if (tr.numfinishedSphericalHarmonics == tr.numSphericalHarmonics)
+		{
+			ri->Printf(PRINT_ALL, "Finished building all spherical harmonics for this level.\n");
+			tr.buildingSphericalHarmonics = qfalse;
+		}
+		else
+			ri->Printf(PRINT_ALL, "Finished building %i of %i spherical harmonics for this level. (%3.2f%%)\n", 
+				tr.numfinishedSphericalHarmonics, 
+				tr.numSphericalHarmonics, 
+				((float)tr.numfinishedSphericalHarmonics / (float)tr.numSphericalHarmonics) * 100.f);
+
+		R_Free(cubemapPixels);
+		R_Free(currentSH);
+	}
+
+	return (const void *)(cmd + 1);
+}
 
 /*
 ====================
@@ -3198,6 +3113,12 @@ void RB_ExecuteRenderCommands( const void *data ) {
 			break;
 		case RC_EXPORT_CUBEMAPS:
 			data = RB_ExportCubemaps(data);
+			break;
+		case RC_BUILD_SPHERICAL_HARMONICS:
+			data = RB_BuildSphericalHarmonics(data);
+			break;
+		case RC_START_BUILDING_SPHERICAL_HARMONICS:
+			data = RB_StartBuildingSphericalHarmonics(data);
 			break;
 		case RC_BEGIN_TIMED_BLOCK:
 			data = RB_BeginTimedBlock(data);

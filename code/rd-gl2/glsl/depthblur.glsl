@@ -26,6 +26,9 @@ float gauss[4] = float[4](0.40, 0.24, 0.054, 0.0044);
 //float gauss[3] = float[3](0.60, 0.19, 0.0066);
 #define GAUSS_SIZE 4
 
+float Offsets[12] = float[](-6.0, -5.0, -4.0, -3.0, -2.0, -1.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+float BlurWeights[12] = float[](1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0);
+
 float getLinearDepth(sampler2D depthMap, const vec2 tex, const float zFarDivZNear)
 {
 		float sampleZDivW = texture(depthMap, tex).r;
@@ -34,15 +37,33 @@ float getLinearDepth(sampler2D depthMap, const vec2 tex, const float zFarDivZNea
 
 vec4 depthGaussian1D(sampler2D imageMap, sampler2D depthMap, vec2 tex, float zFarDivZNear, float zFar)
 {
-	float scale = 1.0 / 256.0;
+	vec2 scale = r_FBufScale * 2.0;
 
 #if defined(USE_HORIZONTAL_BLUR)
     vec2 direction = vec2(1.0, 0.0) * scale;
 #else // if defined(USE_VERTICAL_BLUR)
 	vec2 direction = vec2(0.0, 1.0) * scale;
 #endif
+
+	float BlurWeightsSum = 10.0;
+	float SSAO = texture(imageMap, tex).r * BlurWeightsSum;
+	float Depth = texture(depthMap, tex).r;
+
+	for (int i = 0; i < 12; i++)
+	{
+		vec2 TexCoord = tex + Offsets[i] * direction;
+		float DepthDifference = abs(Depth - texture(depthMap, TexCoord).r);
+
+		if (DepthDifference < 3.0)
+		{
+			SSAO += texture(imageMap, TexCoord).r * BlurWeights[i];
+			BlurWeightsSum += BlurWeights[i];
+		}
+
+	}
+	return vec4(vec3(SSAO / BlurWeightsSum), 1.0);
 	
-	float depthCenter = zFar * getLinearDepth(depthMap, tex, zFarDivZNear);
+	/*float depthCenter = zFar * getLinearDepth(depthMap, tex, zFarDivZNear);
 	vec2 centerSlope = vec2(dFdx(depthCenter), dFdy(depthCenter)) / vec2(dFdx(tex.x), dFdy(tex.y));
 		
 	vec4 result = texture(imageMap, tex) * gauss[0];
@@ -66,7 +87,7 @@ vec4 depthGaussian1D(sampler2D imageMap, sampler2D depthMap, vec2 tex, float zFa
 		direction = -direction;
 	}	
 		
-	return result / total;
+	return result / total;*/
 }
 
 void main()

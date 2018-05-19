@@ -75,7 +75,7 @@ float ambientOcclusion(sampler2D depthMap, const vec2 tex, const float zFarDivZN
 	mat2 rmat = randomRotation(tex);
 		
 	int i;
-	for (i = 0; i < 3; i++)
+	for (i = 0; i < 9; i++)
 	{
 		vec2 offset = rmat * poissonDisc[i] * offsetScale;
 		float sampleZ2 = zFar * getLinearDepth(depthMap, tex + offset, zFarDivZNear);
@@ -89,7 +89,7 @@ float ambientOcclusion(sampler2D depthMap, const vec2 tex, const float zFarDivZN
 		}
 	}
 	
-	result *= 0.33333;
+	result *= 0.11111;
 	
 	return result;
 }

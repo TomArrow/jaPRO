@@ -1957,13 +1957,21 @@ static void RawImage_UploadTexture(byte *data, int x, int y, int width, int heig
 		dataFormat = GL_DEPTH_COMPONENT;
 		dataType = GL_UNSIGNED_BYTE;
 		break;
-	case GL_DEPTH24_STENCIL8:
-		dataFormat = GL_DEPTH_STENCIL;
-		dataType = GL_UNSIGNED_INT_24_8;
+	case GL_RG16F:
+		dataFormat = GL_RG;
+		dataType = GL_HALF_FLOAT;
 		break;
 	case GL_RGBA16F:
 		dataFormat = GL_RGBA;
 		dataType = GL_HALF_FLOAT;
+		break;
+	case GL_RG32F:
+		dataFormat = GL_RG;
+		dataType = GL_FLOAT;
+		break;
+	case GL_RGBA32F:
+		dataFormat = GL_RGBA;
+		dataType = GL_FLOAT;
 		break;
 	default:
 		dataFormat = GL_RGBA;
@@ -2326,16 +2334,25 @@ image_t *R_CreateImage(const char *name, byte *pic, int width, int height, imgTy
 		qglTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		qglTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
-		if (image->flags & IMGFLAG_MIPMAP)
+		int format = GL_BGRA;
+
+		if (internalFormat == GL_DEPTH_COMPONENT24)
+		{
+			format = GL_DEPTH_COMPONENT;
+			qglTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			qglTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		}
+		else if (image->flags & IMGFLAG_MIPMAP)
 		{
 			qglTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			qglTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		}
 		else
 		{
 			qglTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			qglTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		}
-		qglTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
+		
 		if (ShouldUseImmutableTextures(image->flags, internalFormat))
 		{
 			int numLevels = (image->flags & IMGFLAG_MIPMAP) ? CalcNumMipmapLevels(width, height) : 1;
@@ -2346,18 +2363,18 @@ image_t *R_CreateImage(const char *name, byte *pic, int width, int height, imgTy
 			{
 				for (int i = 0; i < 6; i++)
 				{
-					qglTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, pic);
+					qglTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, 0, 0, width, height, format, GL_UNSIGNED_BYTE, pic);
 				}
 			}
 		}
 		else
 		{
-			qglTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X, 0, internalFormat, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, pic);
-			qglTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_X, 0, internalFormat, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, pic);
-			qglTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_Y, 0, internalFormat, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, pic);
-			qglTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_Y, 0, internalFormat, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, pic);
-			qglTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_Z, 0, internalFormat, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, pic);
-			qglTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_Z, 0, internalFormat, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, pic);
+			qglTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X, 0, internalFormat, width, height, 0, format, GL_UNSIGNED_BYTE, pic);
+			qglTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_X, 0, internalFormat, width, height, 0, format, GL_UNSIGNED_BYTE, pic);
+			qglTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_Y, 0, internalFormat, width, height, 0, format, GL_UNSIGNED_BYTE, pic);
+			qglTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_Y, 0, internalFormat, width, height, 0, format, GL_UNSIGNED_BYTE, pic);
+			qglTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_Z, 0, internalFormat, width, height, 0, format, GL_UNSIGNED_BYTE, pic);
+			qglTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_Z, 0, internalFormat, width, height, 0, format, GL_UNSIGNED_BYTE, pic);
 		}
 
 		if (image->flags & IMGFLAG_MIPMAP)
@@ -2539,6 +2556,152 @@ done:
 		R_Free(scaledBuffer);
 	if (resampledBuffer != 0)
 		R_Free(resampledBuffer);
+}
+
+void R_CreateDiffuseAndSpecMapsFromBaseColorAndRMO(shaderStage_t *stage, const char *name, const char *rmoName, int flags, int type)
+{
+	image_t	*image;
+	char	diffuseName[MAX_QPATH];
+	char	specularName[MAX_QPATH];
+	int		width, height, rmoWidth, rmoHeight;
+	byte	*rmoPic,*baseColorPic,*specGlossPic,*diffusePic;
+	long	hash;
+
+	if (!name) {
+		return;
+	}
+
+	COM_StripExtension(name, diffuseName, MAX_QPATH);
+	Q_strcat(diffuseName, MAX_QPATH, "_diffuse");
+
+	COM_StripExtension(name, specularName, MAX_QPATH);
+	Q_strcat(specularName, MAX_QPATH, "_spec");
+
+	//
+	// see if the images are already loaded
+	//
+	hash = generateHashValue(diffuseName);
+	for (image = hashTable[hash]; image; image = image->next) {
+		if (!strcmp(diffuseName, image->imgName)) {
+			stage->bundle[TB_COLORMAP].image[0] = image;
+			// check for specular map
+			hash = generateHashValue(specularName);
+			for (image = hashTable[hash]; image; image = image->next) {
+				if (!strcmp(specularName, image->imgName)) {
+					stage->bundle[TB_SPECULARMAP].image[0] = image;
+					return;
+				}
+			}
+		}
+	}
+
+	//
+	// load the pics from disk
+	//
+	R_LoadImage(name, &baseColorPic, &width, &height);
+	if (baseColorPic == NULL) {
+		return;
+	}
+	R_LoadImage(rmoName, &rmoPic, &rmoWidth, &rmoHeight);
+	if (rmoPic == NULL) {
+		return;
+	}
+
+	if (width != rmoWidth || height != rmoHeight)
+	{
+		ri->Printf(PRINT_ALL, "WARNING: Can't build Specular Map for %s (different texture sizes for baseColor and rmo)\n", name);
+		return;
+	}
+
+	specGlossPic = (byte *)R_Malloc(width * height * 4, TAG_GP2, qfalse);
+	diffusePic = (byte *)R_Malloc(width * height * 4, TAG_GP2, qfalse);
+
+	float baseSpecular;
+
+	switch (type)
+	{
+	case SPEC_RMOS:
+	case SPEC_MOSR:
+		baseSpecular = 0.08f;
+		break;
+	default:
+		baseSpecular = 0.04f;
+		break;
+	}
+
+	for (int i = 0; i < width * height * 4; i += 4)
+	{
+		const float aoStrength	= 0.5f;
+		float roughness, gloss, metalness, specular_variance, ao;
+
+		switch (type)
+		{
+		case SPEC_RMO:
+		case SPEC_RMOS:
+		{
+			roughness = ByteToFloat(rmoPic[i + 0]);
+			gloss = (1.0 - roughness) + (0.04 * roughness);
+			metalness = ByteToFloat(rmoPic[i + 1]);
+			ao = ByteToFloat(rmoPic[i + 2]);
+			ao += (1.0 - ao) * (1.0 - aoStrength);
+			specular_variance = ByteToFloat(rmoPic[i + 3]);
+		}
+		break;
+		case SPEC_MOXR:
+		case SPEC_MOSR:
+		{
+			metalness = ByteToFloat(rmoPic[i + 0]);
+			ao = ByteToFloat(rmoPic[i + 1]);
+			ao += (1.0 - ao) * (1.0 - aoStrength);
+			specular_variance = ByteToFloat(rmoPic[i + 2]);
+			roughness = ByteToFloat(rmoPic[i + 3]);
+			gloss = (1.0 - roughness) + (0.04 * roughness);
+		}
+		break;
+		// should never reach this
+		default:
+		{
+			specular_variance = 1.0f;
+			metalness = 0.0f;
+			gloss = r_baseGloss->value;
+			ao = 1.0f;
+		}
+		break;
+		}
+		
+		float baseColor[4];
+		// remove gamma correction because we want to work in linear space
+		baseColor[0] = pow(ByteToFloat(baseColorPic[i + 0]), GAMMA);
+		baseColor[1] = pow(ByteToFloat(baseColorPic[i + 1]), GAMMA);
+		baseColor[2] = pow(ByteToFloat(baseColorPic[i + 2]), GAMMA);
+		// don't remove gamma correction in alpha because this is data, not color
+		baseColor[3] = ByteToFloat(baseColorPic[i + 3]);
+
+		baseSpecular *= specular_variance;
+
+		// diffuse Color = baseColor * (1.0 - metalness) 
+		// also gamma correct again
+		diffusePic[i + 0] = FloatToByte(pow(baseColor[0] * (1.0f - metalness) * ao, INV_GAMMA));
+		diffusePic[i + 1] = FloatToByte(pow(baseColor[1] * (1.0f - metalness) * ao, INV_GAMMA));
+		diffusePic[i + 2] = FloatToByte(pow(baseColor[2] * (1.0f - metalness) * ao, INV_GAMMA));
+		diffusePic[i + 3] = FloatToByte(baseColor[3]);
+
+		// specular Color = mix(baseSpecular, baseColor, metalness)
+		// also gamma correct again
+		specGlossPic[i + 0] = FloatToByte(pow(baseSpecular * (1.0f - metalness) + baseColor[0] * metalness, INV_GAMMA));
+		specGlossPic[i + 1] = FloatToByte(pow(baseSpecular * (1.0f - metalness) + baseColor[1] * metalness, INV_GAMMA));
+		specGlossPic[i + 2] = FloatToByte(pow(baseSpecular * (1.0f - metalness) + baseColor[2] * metalness, INV_GAMMA));
+		// don't remove gamma correction in alpha because this is data, not color
+		specGlossPic[i + 3] = FloatToByte(gloss);
+	}
+
+	stage->bundle[TB_COLORMAP].image[0] = R_CreateImage(diffuseName, diffusePic, width, height, IMGTYPE_COLORALPHA, flags, 0);
+	stage->bundle[TB_SPECULARMAP].image[0] = R_CreateImage(specularName, specGlossPic, width, height, IMGTYPE_COLORALPHA, flags, 0);
+
+	R_Free(diffusePic);
+	R_Free(specGlossPic);
+	R_Free(baseColorPic);
+	R_Free(rmoPic);
 }
 
 
@@ -2851,13 +3014,15 @@ R_CreateEnvBrdfLUT
 from https://github.com/knarkowicz/IntegrateDFG
 ================
 */
-#define	LUT_WIDTH	128
-#define	LUT_HEIGHT	128
 static void R_CreateEnvBrdfLUT(void) {
+
+	static const int LUT_WIDTH = 128;
+	static const int LUT_HEIGHT = 128;
+
 	if (!r_cubeMapping->integer)
 		return;
 
-	uint16_t	data[LUT_WIDTH][LUT_HEIGHT][4];
+	uint16_t	data[LUT_WIDTH][LUT_HEIGHT][2];
 
 	float const MATH_PI = 3.14159f;
 	unsigned const sampleNum = 1024;
@@ -2914,14 +3079,12 @@ static void R_CreateEnvBrdfLUT(void) {
 			scale /= sampleNum;
 			bias /= sampleNum;
 
-			data[y][x][0] = FloatToHalf(scale);
-			data[y][x][1] = FloatToHalf(bias);
-			data[y][x][2] = 0.0f;
-			data[y][x][3] = 0.0f;
+			data[x][y][0] = FloatToHalf(scale);
+			data[x][y][1] = FloatToHalf(bias);
 		}
 	}
 
-	tr.envBrdfImage = R_CreateImage("*envBrdfLUT", (byte*)data, 128, 128, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA16F);
+	tr.envBrdfImage = R_CreateImage("*envBrdfLUT", (byte*)data, LUT_WIDTH, LUT_HEIGHT, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RG16F);
 	return;
 }
 
@@ -2978,9 +3141,17 @@ void R_CreateBuiltinImages(void) {
 
 	if (r_dlightMode->integer >= 2)
 	{
+		tr.shadowCubemaps = (cubemap_t *)R_Hunk_Alloc(MAX_DLIGHTS * sizeof(*tr.shadowCubemaps), qtrue);
+		memset(tr.shadowCubemaps, 0, MAX_DLIGHTS * sizeof(*tr.shadowCubemaps));
+
 		for (x = 0; x < MAX_DLIGHTS; x++)
 		{
-			tr.shadowCubemaps[x] = R_CreateImage(va("*shadowcubemap%i", x), NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE | IMGFLAG_CUBEMAP, 0);
+			tr.shadowCubemaps[x].image = R_CreateImage(va("*shadowcubemap%i", x), NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_CUBEMAP, GL_DEPTH_COMPONENT24);
+			GL_Bind(tr.shadowCubemaps[x].image);
+			qglTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			qglTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			qglTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+			qglTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 		}
 	}
 
@@ -3022,13 +3193,6 @@ void R_CreateBuiltinImages(void) {
 
 	tr.glowImage = R_CreateImage("*glow", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
 
-	if (r_deferredShading->integer)
-	{
-		tr.gbufferNormals = R_CreateImage("*normals", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
-		tr.gbufferLight = R_CreateImage("*lighting", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
-		tr.gbufferSpecularAndGloss = R_CreateImage("*specularGloss", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
-	}
-
 	int glowImageWidth = width;
 	int glowImageHeight = height;
 	for (int i = 0; i < ARRAY_LEN(tr.glowImageScaled); i++)
@@ -3041,8 +3205,9 @@ void R_CreateBuiltinImages(void) {
 	if (r_drawSunRays->integer)
 		tr.sunRaysImage = R_CreateImage("*sunRays", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, rgbFormat);
 
-	tr.renderDepthImage = R_CreateImage("*renderdepth", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH24_STENCIL8);
-	tr.textureDepthImage = R_CreateImage("*texturedepth", NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
+	tr.renderDepthImage = R_CreateImage("*renderdepth", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
+
+	tr.cubeDepthImage = R_CreateImage("*cubedepth", NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_CUBEMAP, GL_DEPTH_COMPONENT24);
 
 	{
 		unsigned short sdata[4];
@@ -3082,18 +3247,15 @@ void R_CreateBuiltinImages(void) {
 	if (r_ssao->integer)
 	{
 		tr.screenSsaoImage = R_CreateImage("*screenSsao", NULL, width / 2, height / 2, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
-		tr.hdrDepthImage = R_CreateImage("*hdrDepth", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_R32F);
+		tr.hdrDepthImage = R_CreateImage("*hdrDepth", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_INTENSITY32F_ARB);
 	}
 
 	if (r_refraction->integer) 
 	{
-		tr.refractiveImage = R_CreateImage("*refractiveFbo", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, rgbFormat);		
+		tr.refractiveImage = R_CreateImage("*refractiveFbo", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
 	}
 
-	if (r_pbr->integer)
-	{
-		tr.prefilterEnvMapImage = R_CreateImage("*prefilterEnvMapFbo", NULL, r_cubemapSize->integer / 2, r_cubemapSize->integer / 2, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
-	}
+	tr.prefilterEnvMapImage = R_CreateImage("*prefilterEnvMapFbo", NULL, r_cubemapSize->integer / 2, r_cubemapSize->integer / 2, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
 
 	for (x = 0; x < MAX_DRAWN_PSHADOWS; x++)
 	{

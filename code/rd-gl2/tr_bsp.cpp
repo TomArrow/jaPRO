@@ -248,35 +248,27 @@ static	void R_LoadLightmaps( world_t *worldData, lump_t *l, lump_t *surfs ) {
 		}
 	}
 
-	image = (byte *)R_Malloc(tr.lightmapSize * tr.lightmapSize * 4 * 2, TAG_BSP, qfalse); // don't want to use TAG_BSP :< but it's the only one that fits
+	image = (byte *)R_Malloc(tr.lightmapSize * tr.lightmapSize * 4 * 2, TAG_BSP, qfalse);
 
 	if (tr.worldDeluxeMapping)
 		numLightmaps >>= 1;
 
-	if (r_mergeLightmaps->integer && numLightmaps >= 1024 )
-	{
-		// FIXME: fat light maps don't support more than 1024 light maps
-		ri->Printf(PRINT_WARNING, "WARNING: number of lightmaps > 1024\n");
-		numLightmaps = 1024;
-	}
-
-	// use fat lightmaps of an appropriate size
 	if (r_mergeLightmaps->integer)
 	{
-		tr.fatLightmapSize = 512;
-		tr.fatLightmapStep = tr.fatLightmapSize / tr.lightmapSize;
+		const int targetLightmapsPerX = (int)ceilf(sqrtf(numLightmaps));
 
-		// at most MAX_LIGHTMAP_PAGES
-		while (tr.fatLightmapStep * tr.fatLightmapStep * MAX_LIGHTMAP_PAGES < numLightmaps && tr.fatLightmapSize != glConfig.maxTextureSize )
-		{
-			tr.fatLightmapSize <<= 1;
-			tr.fatLightmapStep = tr.fatLightmapSize / tr.lightmapSize;
-		}
+		int lightmapsPerX = 1;
+		while (lightmapsPerX < targetLightmapsPerX)
+			lightmapsPerX *= 2;
+		
+		tr.lightmapsPerAtlasSide[0] = lightmapsPerX;
+		tr.lightmapsPerAtlasSide[1] = (int)ceilf((float)numLightmaps / lightmapsPerX);
 
-		tr.numLightmaps = numLightmaps / (tr.fatLightmapStep * tr.fatLightmapStep);
 
-		if (numLightmaps % (tr.fatLightmapStep * tr.fatLightmapStep) != 0)
-			tr.numLightmaps++;
+		tr.lightmapAtlasSize[0] = tr.lightmapsPerAtlasSide[0] * LIGHTMAP_WIDTH;
+		tr.lightmapAtlasSize[1] = tr.lightmapsPerAtlasSide[1] * LIGHTMAP_HEIGHT;
+
+		tr.numLightmaps = 1;
 	}
 	else
 	{
@@ -299,11 +291,26 @@ static	void R_LoadLightmaps( world_t *worldData, lump_t *l, lump_t *surfs ) {
 	{
 		for (i = 0; i < tr.numLightmaps; i++)
 		{
-			tr.lightmaps[i] = R_CreateImage(va("_fatlightmap%d", i), NULL, tr.fatLightmapSize, tr.fatLightmapSize, IMGTYPE_COLORALPHA, IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, textureInternalFormat );
+			tr.lightmaps[i] = R_CreateImage(
+				va("_lightmapatlas%d", i),
+				NULL,
+				tr.lightmapAtlasSize[0],
+				tr.lightmapAtlasSize[1],
+				IMGTYPE_COLORALPHA,
+				IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE,
+				textureInternalFormat);
 
 			if (tr.worldDeluxeMapping)
 			{
-				tr.deluxemaps[i] = R_CreateImage(va("_fatdeluxemap%d", i), NULL, tr.fatLightmapSize, tr.fatLightmapSize, IMGTYPE_DELUXE, IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, 0 );
+				tr.deluxemaps[i] = R_CreateImage(
+					va("_fatdeluxemap%d", i),
+					NULL,
+					tr.lightmapAtlasSize[0],
+					tr.lightmapAtlasSize[1],
+					IMGTYPE_DELUXE,
+					IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE,
+					0);
+
 			}
 		}
 	}
@@ -316,11 +323,9 @@ static	void R_LoadLightmaps( world_t *worldData, lump_t *l, lump_t *surfs ) {
 
 		if (r_mergeLightmaps->integer)
 		{
-			int lightmaponpage = i % (tr.fatLightmapStep * tr.fatLightmapStep);
-			xoff = (lightmaponpage % tr.fatLightmapStep) * tr.lightmapSize;
-			yoff = (lightmaponpage / tr.fatLightmapStep) * tr.lightmapSize;
-
-			lightmapnum /= (tr.fatLightmapStep * tr.fatLightmapStep);
+			xoff = (i % tr.lightmapsPerAtlasSide[0]) * tr.lightmapSize;
+			yoff = (i / tr.lightmapsPerAtlasSide[0]) * tr.lightmapSize;
+			lightmapnum = 0;
 		}
 
 		// if (tr.worldLightmapping)
@@ -473,9 +478,24 @@ static	void R_LoadLightmaps( world_t *worldData, lump_t *l, lump_t *surfs ) {
 			}
 
 			if (r_mergeLightmaps->integer)
-				R_UpdateSubImage(tr.lightmaps[lightmapnum], image, xoff, yoff, tr.lightmapSize, tr.lightmapSize);
+				R_UpdateSubImage(
+					tr.lightmaps[lightmapnum],
+					image,
+					xoff,
+					yoff,
+					tr.lightmapSize,
+					tr.lightmapSize);
 			else
-				tr.lightmaps[i] = R_CreateImage(va("*lightmap%d", i), image, tr.lightmapSize, tr.lightmapSize, IMGTYPE_COLORALPHA, IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, textureInternalFormat );
+				tr.lightmaps[i] = R_CreateImage(
+					va("*lightmap%d", i),
+					image,
+					tr.lightmapSize,
+					tr.lightmapSize,
+					IMGTYPE_COLORALPHA,
+					IMGFLAG_NOLIGHTSCALE |
+					IMGFLAG_NO_COMPRESSION |
+					IMGFLAG_CLAMPTOEDGE,
+					textureInternalFormat);
 
 			if (hdrLightmap)
 				ri->FS_FreeFile(hdrLightmap);
@@ -503,11 +523,26 @@ static	void R_LoadLightmaps( world_t *worldData, lump_t *l, lump_t *surfs ) {
 
 			if (r_mergeLightmaps->integer)
 			{
-				R_UpdateSubImage(tr.deluxemaps[lightmapnum], image, xoff, yoff, tr.lightmapSize, tr.lightmapSize );
+				R_UpdateSubImage(
+					tr.deluxemaps[lightmapnum],
+					image,
+					xoff,
+					yoff,
+					tr.lightmapSize,
+					tr.lightmapSize);
 			}
 			else
 			{
-				tr.deluxemaps[i] = R_CreateImage(va("*deluxemap%d", i), image, tr.lightmapSize, tr.lightmapSize, IMGTYPE_DELUXE, IMGFLAG_NOLIGHTSCALE | IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, 0 );
+				tr.deluxemaps[i] = R_CreateImage(
+					va("*deluxemap%d", i),
+					image,
+					tr.lightmapSize,
+					tr.lightmapSize,
+					IMGTYPE_DELUXE,
+					IMGFLAG_NOLIGHTSCALE |
+					IMGFLAG_NO_COMPRESSION |
+					IMGFLAG_CLAMPTOEDGE,
+					0);
 			}
 		}
 	}
@@ -528,15 +563,12 @@ static float FatPackU(float input, int lightmapnum)
 	if (tr.worldDeluxeMapping)
 		lightmapnum >>= 1;
 
-	if(tr.fatLightmapSize > 0)
+	if (tr.lightmapAtlasSize[0] > 0)
 	{
-		int             x;
+		const int lightmapXOffset = lightmapnum % tr.lightmapsPerAtlasSide[0];
+		const float invLightmapSide = 1.0f / tr.lightmapsPerAtlasSide[0];
 
-		lightmapnum %= (tr.fatLightmapStep * tr.fatLightmapStep);
-
-		x = lightmapnum % tr.fatLightmapStep;
-
-		return (input / ((float)tr.fatLightmapStep)) + ((1.0 / ((float)tr.fatLightmapStep)) * (float)x);
+		return (lightmapXOffset * invLightmapSide) + (input * invLightmapSide);
 	}
 
 	return input;
@@ -550,15 +582,12 @@ static float FatPackV(float input, int lightmapnum)
 	if (tr.worldDeluxeMapping)
 		lightmapnum >>= 1;
 
-	if(tr.fatLightmapSize > 0)
+	if (tr.lightmapAtlasSize[1] > 0)
 	{
-		int             y;
+		const int lightmapYOffset = lightmapnum / tr.lightmapsPerAtlasSide[0];
+		const float invLightmapSide = 1.0f / tr.lightmapsPerAtlasSide[1];
 
-		lightmapnum %= (tr.fatLightmapStep * tr.fatLightmapStep);
-
-		y = lightmapnum / tr.fatLightmapStep;
-
-		return (input / ((float)tr.fatLightmapStep)) + ((1.0 / ((float)tr.fatLightmapStep)) * (float)y);
+		return (lightmapYOffset * invLightmapSide) + (input * invLightmapSide);
 	}
 
 	return input;
@@ -573,10 +602,8 @@ static int FatLightmap(int lightmapnum)
 	if (tr.worldDeluxeMapping)
 		lightmapnum >>= 1;
 
-	if (tr.fatLightmapSize > 0)
-	{
-		return lightmapnum / (tr.fatLightmapStep * tr.fatLightmapStep);
-	}
+	if (tr.lightmapAtlasSize[0] > 0)
+		return 0;
 	
 	return lightmapnum;
 }
@@ -589,7 +616,7 @@ This is called by the clipmodel subsystem so we can share the 1.8 megs of
 space in big maps...
 =================
 */
-void		RE_SetWorldVisData( const byte *vis ) {
+void RE_SetWorldVisData( const byte *vis ) {
 	tr.externalVisData = vis;
 }
 
@@ -599,7 +626,7 @@ void		RE_SetWorldVisData( const byte *vis ) {
 R_LoadVisibility
 =================
 */
-static	void R_LoadVisibility( world_t *worldData, lump_t *l ) {
+static void R_LoadVisibility( world_t *worldData, lump_t *l ) {
 	int		len;
 	byte	*buf;
 
@@ -738,8 +765,8 @@ static void ParseFace( const world_t *worldData, dsurface_t *ds, drawVert_t *ver
 
 		for ( j = 0; j < MAXLIGHTMAPS; j++ )
 		{
-			cv->verts[i].lightmap[j][0] = FatPackU(LittleFloat(verts[i].lightmap[j][0]), realLightmapNum[j]);
-			cv->verts[i].lightmap[j][1] = FatPackV(LittleFloat(verts[i].lightmap[j][1]), realLightmapNum[j]);
+			cv->verts[i].lightmap[j][0] = FatPackU(LittleFloat(verts[i].lightmap[j][0]), ds->lightmapNum[j]);
+			cv->verts[i].lightmap[j][1] = FatPackV(LittleFloat(verts[i].lightmap[j][1]), ds->lightmapNum[j]);
 
 			if (hdrVertColors)
 			{
@@ -841,9 +868,7 @@ static void ParseMesh ( const world_t *worldData, dsurface_t *ds, drawVert_t *ve
 	int realLightmapNum[MAXLIGHTMAPS];
 
 	for ( j = 0; j < MAXLIGHTMAPS; j++ )
-	{
-		realLightmapNum[j] = FatLightmap (LittleLong (ds->lightmapNum[j]));
-	}
+		realLightmapNum[j] = FatLightmap(LittleLong(ds->lightmapNum[j]));
 
 	surf->numSurfaceSprites = 0;
 	surf->surfaceSprites = nullptr;
@@ -889,8 +914,8 @@ static void ParseMesh ( const world_t *worldData, dsurface_t *ds, drawVert_t *ve
 
 		for ( j = 0; j < MAXLIGHTMAPS; j++ )
 		{
-			points[i].lightmap[j][0] = FatPackU(LittleFloat(verts[i].lightmap[j][0]), realLightmapNum[j]);
-			points[i].lightmap[j][1] = FatPackV(LittleFloat(verts[i].lightmap[j][1]), realLightmapNum[j]);
+			points[i].lightmap[j][0] = FatPackU(LittleFloat(verts[i].lightmap[j][0]), ds->lightmapNum[j]);
+			points[i].lightmap[j][1] = FatPackV(LittleFloat(verts[i].lightmap[j][1]), ds->lightmapNum[j]);
 
 			if (hdrVertColors)
 			{
@@ -947,6 +972,10 @@ static void ParseTriSurf( const world_t *worldData, dsurface_t *ds, drawVert_t *
 	glIndex_t  *tri;
 	int             i, j;
 	int             numVerts, numIndexes, badTriangles;
+	int realLightmapNum[MAXLIGHTMAPS];
+
+	for (j = 0; j < MAXLIGHTMAPS; j++)
+		realLightmapNum[j] = FatLightmap(LittleLong(ds->lightmapNum[j]));
 
 	surf->numSurfaceSprites = 0;
 	surf->surfaceSprites = nullptr;
@@ -955,7 +984,7 @@ static void ParseTriSurf( const world_t *worldData, dsurface_t *ds, drawVert_t *
 	surf->fogIndex = LittleLong( ds->fogNum ) + 1;
 
 	// get shader
-	surf->shader = ShaderForShaderNum( worldData, ds->shaderNum, lightmapsVertex, ds->lightmapStyles, ds->vertexStyles );
+	surf->shader = ShaderForShaderNum(worldData, ds->shaderNum, realLightmapNum, ds->lightmapStyles, ds->vertexStyles);
 	if ( r_singleShader->integer && !surf->shader->isSky ) {
 		surf->shader = tr.defaultShader;
 	}
@@ -998,8 +1027,8 @@ static void ParseTriSurf( const world_t *worldData, dsurface_t *ds, drawVert_t *
 
 		for ( j = 0; j < MAXLIGHTMAPS; j++ )
 		{
-			cv->verts[i].lightmap[j][0] = LittleFloat(verts[i].lightmap[j][0]);
-			cv->verts[i].lightmap[j][1] = LittleFloat(verts[i].lightmap[j][1]);
+			cv->verts[i].lightmap[j][0] = FatPackU(LittleFloat(verts[i].lightmap[j][0]), ds->lightmapNum[j]);
+			cv->verts[i].lightmap[j][1] = FatPackV(LittleFloat(verts[i].lightmap[j][1]), ds->lightmapNum[j]);
 
 			if (hdrVertColors)
 			{
@@ -2927,7 +2956,7 @@ void R_LoadEnvironmentJson(const char *baseName)
 	} buffer;
 	char *bufferEnd;
 
-	const char *cubemapArrayJson;
+	const char *environmentArrayJson;
 	int filelen, i;
 
 	Com_sprintf(filename, MAX_QPATH, "cubemaps/%s/env.json", baseName);
@@ -2945,23 +2974,23 @@ void R_LoadEnvironmentJson(const char *baseName)
 		ri->FS_FreeFile(buffer.v);
 		return;
 	}
-
-	cubemapArrayJson = JSON_ObjectGetNamedValue(buffer.c, bufferEnd, "Cubemaps");
-	if (!cubemapArrayJson)
+	//-----------------------------CUBEMAPS------------------------------------
+	environmentArrayJson = JSON_ObjectGetNamedValue(buffer.c, bufferEnd, "Cubemaps");
+	if (!environmentArrayJson)
 	{
 		ri->Printf(PRINT_ALL, "Bad %s: no Cubemaps\n", filename);
 		ri->FS_FreeFile(buffer.v);
 		return;
 	}
 
-	if (JSON_ValueGetType(cubemapArrayJson, bufferEnd) != JSONTYPE_ARRAY)
+	if (JSON_ValueGetType(environmentArrayJson, bufferEnd) != JSONTYPE_ARRAY)
 	{
 		ri->Printf(PRINT_ALL, "Bad %s: Cubemaps not an array\n", filename);
 		ri->FS_FreeFile(buffer.v);
 		return;
 	}
 
-	tr.numCubemaps = JSON_ArrayGetIndex(cubemapArrayJson, bufferEnd, NULL, 0);
+	tr.numCubemaps = JSON_ArrayGetIndex(environmentArrayJson, bufferEnd, NULL, 0);
 	tr.cubemaps = (cubemap_t *)R_Hunk_Alloc(tr.numCubemaps * sizeof(*tr.cubemaps), qtrue);
 	memset(tr.cubemaps, 0, tr.numCubemaps * sizeof(*tr.cubemaps));
 
@@ -2971,7 +3000,7 @@ void R_LoadEnvironmentJson(const char *baseName)
 		const char *cubemapJson, *keyValueJson, *indexes[3];
 		int j;
 
-		cubemapJson = JSON_ArrayGetValue(cubemapArrayJson, bufferEnd, i);
+		cubemapJson = JSON_ArrayGetValue(environmentArrayJson, bufferEnd, i);
 
 		keyValueJson = JSON_ObjectGetNamedValue(cubemapJson, bufferEnd, "Name");
 		if (!JSON_ValueGetString(keyValueJson, bufferEnd, cubemap->name, MAX_QPATH))
@@ -2988,6 +3017,50 @@ void R_LoadEnvironmentJson(const char *baseName)
 			cubemap->parallaxRadius = JSON_ValueGetFloat(keyValueJson, bufferEnd);
 	}
 
+	//-----------------------------LIGHTS------------------------------------
+	environmentArrayJson = JSON_ObjectGetNamedValue(buffer.c, bufferEnd, "Lights");
+	if (!environmentArrayJson)
+	{
+		ri->Printf(PRINT_ALL, "Bad %s: no Lights\n", filename);
+		ri->FS_FreeFile(buffer.v);
+		return;
+	}
+
+	if (JSON_ValueGetType(environmentArrayJson, bufferEnd) != JSONTYPE_ARRAY)
+	{
+		ri->Printf(PRINT_ALL, "Bad %s: Lights not an array\n", filename);
+		ri->FS_FreeFile(buffer.v);
+		return;
+	}
+
+	tr.numRealTimeLights = JSON_ArrayGetIndex(environmentArrayJson, bufferEnd, NULL, 0);
+	tr.realTimeLights = (realTimeLight_t *)R_Hunk_Alloc(tr.numRealTimeLights * sizeof(*tr.realTimeLights), qtrue);
+	memset(tr.realTimeLights, 0, tr.numRealTimeLights * sizeof(*tr.realTimeLights));
+
+	for (i = 0; i < tr.numRealTimeLights; i++)
+	{
+		realTimeLight_t *light = &tr.realTimeLights[i];
+		const char *lightJson, *keyValueJson, *indexes[3];
+		int j;
+
+		lightJson = JSON_ArrayGetValue(environmentArrayJson, bufferEnd, i);
+
+		keyValueJson = JSON_ObjectGetNamedValue(lightJson, bufferEnd, "Position");
+		JSON_ArrayGetIndex(keyValueJson, bufferEnd, indexes, 3);
+		for (j = 0; j < 3; j++)
+			light->position[j] = JSON_ValueGetFloat(indexes[j], bufferEnd);
+
+		keyValueJson = JSON_ObjectGetNamedValue(lightJson, bufferEnd, "Color");
+		JSON_ArrayGetIndex(keyValueJson, bufferEnd, indexes, 3);
+		for (j = 0; j < 3; j++)
+			light->color[j] = JSON_ValueGetFloat(indexes[j], bufferEnd);
+
+		light->strength = 100.0f;
+		keyValueJson = JSON_ObjectGetNamedValue(lightJson, bufferEnd, "Strength");
+		if (keyValueJson)
+			light->strength = JSON_ValueGetFloat(keyValueJson, bufferEnd);
+	}
+
 	ri->FS_FreeFile(buffer.v);
 }
 
@@ -2997,6 +3070,43 @@ void R_LoadCubemapEntities(char *cubemapEntityName)
 	int numSpawnVars;
 	char *spawnVars[MAX_SPAWN_VARS][2];
 	int numCubemaps = 0;
+
+	if (!Q_strncmp(cubemapEntityName, "misc_skyportal", strlen("misc_skyportal")))
+	{
+		memset(&tr.skyboxCubemap, 0, sizeof(tr.skyboxCubemap));
+		while (R_ParseSpawnVars(spawnVarChars, sizeof(spawnVarChars), &numSpawnVars, spawnVars))
+		{
+			int i;
+			char name[MAX_QPATH];
+			qboolean isCubemap = qfalse;
+			qboolean originSet = qfalse;
+			vec3_t origin;
+			float parallaxRadius = 1000.0f;
+
+			name[0] = '\0';
+			for (i = 0; i < numSpawnVars; i++)
+			{
+				if (!Q_stricmp(spawnVars[i][0], "classname") && !Q_stricmp(spawnVars[i][1], cubemapEntityName))
+					isCubemap = qtrue;
+
+				if (!Q_stricmp(spawnVars[i][0], "origin"))
+				{
+					sscanf(spawnVars[i][1], "%f %f %f", &origin[0], &origin[1], &origin[2]);
+					originSet = qtrue;
+				}
+			}
+
+			if (isCubemap && originSet)
+			{
+				cubemap_t *cubemap = &tr.cubemaps[numCubemaps];
+				Q_strncpyz(cubemap->name, "SKYBOX_CUBEMAP", MAX_QPATH);
+				VectorCopy(origin, cubemap->origin);
+				cubemap->parallaxRadius = parallaxRadius;
+			}
+		}
+		return;
+	}
+
 
 	// count cubemaps
 	numCubemaps = 0;
@@ -3116,24 +3226,50 @@ void R_RenderMissingCubemaps()
 		cubemapFormat = GL_RGBA16F;
 	}
 
-	for (int i = 0; i < tr.numCubemaps; i++)
+	tr.skyboxCubemapped = qfalse;
+
+	if (!tr.skyboxCubemap.image)
 	{
-		if (!tr.cubemaps[i].image)
+		tr.skyboxCubemap.image = R_CreateImage("*skyboxCubemap", NULL, r_cubemapSize->integer, r_cubemapSize->integer, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP | IMGFLAG_CUBEMAP, cubemapFormat);
+		for (int j = 0; j < 6; j++)
 		{
-			tr.cubemaps[i].image = R_CreateImage(va("*cubeMap%d", i), NULL, r_cubemapSize->integer, r_cubemapSize->integer, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP | IMGFLAG_CUBEMAP, cubemapFormat);
+			RE_ClearScene();
+			R_RenderCubemapSide(&tr.skyboxCubemap, 0, j, qfalse, qfalse);
+			R_IssuePendingRenderCommands();
+			R_InitNextFrame();
+		}
+		tr.skyboxCubemapped = qtrue;
+	}
+
+	if (tr.cubemaps[0].image)
+	{
+		return;
+	}
+
+	int numberOfBounces = 2;
+	for (int k = 0; k <= numberOfBounces; k++)
+	{
+		qboolean bounce = qboolean(k != 0);
+		for (int i = 0; i < tr.numCubemaps; i++)
+		{
+			if (!bounce)
+				tr.cubemaps[i].image = R_CreateImage(va("*cubeMap%d", i), NULL, r_cubemapSize->integer, r_cubemapSize->integer, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP | IMGFLAG_CUBEMAP, cubemapFormat);
+
 			for (int j = 0; j < 6; j++)
 			{
 				RE_ClearScene();
-				R_RenderCubemapSide(i, j, qfalse);
+				R_RenderCubemapSide(tr.cubemaps, i, j, qfalse, bounce);
 				R_IssuePendingRenderCommands();
 				R_InitNextFrame();
 			}
 
-			RE_ClearScene();
-			R_AddConvolveCubemapCmd(i);
-			R_IssuePendingRenderCommands();
-			R_InitNextFrame();
-
+			for (int j = 0; j < 6; j++)
+			{
+				RE_ClearScene();
+				R_AddConvolveCubemapCmd(tr.cubemaps, i, j);
+				R_IssuePendingRenderCommands();
+				R_InitNextFrame();
+			}
 		}
 	}
 }
@@ -3520,16 +3656,8 @@ static uint32_t UpdateHash( const char *text, uint32_t hash )
 	return (hash ^ (hash >> 10) ^ (hash >> 20));
 }
 
-static void R_GenerateSurfaceSprites(
-		const srfBspSurface_t *bspSurf,
-		const shader_t *shader,
-		const shaderStage_t *stage,
-		srfSprites_t *out)
+static std::vector<sprite_t> R_CreateSurfaceSpritesVertexData(const srfBspSurface_t *bspSurf, float density)
 {
-	const surfaceSprite_t *surfaceSprite = stage->ss;
-	const textureBundle_t *bundle = &stage->bundle[0];
-
-	const float density = surfaceSprite->density;
 	const srfVert_t *verts = bspSurf->verts;
 	const glIndex_t *indexes = bspSurf->indexes;
 
@@ -3599,14 +3727,21 @@ static void R_GenerateSurfaceSprites(
 			}
 		}
 	}
+	return sprites;
+}
+
+static void R_GenerateSurfaceSprites(const srfBspSurface_t *bspSurf, const shader_t *shader, const shaderStage_t *stage, srfSprites_t *out)
+{
+	const surfaceSprite_t *surfaceSprite = stage->ss;
+	const textureBundle_t *bundle = &stage->bundle[0];
 
 	uint32_t hash = 0;
 	for ( int i = 0; bundle->image[i]; ++i )
-	{
 		hash = UpdateHash(bundle->image[i]->imgName, hash);
-	}
 
 	uint16_t indices[] = { 0, 1, 2, 0, 2, 3 };
+	std::vector<sprite_t> sprites =
+		R_CreateSurfaceSpritesVertexData(bspSurf, surfaceSprite->density);
 
 	out->surfaceType = SF_SPRITES;
 	out->sprite = surfaceSprite;
@@ -3622,6 +3757,7 @@ static void R_GenerateSurfaceSprites(
 	out->shader->cullType = shader->cullType;
 	out->shader->stages[0]->glslShaderGroup = tr.spriteShader;
 	out->shader->stages[0]->alphaTestCmp = stage->alphaTestCmp;
+	out->shader->sort = SS_OPAQUE;
 
 	out->numAttributes = 2;
 	out->attributes = (vertexAttribute_t *)R_Hunk_Alloc(
@@ -3663,9 +3799,7 @@ static void R_GenerateSurfaceSprites( const world_t *world )
 			{
 				const shader_t *shader = surf->shader;
 				if ( !shader->numSurfaceSpriteStages )
-				{
 					continue;
-				}
 
 				surf->numSurfaceSprites = shader->numSurfaceSpriteStages;
 				surf->surfaceSprites = (srfSprites_t *)R_Hunk_Alloc(
@@ -3677,14 +3811,10 @@ static void R_GenerateSurfaceSprites( const world_t *world )
 				{
 					const shaderStage_t *stage = shader->stages[j];
 					if ( !stage )
-					{
 						break;
-					}
 
 					if ( !stage->ss || stage->ss->type == SURFSPRITE_NONE )
-					{
 						continue;
-					}
 
 					srfSprites_t *sprite = surf->surfaceSprites + surfaceSpriteNum;
 					R_GenerateSurfaceSprites(bspSurf, shader, stage, sprite);
@@ -3706,69 +3836,148 @@ static void R_BuildLightGridTextures(world_t *world)
 	byte *directionalBase = (byte *)R_Malloc(world->numGridArrayElements * sizeof(byte) * 4, TAG_TEMP_WORKSPACE, qtrue);
 	byte *directionBase = (byte *)R_Malloc(world->numGridArrayElements * sizeof(byte) * 4, TAG_TEMP_WORKSPACE, qtrue);
 
-	byte *ambient = ambientBase;
-	byte *directional = directionalBase;
-	byte *direction = directionBase;
-	for (int i = 0; i < world->numGridArrayElements; i++)
+	if (1)
 	{
-		
-		float lat, lng;
-		float clat, slong, slat, clong;
-		mgrid_t *data = world->lightGridData + world->lightGridArray[i];
+		byte *ambient = ambientBase;
+		byte *directional = directionalBase;
+		byte *direction = directionBase;
+		for (int i = 0; i < world->numGridArrayElements; i++)
+		{
 
-		ambient[0] = data->ambientLight[0][0];
-		ambient[1] = data->ambientLight[0][1];
-		ambient[2] = data->ambientLight[0][2];
-		ambient[3] = 0;
+			float lat, lng;
+			float clat, slong, slat, clong;
+			mgrid_t *data = world->lightGridData + world->lightGridArray[i];
 
-		directional[0] = data->directLight[0][0];
-		directional[1] = data->directLight[0][1];
-		directional[2] = data->directLight[0][2];
-		directional[3] = 0;
+			ambient[0] = data->ambientLight[0][0];
+			ambient[1] = data->ambientLight[0][1];
+			ambient[2] = data->ambientLight[0][2];
+			ambient[3] = 0;
 
-		lat = (data->latLong[1] / 255.0f) * 2.0f * M_PI;
-		lng = (data->latLong[0] / 255.0f) * 2.0f * M_PI;
+			directional[0] = data->directLight[0][0];
+			directional[1] = data->directLight[0][1];
+			directional[2] = data->directLight[0][2];
+			directional[3] = 0;
 
-		// decode X as cos( lat ) * sin( long )
-		// decode Y as sin( lat ) * sin( long )
-		// decode Z as cos( long )
+			lat = (data->latLong[1] / 255.0f) * 2.0f * M_PI;
+			lng = (data->latLong[0] / 255.0f) * 2.0f * M_PI;
 
-		slat = sinf(lat);
-		clat = cosf(lat);
-		slong = sinf(lng);
-		clong = cosf(lng);
+			// decode X as cos( lat ) * sin( long )
+			// decode Y as sin( lat ) * sin( long )
+			// decode Z as cos( long )
 
-		direction[0] = (byte)floorf(clat * slong);
-		direction[1] = (byte)floorf(slat * slong);
-		direction[2] = (byte)floorf(clong);
-		direction[3] = 0;
+			slat = sinf(lat);
+			clat = cosf(lat);
+			slong = sinf(lng);
+			clong = cosf(lng);
 
-		ambient += 4;
-		directional += 4;
-		direction += 4;
+			direction[0] = (byte)floorf(clat * slong);
+			direction[1] = (byte)floorf(slat * slong);
+			direction[2] = (byte)floorf(clong);
+			direction[3] = 0;
+
+			ambient += 4;
+			directional += 4;
+			direction += 4;
+		}
+
+		world->ambientLightImages[0] = R_CreateImage3D(
+			"*bsp_ambientLightGrid", ambientBase,
+			world->lightGridBounds[0],
+			world->lightGridBounds[1],
+			world->lightGridBounds[2],
+			GL_RGB8);
+
+		world->directionalLightImages[0] = R_CreateImage3D(
+			"*bsp_directionalLightGrid", directionalBase,
+			world->lightGridBounds[0],
+			world->lightGridBounds[1],
+			world->lightGridBounds[2],
+			GL_RGB8);
+
+		world->directionImages = R_CreateImage3D(
+			"*bsp_directionsGrid", directionBase,
+			world->lightGridBounds[0],
+			world->lightGridBounds[1],
+			world->lightGridBounds[2],
+			GL_RGB8);
 	}
+	if (1)
+	{
+		const float stepSize = 1;
+		int numSphericalHarmonics = world->numGridArrayElements / stepSize;
 
-	world->ambientLightImages[0] = R_CreateImage3D(
-		"*bsp_ambientLightGrid", ambientBase,
-		world->lightGridBounds[0],
-		world->lightGridBounds[1],
-		world->lightGridBounds[2],
-		GL_RGB8);
+		if (!numSphericalHarmonics)
+			return;
 
-	world->directionalLightImages[0] = R_CreateImage3D(
-		"*bsp_directionalLightGrid", directionalBase,
-		world->lightGridBounds[0],
-		world->lightGridBounds[1],
-		world->lightGridBounds[2],
-		GL_RGB8);
+		vec3_t *positions = (vec3_t *)R_Malloc(numSphericalHarmonics * sizeof(vec3_t), TAG_TEMP_WORKSPACE, qtrue);
+		
+		numSphericalHarmonics = 0;
+		for (int x = 0; x < world->lightGridBounds[0] / stepSize; x++)
+		{
+			for (int y = 0; y < world->lightGridBounds[1] / stepSize; y++)
+			{
+				for (int z = 0; z < world->lightGridBounds[2] / stepSize; z++)
+				{
+					mgrid_t	*data;
+					vec3_t	origin;
+					int		pos[3];
 
-	world->directionImages = R_CreateImage3D(
-		"*bsp_directionsGrid", directionBase,
-		world->lightGridBounds[0],
-		world->lightGridBounds[1],
-		world->lightGridBounds[2],
-		GL_RGB8);
+					float posX = world->lightGridOrigin[0] + (x * world->lightGridSize[0] * stepSize);
+					float posY = world->lightGridOrigin[1] + (y * world->lightGridSize[1] * stepSize);
+					float posZ = world->lightGridOrigin[2] + (z * world->lightGridSize[2] * stepSize);
 
+					VectorSet(origin, posX, posY, posZ);
+
+					int		gridStep[3];
+					gridStep[0] = 1;
+					gridStep[1] = 1 * world->lightGridBounds[0];
+					gridStep[2] = 1 * world->lightGridBounds[0] * world->lightGridBounds[1];
+
+					VectorSubtract(origin, world->lightGridOrigin, origin);
+					for (int i = 0; i < 3; i++) {
+						pos[i] = floor(origin[i] * world->lightGridInverseSize[i]);
+						if (pos[i] < 0) {
+							pos[i] = 0;
+						}
+						else if (pos[i] >= world->lightGridBounds[i] - 1) {
+							pos[i] = world->lightGridBounds[i] - 1;
+						}
+					}
+
+					unsigned short	*startGridPos = 
+						world->lightGridArray + 
+						(
+						pos[0] * gridStep[0] +
+						pos[1] * gridStep[1] +
+						pos[2] * gridStep[2]
+						);
+
+					data = world->lightGridData + *startGridPos;
+
+					if (data->styles[0] == LS_NONE)
+					{
+						continue;	// ignore samples in walls
+					}
+
+					VectorSet(origin, posX, posY, posZ);
+					VectorCopy(origin, positions[numSphericalHarmonics]);
+					numSphericalHarmonics++;
+				}
+			}
+		}
+		tr.numSphericalHarmonics = numSphericalHarmonics;
+
+		tr.sphericalHarmonicsCoefficients = (sphericalHarmonic_t *)R_Hunk_Alloc(numSphericalHarmonics * sizeof(*tr.sphericalHarmonicsCoefficients), qtrue);
+
+		for (int i = 0; i < numSphericalHarmonics; i++)
+		{
+			VectorCopy(positions[i], tr.sphericalHarmonicsCoefficients[i].origin);
+		}
+
+		tr.numfinishedSphericalHarmonics = 0;
+	}
+	
+	ri->Printf(PRINT_DEVELOPER, "Found %i positions for sphericalHarmonics\n", tr.numSphericalHarmonics);
 	return;
 }
 
@@ -3872,17 +4081,26 @@ world_t *R_LoadBSP(const char *name, int *bspIndex)
 	// load cubemaps
 	if (r_cubeMapping->integer)
 	{
-		R_LoadCubemapEntities("misc_cubemap");
+		R_LoadEnvironmentJson(worldData->baseName);
+
+		if (!tr.numCubemaps)
+		{
+			// use cubemap entities as cubemaps
+			R_LoadCubemapEntities("misc_cubemap");
+		}
 		if (!tr.numCubemaps)
 		{
 			// use deathmatch spawn points as cubemaps
 			R_LoadCubemapEntities("info_player_deathmatch");
 		}
+
 		if (!tr.numCubemaps)
 		{
-			// use deathmatch spawn points as cubemaps
+			// use spawn points as cubemaps
 			R_LoadCubemapEntities("info_player_start");
 		}
+
+		R_LoadCubemapEntities("misc_skyportal");
 
 		if (tr.numCubemaps)
 		{

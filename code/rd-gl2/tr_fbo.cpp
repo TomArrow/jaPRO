@@ -279,12 +279,26 @@ void R_AttachFBOTextureDepth(int texId)
 
 /*
 =================
-FBO_AttachTexturePackedDepthStencil
+R_AttachFBOTextureDepth
 =================
 */
-void FBO_AttachTexturePackedDepthStencil(int texId)
+void R_AttachFBOTextureDepthCubemap(int texId)
 {
-	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, texId, 0);
+	for (int i = 0; i < 6; i++)
+	{
+		qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, texId, 0);
+	}
+}
+
+/*
+=================
+R_AttachFBOTexturePackedDepthStencil
+=================
+*/
+void R_AttachFBOTexturePackedDepthStencil(int texId)
+{
+	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, texId, 0);
+	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_TEXTURE_2D, texId, 0);
 }
 
 void FBO_AttachTextureImage(image_t *img, int index)
@@ -435,7 +449,7 @@ void FBO_Init(void)
 		FBO_AttachTextureImage(tr.renderImage, 0);
 		FBO_AttachTextureImage(tr.glowImage, 1);
 
-		FBO_AttachTexturePackedDepthStencil(tr.renderDepthImage->texnum);
+		R_AttachFBOTextureDepth(tr.renderDepthImage->texnum);
 
 		FBO_SetupDrawBuffers();
 
@@ -448,29 +462,12 @@ void FBO_Init(void)
 
 		FBO_AttachTextureImage(tr.renderImage, 0);
 		FBO_AttachTextureImage(tr.glowImage, 1);
-		if (r_deferredShading->integer)
-		{
-			FBO_AttachTextureImage(tr.gbufferSpecularAndGloss, 2);
-			FBO_AttachTextureImage(tr.gbufferNormals, 3);
-			FBO_AttachTextureImage(tr.gbufferLight, 4);
-		}
 
-		//R_AttachFBOTextureDepth(tr.renderDepthImage->texnum);
-		FBO_AttachTexturePackedDepthStencil(tr.renderDepthImage->texnum);
+		R_AttachFBOTextureDepth(tr.renderDepthImage->texnum);
 
 		FBO_SetupDrawBuffers();
 
 		R_CheckFBO(tr.renderFbo);
-	}
-
-	if (r_deferredShading->integer)
-	{
-		tr.deferredLightFbo = FBO_Create("_deferredLightPass", tr.renderDepthImage->width, tr.renderDepthImage->height);
-		FBO_Bind(tr.deferredLightFbo);
-		FBO_AttachTextureImage(tr.gbufferLight, 0);
-		FBO_AttachTexturePackedDepthStencil(tr.renderDepthImage->texnum);
-		FBO_SetupDrawBuffers();
-		R_CheckFBO(tr.deferredLightFbo);
 	}
 
 	// clear render buffer
@@ -479,7 +476,7 @@ void FBO_Init(void)
 	{
 		FBO_Bind(tr.renderFbo);
 		qglClearColor( 1, 0, 0.5, 1 );
-		qglClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+		qglClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 		FBO_Bind(NULL);
 	}
 
@@ -521,6 +518,10 @@ void FBO_Init(void)
 			tr.pshadowFbos[i] = FBO_Create(va("_shadowmap%i", i), tr.pshadowMaps[i]->width, tr.pshadowMaps[i]->height);
 			FBO_Bind(tr.pshadowFbos[i]);
 			FBO_CreateBuffer(tr.pshadowFbos[i], GL_DEPTH_COMPONENT24, 0, 0);
+
+			qglDrawBuffer(GL_NONE);
+			qglReadBuffer(GL_NONE);
+
 			//FBO_AttachTextureImage(tr.pshadowMaps[i], 0);
 			//FBO_CreateBuffer(tr.pshadowFbos[i], GL_DEPTH_COMPONENT24, 0, 0);
 			R_AttachFBOTextureDepth(tr.pshadowMaps[i]->texnum);
@@ -531,6 +532,22 @@ void FBO_Init(void)
 		}
 	}
 #endif
+
+	if (r_dlightMode->integer >= 2)
+	{
+		tr.shadowCubeFbo = FBO_Create("_shadowCubeFbo", PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE);
+		FBO_Bind(tr.shadowCubeFbo);
+
+		//FBO_CreateBuffer(tr.shadowCubeFbo, GL_DEPTH_COMPONENT24, 0, 0);
+
+		qglDrawBuffer(GL_NONE);
+
+		R_AttachFBOTextureDepth(tr.cubeDepthImage->texnum);
+
+		FBO_SetupDrawBuffers();
+
+		R_CheckFBO(tr.shadowCubeFbo);
+	}
 
 	if (tr.sunShadowDepthImage[0] != NULL)
 	{
@@ -654,7 +671,7 @@ void FBO_Init(void)
 		glState.currentFBO->colorImage[0] = tr.renderCubeImage;
 		glState.currentFBO->colorBuffers[0] = tr.renderCubeImage->texnum;
 
-		FBO_AttachTexturePackedDepthStencil(tr.renderDepthImage->texnum);
+		R_AttachFBOTextureDepth(tr.renderDepthImage->texnum);
 
 		FBO_SetupDrawBuffers();
 

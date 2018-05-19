@@ -420,6 +420,20 @@ void RE_BeginScene(const refdef_t *fd)
 		tr.refdef.blurFactor = 0.0f;
 	}
 
+	// SomaZ: playing with real time lights
+	if (tr.numRealTimeLights > 0)
+	{
+		for (int i = 0; i < tr.numRealTimeLights; i++)
+		{
+			RE_AddDynamicLightToScene(tr.realTimeLights[i].position,
+				tr.realTimeLights[i].strength * 100.f,
+				tr.realTimeLights[i].color[0],
+				tr.realTimeLights[i].color[1],
+				tr.realTimeLights[i].color[2],
+				qfalse);
+		}
+	}
+
 	// derived info
 
 	tr.refdef.floatTime = tr.refdef.time * 0.001f;
@@ -538,7 +552,7 @@ void RE_RenderScene( const refdef_t *fd ) {
 		{
 			for (j = 0; j < 6; j++)
 			{
-				R_RenderCubemapSide(i, j, qtrue);
+				R_RenderCubemapSide(tr.cubemaps, i, j, qtrue, qfalse);
 			}
 		}
 	}
@@ -555,6 +569,7 @@ void RE_RenderScene( const refdef_t *fd ) {
 	parms.viewportWidth = tr.refdef.width;
 	parms.viewportHeight = tr.refdef.height;
 	parms.isPortal = qfalse;
+	parms.zNear = r_znear->value;
 
 	parms.fovX = tr.refdef.fov_x;
 	parms.fovY = tr.refdef.fov_y;
@@ -583,6 +598,9 @@ void RE_RenderScene( const refdef_t *fd ) {
 		R_AddPostProcessCmd();
 		R_EndTimedBlockCmd( timer );
 	}
+
+	if (tr.buildingSphericalHarmonics)
+		R_AddBuildSphericalHarmonicsCmd();
 
 	RE_EndScene();
 

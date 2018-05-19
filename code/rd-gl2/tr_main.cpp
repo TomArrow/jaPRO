@@ -38,7 +38,7 @@ static float	s_flipMatrix[16] = {
 };
 
 
-refimport_t*	ri;
+refimport_t	*ri;
 
 // entities that will have procedurally generated surfaces will just
 // point at this for their sorting surface
@@ -1016,7 +1016,7 @@ void R_SetupProjectionZ(viewParms_t *dest)
 {
 	float zNear, zFar, depth;
 	
-	zNear = r_znear->value;
+	zNear	= dest->zNear;// r_znear->value;
 	zFar	= dest->zFar;
 
 	depth	= zFar - zNear;
@@ -1069,7 +1069,6 @@ R_SetupProjectionOrtho
 void R_SetupProjectionOrtho(viewParms_t *dest, vec3_t viewBounds[2])
 {
 	float xmin, xmax, ymin, ymax, znear, zfar;
-	//viewParms_t *dest = &tr.viewParms;
 	int i;
 	vec3_t pop;
 
@@ -1415,8 +1414,7 @@ static qboolean SurfIsOffscreen( const drawSurf_t *drawSurf, vec4_t clipDest[128
 
 	R_RotateForViewer(&tr.viewParms);
 
-	R_DecomposeSort( drawSurf->sort, &shader, &cubemap, &postRender );
-	entityNum = drawSurf->entityNum;
+	R_DecomposeSort(drawSurf->sort, &entityNum, &shader, &cubemap, &postRender);
 	fogNum = drawSurf->fogIndex;
 
 	RB_BeginSurface( shader, fogNum, cubemap );
@@ -1543,6 +1541,7 @@ qboolean R_MirrorViewBySurface (drawSurf_t *drawSurf, int entityNum) {
 	newParms = tr.viewParms;
 	newParms.isPortal = qtrue;
 	newParms.zFar = 0.0f;
+	newParms.zNear = r_znear->value;
 	newParms.flags &= ~VPF_FARPLANEFRUSTUM;
 	if ( !R_GetPortalOrientations( drawSurf, entityNum, &surface, &camera, 
 		newParms.pvsOrigin, &newParms.isMirror ) ) {
@@ -1750,20 +1749,22 @@ bool R_IsPostRenderEntity ( int refEntityNum, const trRefEntity_t *refEntity )
 R_DecomposeSort
 =================
 */
-void R_DecomposeSort( uint32_t sort, shader_t **shader, int *cubemap, int *postRender )
+void R_DecomposeSort(uint32_t sort, int *entityNum, shader_t **shader, int *cubemap, int *postRender)
 {
 	*shader = tr.sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & QSORT_SHADERNUM_MASK ];
 	*postRender = (sort >> QSORT_POSTRENDER_SHIFT ) & QSORT_POSTRENDER_MASK;
+	*entityNum = (sort >> QSORT_ENTITYNUM_SHIFT) & QSORT_ENTITYNUM_MASK;
 	*cubemap = (sort >> QSORT_CUBEMAP_SHIFT ) & QSORT_CUBEMAP_MASK;
 }
 
-uint32_t R_CreateSortKey(int sortedShaderIndex, int cubemapIndex, int postRender)
+uint32_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex, int postRender)
 {
 	uint32_t key = 0;
 
 	key |= (sortedShaderIndex & QSORT_SHADERNUM_MASK) << QSORT_SHADERNUM_SHIFT;
 	key |= (cubemapIndex & QSORT_CUBEMAP_MASK) << QSORT_CUBEMAP_SHIFT;
 	key |= (postRender & QSORT_POSTRENDER_MASK) << QSORT_POSTRENDER_SHIFT;
+	key |= (entityNum & QSORT_ENTITYNUM_MASK) << QSORT_ENTITYNUM_SHIFT;
 
 	return key;
 }
@@ -1798,8 +1799,7 @@ void R_AddDrawSurf( surfaceType_t *surface, int entityNum, shader_t *shader,  in
 	index = tr.refdef.numDrawSurfs & DRAWSURF_MASK;
 	surf = tr.refdef.drawSurfs + index;
 
-	surf->sort = R_CreateSortKey(shader->sortedIndex, cubemap, postRender);
-	surf->entityNum = entityNum;
+	surf->sort = R_CreateSortKey(entityNum, shader->sortedIndex, cubemap, postRender);
 	surf->dlightBits = dlightMap;
 	surf->surface = surface;
 	surf->fogIndex = fogIndex;
@@ -1839,8 +1839,7 @@ void R_SortAndSubmitDrawSurfs( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 				int postRender;
 				int cubemap;
 
-				R_DecomposeSort( (drawSurfs+i)->sort, &shader, &cubemap, &postRender );
-				entityNum = drawSurfs[i].entityNum;
+				R_DecomposeSort((drawSurfs + i)->sort, &entityNum, &shader, &cubemap, &postRender);
 
 				if ( shader->sort > SS_PORTAL ) {
 					break;
@@ -1992,7 +1991,7 @@ static void R_GenerateDrawSurfs(viewParms_t *viewParms, trRefdef_t *refdef) {
 	// matrix for lod calculation
 
 	// dynamically compute far clip plane distance
-	if (!(tr.viewParms.flags & VPF_SHADOWMAP))
+	if (!(tr.viewParms.flags & VPF_SHADOWMAP) && !(tr.viewParms.flags & VPF_DEPTHSHADOW))
 	{
 		R_SetFarClip(viewParms, refdef);
 	}
@@ -2138,7 +2137,7 @@ void R_RenderView (viewParms_t *parms) {
 	// set viewParms.world
 	R_RotateForViewer(&tr.viewParms);
 
-	R_SetupProjection(&tr.viewParms, r_zproj->value, tr.viewParms.zFar, qtrue);
+	R_SetupProjection(&tr.viewParms, tr.viewParms.zNear, tr.viewParms.zFar, qtrue);
 
 	R_GenerateDrawSurfs(&tr.viewParms, &tr.refdef);
 
@@ -2149,9 +2148,11 @@ void R_RenderView (viewParms_t *parms) {
 }
 
 
-void R_RenderDlightCubemaps(const refdef_t *fd)
+void R_RenderDlightCubemaps(const refdef_t *fd) 
 {
 	int i;
+
+	unsigned int bufferDlightMask = tr.refdef.dlightMask;
 
 	for (i = 0; i < tr.refdef.num_dlights; i++)
 	{
@@ -2159,13 +2160,13 @@ void R_RenderDlightCubemaps(const refdef_t *fd)
 		int j;
 
 		// use previous frame to determine visible dlights
-		if ((1 << i) & tr.refdef.dlightMask)
+		if ((1 << i) & bufferDlightMask)
 			continue;
 
 		Com_Memset( &shadowParms, 0, sizeof( shadowParms ) );
 
-		shadowParms.viewportX = tr.refdef.x;
-		shadowParms.viewportY = glConfig.vidHeight - ( tr.refdef.y + PSHADOW_MAP_SIZE );
+		shadowParms.viewportX = 0;
+		shadowParms.viewportY = 0;
 		shadowParms.viewportWidth = PSHADOW_MAP_SIZE;
 		shadowParms.viewportHeight = PSHADOW_MAP_SIZE;
 		shadowParms.isPortal = qfalse;
@@ -2174,8 +2175,9 @@ void R_RenderDlightCubemaps(const refdef_t *fd)
 		shadowParms.fovX = 90;
 		shadowParms.fovY = 90;
 
-		shadowParms.flags = (viewParmFlags_t)(VPF_SHADOWMAP | VPF_DEPTHSHADOW | VPF_NOVIEWMODEL);
+		shadowParms.flags = (viewParmFlags_t)(VPF_DEPTHSHADOW | VPF_NOVIEWMODEL);
 		shadowParms.zFar = tr.refdef.dlights[i].radius;
+		shadowParms.zNear = 1.0f;
 
 		VectorCopy( tr.refdef.dlights[i].origin, shadowParms.ori.origin );
 
@@ -2221,8 +2223,12 @@ void R_RenderDlightCubemaps(const refdef_t *fd)
 					break;
 			}
 
+			shadowParms.targetFbo = tr.shadowCubeFbo;
+			shadowParms.cubemapSelection = tr.shadowCubemaps;
+			shadowParms.targetFboLayer = j;
+			shadowParms.targetFboCubemapIndex = i;
+
 			R_RenderView(&shadowParms);
-			R_AddCapShadowmapCmd( i, j );
 		}
 	}
 }
@@ -2831,6 +2837,7 @@ void R_RenderSunShadowMaps(const refdef_t *fd, int level)
 
 		shadowParms.flags = (viewParmFlags_t)( VPF_DEPTHSHADOW | VPF_DEPTHCLAMP | VPF_ORTHOGRAPHIC | VPF_NOVIEWMODEL );
 		shadowParms.zFar = lightviewBounds[1][0];
+		shadowParms.zNear = r_znear->value;
 
 		VectorCopy(lightOrigin, shadowParms.ori.origin);
 		
@@ -2869,7 +2876,7 @@ void R_RenderSunShadowMaps(const refdef_t *fd, int level)
 	}
 }
 
-void R_RenderCubemapSide( int cubemapIndex, int cubemapSide, qboolean subscene )
+void R_RenderCubemapSide( cubemap_t *cubemaps, int cubemapIndex, int cubemapSide, qboolean subscene, qboolean bounce )
 {
 	refdef_t refdef;
 	viewParms_t	parms;
@@ -2877,7 +2884,7 @@ void R_RenderCubemapSide( int cubemapIndex, int cubemapSide, qboolean subscene )
 
 	memset( &refdef, 0, sizeof( refdef ) );
 	refdef.rdflags = 0;
-	VectorCopy(tr.cubemaps[cubemapIndex].origin, refdef.vieworg);
+	VectorCopy(cubemaps[cubemapIndex].origin, refdef.vieworg);
 
 	switch(cubemapSide)
 	{
@@ -2933,8 +2940,11 @@ void R_RenderCubemapSide( int cubemapIndex, int cubemapSide, qboolean subscene )
 	{
 		RE_BeginScene(&refdef);
 
-		// FIXME: sun shadows aren't rendered correctly in cubemaps
-		// fix involves changing r_FBufScale to fit smaller cubemap image size, or rendering cubemap to framebuffer first
+		if (!(refdef.rdflags & RDF_NOWORLDMODEL) && tr.refdef.num_dlights && r_dlightMode->integer >= 2)
+		{
+			R_RenderDlightCubemaps(&refdef);
+		}
+
 		if (r_sunlightMode->integer && r_depthPrepass->value && ((r_forceSun->integer) || tr.sunShadows))
 		{
 			R_RenderSunShadowMaps(&refdef, 0);
@@ -2954,10 +2964,13 @@ void R_RenderCubemapSide( int cubemapIndex, int cubemapSide, qboolean subscene )
 	parms.viewportHeight = tr.renderCubeFbo->height;
 	parms.isPortal = qfalse;
 	parms.isMirror = qtrue;
-	parms.flags =  VPF_NOVIEWMODEL | VPF_NOCUBEMAPS | VPF_NOPOSTPROCESS;
+	parms.flags =  VPF_NOVIEWMODEL | VPF_NOPOSTPROCESS;
+	if (!bounce)
+		parms.flags |= VPF_NOCUBEMAPS;
 
 	parms.fovX = 90;
 	parms.fovY = 90;
+	parms.zNear = 4.0;
 
 	VectorCopy( refdef.vieworg, parms.ori.origin );
 	VectorCopy( refdef.viewaxis[0], parms.ori.axis[0] );
@@ -2966,14 +2979,13 @@ void R_RenderCubemapSide( int cubemapIndex, int cubemapSide, qboolean subscene )
 
 	VectorCopy( refdef.vieworg, parms.pvsOrigin );
 
-	// FIXME: sun shadows aren't rendered correctly in cubemaps
-	// fix involves changing r_FBufScale to fit smaller cubemap image size, or rendering cubemap to framebuffer first
 	if (r_sunlightMode->integer && r_depthPrepass->value && ((r_forceSun->integer) || tr.sunShadows))
 	{
 		parms.flags |= VPF_USESUNLIGHT;
 	}
 
 	parms.targetFbo = tr.renderCubeFbo;
+	parms.cubemapSelection = cubemaps;
 	parms.targetFboLayer = cubemapSide;
 	parms.targetFboCubemapIndex = cubemapIndex;
 

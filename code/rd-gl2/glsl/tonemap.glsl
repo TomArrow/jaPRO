@@ -54,12 +54,29 @@ vec3 FilmicTonemap(vec3 x)
 
 }
 
+vec3 ACESFilm(vec3 v)
+{
+	vec3 a = v * (v + 0.0245786f) - 0.000090537f;
+	vec3 b = v * (0.983729f * v + 0.4329510f) + 0.238081f;
+	return a / b;
+}
+
+vec3 ACESFilmVariation(vec3 x)
+{
+	float a = 2.51f;
+	float b = 0.03f;
+	float c = 2.43f;
+	float d = 0.59f;
+	float e = 0.14f;
+	return clamp((x*(a*x + b)) / (x*(c*x + d) + e), 0.0, 1.0);
+}
+
 void main()
 {
 	vec4 color = texture(u_TextureMap, var_TexCoords) * u_Color;
-	#if defined(USE_PBR)
-		color.rgb = pow(color.rgb, vec3(2.2));
-	#endif
+#if defined(USE_PBR)
+	color.rgb = pow(color.rgb, vec3(2.2));
+#endif
 	vec3 minAvgMax = texture(u_LevelsMap, var_TexCoords).rgb;
 	vec3 logMinAvgMaxLum = clamp(minAvgMax * 20.0 - 10.0, -u_AutoExposureMinMax.y, -u_AutoExposureMinMax.x);
 		
@@ -69,8 +86,8 @@ void main()
 	color.rgb *= u_ToneMinAvgMaxLinear.y / avgLum;
 	color.rgb = max(vec3(0.0), color.rgb - vec3(u_ToneMinAvgMaxLinear.x));
 
-	vec3 fWhite = 1.0 / FilmicTonemap(vec3(u_ToneMinAvgMaxLinear.z - u_ToneMinAvgMaxLinear.x));
-	color.rgb = FilmicTonemap(color.rgb) * fWhite;
+	vec3 fWhite = 1.0 / ACESFilm(vec3(u_ToneMinAvgMaxLinear.z - u_ToneMinAvgMaxLinear.x));
+	color.rgb = ACESFilm(color.rgb) * fWhite;
 	//color.rgb = LinearTosRGB(color.rgb);
 
 #if defined(USE_PBR)
