@@ -416,8 +416,11 @@ void CG_DrawInformation( void ) {
 		cgi_R_SetColor( NULL );
 		CG_DrawPic( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, levelshot );
 	}
-
-	if ( g_eSavedGameJustLoaded != eFULL && !strcmp(s,"kejim_post") )//special case for first map!
+#ifdef JK2_DEMO
+	if ( g_eSavedGameJustLoaded != eFULL && !strcmp(s,"demo") )//special case for first map!
+#else
+	if (g_eSavedGameJustLoaded != eFULL && !strcmp(s, "kejim_post"))//special case for first map!
+#endif
 	{
 		char	text[1024]={0};
 		cgi_SP_GetStringTextString( "INGAME_ALONGTIME", text, sizeof(text) );

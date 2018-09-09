@@ -45,6 +45,7 @@ option(BuildSPGame "Whether to create projects for the SP gamecode (df2gamex86.d
 option(BuildSPRdGL1 "Whether to create projects for the SP default OpenGL 1 renderer (rdsp-GL1_x86.dll)" ON)
 option(BuildSPRdGL2 "Whether to create projects for the SP OpenGL 2 renderer (rdsp-GL2_x86.dll)" ON)
 
+option(BuildJK2SPDemoEngine "Whether to create projects for the jk2 demo engine" OFF)
 option(BuildJK2SPEngine "Whether to create projects for the jk2 SP engine (openjo_sp.exe)" OFF)
 option(BuildJK2SPGame "Whether to create projects for the jk2 sp gamecode mod (jk2gamex86.dll)" OFF)
 option(BuildJK2SPRdGL1 "Whether to create projects for the jk2 sp OpenGL 1 renderer (rdjosp-gl1_x86.dll)" OFF)
@@ -306,7 +307,9 @@ if(BuildPortableVersion)
 	set(SharedDefines ${SharedDefines} "_PORTABLE_VERSION")
 endif()
 
-
+if(BuildJK2SPDemoEngine)
+	set(SharedDefines ${SharedDefines} "JK2_DEMO")
+endif()
 
 
 # Files shared across all projects
