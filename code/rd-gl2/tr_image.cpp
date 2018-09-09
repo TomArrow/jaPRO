@@ -98,7 +98,7 @@ void GL_TextureMode(const char *string) {
 
 
 	if (i == 6) {
-		ri->Printf(PRINT_ALL, "bad filter name\n");
+		ri.Printf(PRINT_ALL, "bad filter name\n");
 		return;
 	}
 
@@ -107,7 +107,7 @@ void GL_TextureMode(const char *string) {
 
 	if (r_ext_texture_filter_anisotropic->value > glConfig.maxTextureFilterAnisotropy)
 	{
-		ri->Cvar_SetValue("r_ext_texture_filter_anisotropic", glConfig.maxTextureFilterAnisotropy);
+		ri.Cvar_SetValue("r_ext_texture_filter_anisotropic", glConfig.maxTextureFilterAnisotropy);
 	}
 
 	// change all the existing mipmap texture objects
@@ -189,7 +189,7 @@ void R_ImageList_f(void) {
 	int estTotalSize = 0;
 	const char *sizeSuffix;
 
-	ri->Printf(PRINT_ALL, "\n      -w-- -h-- type  -size- --name-------\n");
+	ri.Printf(PRINT_ALL, "\n      -w-- -h-- type  -size- --name-------\n");
 
 	for (i = 0; i < tr.numImages; i++ )
 	{
@@ -273,15 +273,15 @@ void R_ImageList_f(void) {
 
 		float printSize = GetReadableSize(estSize, &sizeSuffix);
 
-		ri->Printf(PRINT_ALL, "%4i: %4ix%4i %s %7.2f%s %s\n", i, image->uploadWidth, image->uploadHeight, format, printSize, sizeSuffix, image->imgName);
+		ri.Printf(PRINT_ALL, "%4i: %4ix%4i %s %7.2f%s %s\n", i, image->uploadWidth, image->uploadHeight, format, printSize, sizeSuffix, image->imgName);
 		estTotalSize += estSize;
 	}
 
 	float printSize = GetReadableSize(estTotalSize, &sizeSuffix);
 
-	ri->Printf(PRINT_ALL, " ---------\n");
-	ri->Printf(PRINT_ALL, " approx %i bytes (%.2f%s)\n", estTotalSize, printSize, sizeSuffix);
-	ri->Printf(PRINT_ALL, " %i total images\n\n", tr.numImages);
+	ri.Printf(PRINT_ALL, " ---------\n");
+	ri.Printf(PRINT_ALL, " approx %i bytes (%.2f%s)\n", estTotalSize, printSize, sizeSuffix);
+	ri.Printf(PRINT_ALL, " %i total images\n\n", tr.numImages);
 }
 
 //=======================================================================
@@ -308,7 +308,7 @@ static void ResampleTexture(byte *in, int inwidth, int inheight, byte *out,
 	byte	*pix1, *pix2, *pix3, *pix4;
 
 	if (outwidth>2048)
-		ri->Error(ERR_DROP, "ResampleTexture: max width");
+		ri.Error(ERR_DROP, "ResampleTexture: max width");
 
 	fracstep = inwidth * 0x10000 / outwidth;
 
@@ -1664,7 +1664,7 @@ static void RawImage_ScaleToPower2(byte **data, int *inout_width, int *inout_hei
 
 		//endTime = ri->Milliseconds();
 
-		//ri->Printf(PRINT_ALL, "upsampled %dx%d to %dx%d in %dms\n", width, height, scaled_width, scaled_height, endTime - startTime);
+		//ri.Printf(PRINT_ALL, "upsampled %dx%d to %dx%d in %dms\n", width, height, scaled_width, scaled_height, endTime - startTime);
 
 		*data = *resampledBuffer;
 		width = scaled_width;
@@ -1735,7 +1735,7 @@ static qboolean RawImage_HasAlpha(const byte *scan, int numPixels)
 	return qfalse;
 }
 
-static GLenum RawImage_GetFormat(const byte *data, int numPixels, qboolean lightMap, imgType_t type, int flags)
+static GLenum RawImage_GetFormat(const byte *data, int numPixels, int depth, qboolean lightMap, imgType_t type, int flags)
 {
 	int samples = 3;
 	GLenum internalFormat = GL_RGB8;
@@ -1754,13 +1754,21 @@ static GLenum RawImage_GetFormat(const byte *data, int numPixels, qboolean light
 			{
 				internalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
 			}
-			else if (r_texturebits->integer == 16)
+			else if (depth == 4)
 			{
 				internalFormat = GL_RGBA4;
 			}
-			else if (r_texturebits->integer == 32)
+			else if (depth == 8)
 			{
 				internalFormat = GL_RGBA8;
+			}
+			else if (depth == 16)
+			{
+				internalFormat = GL_RGBA16F;
+			}
+			else if (depth == 32)
+			{
+				internalFormat = GL_RGBA32F;
 			}
 			else
 			{
@@ -1812,13 +1820,21 @@ static GLenum RawImage_GetFormat(const byte *data, int numPixels, qboolean light
 				{
 					internalFormat = GL_RGB4_S3TC;
 				}
-				else if (r_texturebits->integer == 16)
+				else if (depth == 4)
 				{
 					internalFormat = GL_RGB5;
 				}
-				else if (r_texturebits->integer == 32)
+				else if (depth == 8)
 				{
 					internalFormat = GL_RGB8;
+				}
+				else if (depth == 16)
+				{
+					internalFormat = GL_RGB16F;
+				}
+				else if (depth == 32)
+				{
+					internalFormat = GL_RGB32F;
 				}
 				else
 				{
@@ -1849,13 +1865,21 @@ static GLenum RawImage_GetFormat(const byte *data, int numPixels, qboolean light
 				{
 					internalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
 				}
-				else if (r_texturebits->integer == 16)
+				else if (depth == 4)
 				{
 					internalFormat = GL_RGBA4;
 				}
-				else if (r_texturebits->integer == 32)
+				else if (depth == 8)
 				{
 					internalFormat = GL_RGBA8;
+				}
+				else if (depth == 16)
+				{
+					internalFormat = GL_RGBA16F;
+				}
+				else if (depth == 32)
+				{
+					internalFormat = GL_RGBA32F;
 				}
 				else
 				{
@@ -1956,6 +1980,10 @@ static void RawImage_UploadTexture(byte *data, int x, int y, int width, int heig
 	case GL_DEPTH_COMPONENT32:
 		dataFormat = GL_DEPTH_COMPONENT;
 		dataType = GL_UNSIGNED_BYTE;
+		break;
+	case GL_DEPTH24_STENCIL8:
+		dataFormat = GL_DEPTH_STENCIL;
+		dataType = GL_UNSIGNED_INT_24_8;
 		break;
 	case GL_RG16F:
 		dataFormat = GL_RG;
@@ -2274,21 +2302,21 @@ R_CreateImage
 This is the only way any image_t are created
 ================
 */
-image_t *R_CreateImage(const char *name, byte *pic, int width, int height, imgType_t type, int flags, int internalFormat) {
+image_t *R_CreateImage(const char *name, byte *pic, int width, int height, int depth, imgType_t type, int flags, int internalFormat) {
 	image_t		*image;
 	qboolean	isLightmap = qfalse;
 	long		hash;
 	int         glWrapClampMode;
 
 	if (strlen(name) >= MAX_QPATH) {
-		ri->Error(ERR_DROP, "R_CreateImage: \"%s\" is too long", name);
+		ri.Error(ERR_DROP, "R_CreateImage: \"%s\" is too long", name);
 	}
 	if (!strncmp(name, "*lightmap", 9)) {
 		isLightmap = qtrue;
 	}
 
 	if (tr.numImages == MAX_DRAWIMAGES) {
-		ri->Error(ERR_DROP, "R_CreateImage: MAX_DRAWIMAGES hit");
+		ri.Error(ERR_DROP, "R_CreateImage: MAX_DRAWIMAGES hit");
 	}
 	
 	image = tr.images[tr.numImages] = (image_t *)R_Hunk_Alloc(sizeof(image_t), qtrue);
@@ -2312,7 +2340,7 @@ image_t *R_CreateImage(const char *name, byte *pic, int width, int height, imgTy
 		if (image->flags & IMGFLAG_CUBEMAP)
 			internalFormat = GL_RGBA8;
 		else
-			internalFormat = RawImage_GetFormat(pic, width * height, isLightmap, image->type, image->flags);
+			internalFormat = RawImage_GetFormat(pic, width * height, depth, isLightmap, image->type, image->flags);
 	}
 
 	image->internalFormat = internalFormat;
@@ -2386,8 +2414,18 @@ image_t *R_CreateImage(const char *name, byte *pic, int width, int height, imgTy
 	else
 	{
 		GL_Bind(image);
-
-		if (pic)
+		if (image->flags & IMGFLAG_NPOT_MIP) {
+			int dim = width > height ? width : height;
+			int levels = 0;
+			while (dim) {
+				levels++;
+				dim /= 2;
+			}
+			qglTexStorage2D(GL_TEXTURE_2D, levels, internalFormat, width, height);
+			qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		}
+		else if (pic)
 		{
 			Upload32(pic, image->width, image->height, image->type, image->flags,
 				isLightmap, image->internalFormat, &image->uploadWidth,
@@ -2402,6 +2440,8 @@ image_t *R_CreateImage(const char *name, byte *pic, int width, int height, imgTy
 
 		qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, glWrapClampMode);
 		qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, glWrapClampMode);
+
+		
 	}
 
 	GL_SelectTexture(0);
@@ -2419,7 +2459,7 @@ image_t *R_CreateImage3D(const char *name, byte *data, int width, int height, in
 	long hash;
 
 	if (strlen(name) >= MAX_QPATH) {
-		ri->Error(ERR_DROP, "R_CreateImage3D: \"%s\" is too long", name);
+		ri.Error(ERR_DROP, "R_CreateImage3D: \"%s\" is too long", name);
 
 	}
 
@@ -2558,63 +2598,84 @@ done:
 		R_Free(resampledBuffer);
 }
 
+image_t* R_GetLoadedImage(const char *name, int flags) {
+	long	hash;
+	image_t	*image;
+
+	hash = generateHashValue(name);
+	for (image = hashTable[hash]; image; image = image->next) {
+		if (!strcmp(name, image->imgName)) {
+			// the white image can be used with any set of parms, but other mismatches are errors
+			if (strcmp(name, "*white")) {
+				if (image->flags != flags) {
+					ri.Printf(PRINT_DEVELOPER, "WARNING: reused image %s with mixed flags (%i vs %i)\n", name, image->flags, flags);
+				}
+			}
+			return image;
+		}
+	}
+	return NULL;
+}
+
 void R_CreateDiffuseAndSpecMapsFromBaseColorAndRMO(shaderStage_t *stage, const char *name, const char *rmoName, int flags, int type)
 {
-	image_t	*image;
 	char	diffuseName[MAX_QPATH];
 	char	specularName[MAX_QPATH];
-	int		width, height, rmoWidth, rmoHeight;
-	byte	*rmoPic,*baseColorPic,*specGlossPic,*diffusePic;
-	long	hash;
+	int		width, height, depth, rmoWidth, rmoHeight, rmoDepth;
+	byte	*rmoPic, *baseColorPic, *specGlossPic, *diffusePic;
+	image_t *image;
 
 	if (!name) {
 		return;
 	}
 
-	COM_StripExtension(name, diffuseName, MAX_QPATH);
-	Q_strcat(diffuseName, MAX_QPATH, "_diffuse");
+	COM_StripExtension(name, diffuseName, sizeof(diffuseName));
+	Q_strcat(diffuseName, sizeof(diffuseName), "_diffuse");
 
-	COM_StripExtension(name, specularName, MAX_QPATH);
-	Q_strcat(specularName, MAX_QPATH, "_spec");
+	COM_StripExtension(name, specularName, sizeof(specularName));
+	Q_strcat(specularName, sizeof(specularName), "_spec");
 
 	//
 	// see if the images are already loaded
 	//
-	hash = generateHashValue(diffuseName);
-	for (image = hashTable[hash]; image; image = image->next) {
-		if (!strcmp(diffuseName, image->imgName)) {
-			stage->bundle[TB_COLORMAP].image[0] = image;
-			// check for specular map
-			hash = generateHashValue(specularName);
-			for (image = hashTable[hash]; image; image = image->next) {
-				if (!strcmp(specularName, image->imgName)) {
-					stage->bundle[TB_SPECULARMAP].image[0] = image;
-					return;
-				}
-			}
+	image = R_GetLoadedImage(diffuseName, flags);
+	if (image != NULL)
+	{
+		stage->bundle[TB_COLORMAP].image[0] = image;
+
+		image = R_GetLoadedImage(specularName, flags);
+		if (image != NULL)
+		{
+			stage->bundle[TB_SPECULARMAP].image[0] = R_GetLoadedImage(specularName, flags);
+			ri.Printf(PRINT_DEVELOPER, "WARNING: reused Diffuse and Specular images for %s\n", name);
+			return;
 		}
 	}
 
 	//
 	// load the pics from disk
 	//
-	R_LoadImage(name, &baseColorPic, &width, &height);
+	R_LoadImage(name, &baseColorPic, &width, &height, &depth);
 	if (baseColorPic == NULL) {
 		return;
 	}
-	R_LoadImage(rmoName, &rmoPic, &rmoWidth, &rmoHeight);
+
+	R_LoadImage(rmoName, &rmoPic, &rmoWidth, &rmoHeight, &rmoDepth);
 	if (rmoPic == NULL) {
+		R_Free(baseColorPic);
 		return;
 	}
 
 	if (width != rmoWidth || height != rmoHeight)
 	{
-		ri->Printf(PRINT_ALL, "WARNING: Can't build Specular Map for %s (different texture sizes for baseColor and rmo)\n", name);
+		ri.Printf(PRINT_ALL, "WARNING: Can't build Specular Map for %s (different texture sizes for baseColor and rmo)\n", name);
+		R_Free(baseColorPic);
+		R_Free(rmoPic);
 		return;
 	}
 
-	specGlossPic = (byte *)R_Malloc(width * height * 4, TAG_GP2, qfalse);
-	diffusePic = (byte *)R_Malloc(width * height * 4, TAG_GP2, qfalse);
+	specGlossPic = (byte *)R_Malloc(width * height * 4, TAG_TEMP_WORKSPACE, qfalse);
+	diffusePic = (byte *)R_Malloc(width * height * 4, TAG_TEMP_WORKSPACE, qfalse);
 
 	float baseSpecular;
 
@@ -2631,72 +2692,67 @@ void R_CreateDiffuseAndSpecMapsFromBaseColorAndRMO(shaderStage_t *stage, const c
 
 	for (int i = 0; i < width * height * 4; i += 4)
 	{
-		const float aoStrength	= 0.5f;
+		const float aoStrength = 0.5f;
 		float roughness, gloss, metalness, specular_variance, ao;
 
 		switch (type)
 		{
 		case SPEC_RMO:
 		case SPEC_RMOS:
-		{
 			roughness = ByteToFloat(rmoPic[i + 0]);
 			gloss = (1.0 - roughness) + (0.04 * roughness);
 			metalness = ByteToFloat(rmoPic[i + 1]);
 			ao = ByteToFloat(rmoPic[i + 2]);
 			ao += (1.0 - ao) * (1.0 - aoStrength);
-			specular_variance = ByteToFloat(rmoPic[i + 3]);
-		}
-		break;
+			specular_variance = (type == SPEC_RMOS) ? ByteToFloat(rmoPic[i + 3]) : 1.0f;
+			break;
 		case SPEC_MOXR:
 		case SPEC_MOSR:
-		{
 			metalness = ByteToFloat(rmoPic[i + 0]);
 			ao = ByteToFloat(rmoPic[i + 1]);
 			ao += (1.0 - ao) * (1.0 - aoStrength);
-			specular_variance = ByteToFloat(rmoPic[i + 2]);
+			specular_variance = (type == SPEC_MOSR) ? ByteToFloat(rmoPic[i + 2]) : 1.0f;
 			roughness = ByteToFloat(rmoPic[i + 3]);
 			gloss = (1.0 - roughness) + (0.04 * roughness);
-		}
-		break;
-		// should never reach this
+			break;
+			// should never reach this
 		default:
-		{
 			specular_variance = 1.0f;
 			metalness = 0.0f;
-			gloss = r_baseGloss->value;
+			gloss = 0.02f;
 			ao = 1.0f;
+			break;
 		}
-		break;
-		}
-		
-		float baseColor[4];
+
+		vec4_t baseColor;
 		// remove gamma correction because we want to work in linear space
-		baseColor[0] = pow(ByteToFloat(baseColorPic[i + 0]), GAMMA);
-		baseColor[1] = pow(ByteToFloat(baseColorPic[i + 1]), GAMMA);
-		baseColor[2] = pow(ByteToFloat(baseColorPic[i + 2]), GAMMA);
+		baseColor[0] = sRGBtoRGB(ByteToFloat(baseColorPic[i + 0]));
+		baseColor[1] = sRGBtoRGB(ByteToFloat(baseColorPic[i + 1]));
+		baseColor[2] = sRGBtoRGB(ByteToFloat(baseColorPic[i + 2]));
 		// don't remove gamma correction in alpha because this is data, not color
 		baseColor[3] = ByteToFloat(baseColorPic[i + 3]);
 
-		baseSpecular *= specular_variance;
+		specular_variance *= baseSpecular;
 
 		// diffuse Color = baseColor * (1.0 - metalness) 
 		// also gamma correct again
-		diffusePic[i + 0] = FloatToByte(pow(baseColor[0] * (1.0f - metalness) * ao, INV_GAMMA));
-		diffusePic[i + 1] = FloatToByte(pow(baseColor[1] * (1.0f - metalness) * ao, INV_GAMMA));
-		diffusePic[i + 2] = FloatToByte(pow(baseColor[2] * (1.0f - metalness) * ao, INV_GAMMA));
+		// FIXME: AO should be handled in shader because it should only affect the ambient lighting
+		diffusePic[i + 0] = FloatToByte(RGBtosRGB(baseColor[0] * (1.0f - metalness) * ao));
+		diffusePic[i + 1] = FloatToByte(RGBtosRGB(baseColor[1] * (1.0f - metalness) * ao));
+		diffusePic[i + 2] = FloatToByte(RGBtosRGB(baseColor[2] * (1.0f - metalness) * ao));
 		diffusePic[i + 3] = FloatToByte(baseColor[3]);
 
 		// specular Color = mix(baseSpecular, baseColor, metalness)
 		// also gamma correct again
-		specGlossPic[i + 0] = FloatToByte(pow(baseSpecular * (1.0f - metalness) + baseColor[0] * metalness, INV_GAMMA));
-		specGlossPic[i + 1] = FloatToByte(pow(baseSpecular * (1.0f - metalness) + baseColor[1] * metalness, INV_GAMMA));
-		specGlossPic[i + 2] = FloatToByte(pow(baseSpecular * (1.0f - metalness) + baseColor[2] * metalness, INV_GAMMA));
+		specGlossPic[i + 0] = FloatToByte(RGBtosRGB(specular_variance * (1.0f - metalness) + baseColor[0] * metalness));
+		specGlossPic[i + 1] = FloatToByte(RGBtosRGB(specular_variance * (1.0f - metalness) + baseColor[1] * metalness));
+		specGlossPic[i + 2] = FloatToByte(RGBtosRGB(specular_variance * (1.0f - metalness) + baseColor[2] * metalness));
 		// don't remove gamma correction in alpha because this is data, not color
 		specGlossPic[i + 3] = FloatToByte(gloss);
 	}
 
-	stage->bundle[TB_COLORMAP].image[0] = R_CreateImage(diffuseName, diffusePic, width, height, IMGTYPE_COLORALPHA, flags, 0);
-	stage->bundle[TB_SPECULARMAP].image[0] = R_CreateImage(specularName, specGlossPic, width, height, IMGTYPE_COLORALPHA, flags, 0);
+	stage->bundle[TB_COLORMAP].image[0] = R_CreateImage(diffuseName, diffusePic, width, height, depth, IMGTYPE_COLORALPHA, flags, 0);
+	stage->bundle[TB_SPECULARMAP].image[0] = R_CreateImage(specularName, specGlossPic, width, height, depth, IMGTYPE_COLORALPHA, flags, 0);
 
 	R_Free(diffusePic);
 	R_Free(specGlossPic);
@@ -2714,8 +2770,8 @@ static void R_CreateNormalMap(const char *name, byte *pic, int width, int height
 
 	normalFlags = (flags & ~(IMGFLAG_GENNORMALMAP | IMGFLAG_SRGB)) | IMGFLAG_NOLIGHTSCALE;
 
-	COM_StripExtension(name, normalName, MAX_QPATH);
-	Q_strcat(normalName, MAX_QPATH, "_n");
+	COM_StripExtension(name, normalName, sizeof(normalName));
+	Q_strcat(normalName, sizeof(normalName), "_n");
 
 	// find normalmap in case it's there
 	normalImage = R_FindImageFile(normalName, IMGTYPE_NORMAL, normalFlags);
@@ -2753,7 +2809,7 @@ static void R_CreateNormalMap(const char *name, byte *pic, int width, int height
 			byte *blurPic;
 
 			RGBAtoYCoCgA(pic, pic, width, height);
-			blurPic = ri->Malloc(width * height);
+			blurPic = ri.Malloc(width * height);
 
 			for (y = 1; y < height - 1; y++)
 			{
@@ -2803,7 +2859,7 @@ static void R_CreateNormalMap(const char *name, byte *pic, int width, int height
 		}
 #endif
 
-		R_CreateImage(normalName, normalPic, normalWidth, normalHeight, IMGTYPE_NORMAL, normalFlags, 0);
+		R_CreateImage(normalName, normalPic, normalWidth, normalHeight, 8, IMGTYPE_NORMAL, normalFlags, 0);
 		R_Free(normalPic);
 	}
 }
@@ -2820,35 +2876,20 @@ Returns NULL if it fails, not a default image.
 image_t	*R_FindImageFile(const char *name, imgType_t type, int flags)
 {
 	image_t	*image;
-	int		width, height;
+	int		width, height, depth;
 	byte	*pic;
-	long	hash;
 
 	if (!name) {
 		return NULL;
 	}
 
-	hash = generateHashValue(name);
-
-	//
-	// see if the image is already loaded
-	//
-	for (image = hashTable[hash]; image; image = image->next) {
-		if (!strcmp(name, image->imgName)) {
-			// the white image can be used with any set of parms, but other mismatches are errors
-			if (strcmp(name, "*white")) {
-				if (image->flags != flags) {
-					ri->Printf(PRINT_DEVELOPER, "WARNING: reused image %s with mixed flags (%i vs %i)\n", name, image->flags, flags);
-				}
-			}
-			return image;
-		}
-	}
+	if ((image = R_GetLoadedImage(name, flags)) != NULL)
+		return image;
 
 	//
 	// load the pic from disk
 	//
-	R_LoadImage(name, &pic, &width, &height);
+	R_LoadImage(name, &pic, &width, &height, &depth);
 	if (pic == NULL) {
 		return NULL;
 	}
@@ -2860,7 +2901,7 @@ image_t	*R_FindImageFile(const char *name, imgType_t type, int flags)
 		R_CreateNormalMap(name, pic, width, height, flags);
 	}
 
-	image = R_CreateImage(name, pic, width, height, type, flags, 0);
+	image = R_CreateImage(name, pic, width, height, depth, type, flags, 0);
 	R_Free(pic);
 
 	return image;
@@ -2874,13 +2915,13 @@ R_CreateDlightImage
 */
 #define	DLIGHT_SIZE	16
 static void R_CreateDlightImage(void) {
-	int		width, height;
+	int		width, height, depth;
 	byte	*pic;
 
-	R_LoadImage("gfx/2d/dlight", &pic, &width, &height);
+	R_LoadImage("gfx/2d/dlight", &pic, &width, &height, &depth);
 	if (pic)
 	{
-		tr.dlightImage = R_CreateImage("*dlight", pic, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, 0);
+		tr.dlightImage = R_CreateImage("*dlight", pic, width, height, depth, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, 0);
 		R_Free(pic);
 	}
 	else
@@ -2909,7 +2950,7 @@ static void R_CreateDlightImage(void) {
 				data[y][x][3] = 255;
 			}
 		}
-		tr.dlightImage = R_CreateImage("*dlight", (byte *)data, DLIGHT_SIZE, DLIGHT_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, 0);
+		tr.dlightImage = R_CreateImage("*dlight", (byte *)data, DLIGHT_SIZE, DLIGHT_SIZE, depth, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, 0);
 	}
 }
 
@@ -2997,7 +3038,7 @@ static void R_CreateFogImage(void) {
 	// standard openGL clamping doesn't really do what we want -- it includes
 	// the border color at the edges.  OpenGL 1.2 has clamp-to-edge, which does
 	// what we want.
-	tr.fogImage = R_CreateImage("*fog", (byte *)data, FOG_S, FOG_T, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0);
+	tr.fogImage = R_CreateImage("*fog", (byte *)data, FOG_S, FOG_T, 8, IMGTYPE_COLORALPHA, IMGFLAG_CLAMPTOEDGE, 0);
 	R_Free(data);
 
 	borderColor[0] = 1.0;
@@ -3019,7 +3060,7 @@ static void R_CreateEnvBrdfLUT(void) {
 	static const int LUT_WIDTH = 128;
 	static const int LUT_HEIGHT = 128;
 
-	if (!r_cubeMapping->integer)
+	if (!r_cubeMapping->integer && !1)
 		return;
 
 	uint16_t	data[LUT_WIDTH][LUT_HEIGHT][2];
@@ -3084,7 +3125,7 @@ static void R_CreateEnvBrdfLUT(void) {
 		}
 	}
 
-	tr.envBrdfImage = R_CreateImage("*envBrdfLUT", (byte*)data, LUT_WIDTH, LUT_HEIGHT, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RG16F);
+	tr.envBrdfImage = R_CreateImage("*envBrdfLUT", (byte*)data, LUT_WIDTH, LUT_HEIGHT, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RG16F);
 	return;
 }
 
@@ -3121,7 +3162,7 @@ static void R_CreateDefaultImage(void) {
 			data[x][DEFAULT_SIZE - 1][2] =
 			data[x][DEFAULT_SIZE - 1][3] = 255;
 	}
-	tr.defaultImage = R_CreateImage("*default", (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_MIPMAP, 0);
+	tr.defaultImage = R_CreateImage("*default", (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, 8, IMGTYPE_COLORALPHA, IMGFLAG_MIPMAP, 0);
 }
 
 /*
@@ -3137,7 +3178,7 @@ void R_CreateBuiltinImages(void) {
 
 	// we use a solid white image instead of disabling texturing
 	Com_Memset(data, 255, sizeof(data));
-	tr.whiteImage = R_CreateImage("*white", (byte *)data, 8, 8, IMGTYPE_COLORALPHA, IMGFLAG_NONE, 0);
+	tr.whiteImage = R_CreateImage("*white", (byte *)data, 8, 8, 8, IMGTYPE_COLORALPHA, IMGFLAG_NONE, 0);
 
 	if (r_dlightMode->integer >= 2)
 	{
@@ -3146,7 +3187,7 @@ void R_CreateBuiltinImages(void) {
 
 		for (x = 0; x < MAX_DLIGHTS; x++)
 		{
-			tr.shadowCubemaps[x].image = R_CreateImage(va("*shadowcubemap%i", x), NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_CUBEMAP, GL_DEPTH_COMPONENT24);
+			tr.shadowCubemaps[x].image = R_CreateImage(va("*shadowcubemap%i", x), NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_CUBEMAP, GL_DEPTH_COMPONENT24);
 			GL_Bind(tr.shadowCubemaps[x].image);
 			qglTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 			qglTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -3166,12 +3207,12 @@ void R_CreateBuiltinImages(void) {
 		}
 	}
 
-	tr.identityLightImage = R_CreateImage("*identityLight", (byte *)data, 8, 8, IMGTYPE_COLORALPHA, IMGFLAG_NONE, 0);
+	tr.identityLightImage = R_CreateImage("*identityLight", (byte *)data, 8, 8, 0, IMGTYPE_COLORALPHA, IMGFLAG_NONE, 0);
 
 
 	for (x = 0; x<32; x++) {
 		// scratchimage is usually used for cinematic drawing
-		tr.scratchImage[x] = R_CreateImage("*scratch", (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_PICMIP | IMGFLAG_CLAMPTOEDGE | IMGFLAG_MUTABLE, 0);
+		tr.scratchImage[x] = R_CreateImage("*scratch", (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE, 0, IMGTYPE_COLORALPHA, IMGFLAG_PICMIP | IMGFLAG_CLAMPTOEDGE | IMGFLAG_MUTABLE, 0);
 	}
 
 	R_CreateDlightImage();
@@ -3189,25 +3230,49 @@ void R_CreateBuiltinImages(void) {
 
 	rgbFormat = GL_RGBA8;
 
-	tr.renderImage = R_CreateImage("_render", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
+	tr.renderImage = R_CreateImage("_render", NULL, width, height, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
 
-	tr.glowImage = R_CreateImage("*glow", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
+	tr.specBufferImage = R_CreateImage("_specBuffer", NULL, width, height, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+	tr.normalBufferImage = R_CreateImage("_normalBuffer", NULL, width, height, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_NPOT_MIP, GL_RGBA16F);
+
+	tr.diffuseLightingImage = R_CreateImage("_diffuseLighting", NULL, width, height, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA16F);
+	tr.specularLightingImage = R_CreateImage("_specularLighting", NULL, width, height, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA16F);
+
+	tr.glowImage = R_CreateImage("*glow", NULL, width, height, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
 
 	int glowImageWidth = width;
 	int glowImageHeight = height;
 	for (int i = 0; i < ARRAY_LEN(tr.glowImageScaled); i++)
 	{
-		tr.glowImageScaled[i] = R_CreateImage(va("*glowScaled%d", i), NULL, glowImageWidth, glowImageHeight, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
+		tr.glowImageScaled[i] = R_CreateImage(va("*glowScaled%d", i), NULL, glowImageWidth, glowImageHeight, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
 		glowImageWidth = Q_max(1, glowImageWidth >> 1);
 		glowImageHeight = Q_max(1, glowImageHeight >> 1);
 	}
 
 	if (r_drawSunRays->integer)
-		tr.sunRaysImage = R_CreateImage("*sunRays", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, rgbFormat);
+		tr.sunRaysImage = R_CreateImage("*sunRays", NULL, width, height, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, rgbFormat);
 
-	tr.renderDepthImage = R_CreateImage("*renderdepth", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
+	tr.renderDepthImage = R_CreateImage("*renderdepth", NULL, width, height, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_NPOT_MIP, GL_DEPTH24_STENCIL8);
 
-	tr.cubeDepthImage = R_CreateImage("*cubedepth", NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_CUBEMAP, GL_DEPTH_COMPONENT24);
+	tr.cubeDepthImage = R_CreateImage("*cubedepth", NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_CUBEMAP, GL_DEPTH_COMPONENT24);
+
+	if (r_ssr->integer)
+	{
+		tr.velocityImage = R_CreateImage("*velocity", NULL, width, height, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RG16F);
+
+		tr.preSSRImage[0] = R_CreateImage("*preSSR_0", NULL, width / 2, height / 2, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
+		tr.preSSRImage[1] = R_CreateImage("*preSSR_1", NULL, width / 2, height / 2, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
+
+		GL_Bind(tr.preSSRImage[0]);
+		qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		GL_Bind(tr.preSSRImage[1]);
+		qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+		tr.tempFilterBufferImage = R_CreateImage("*tempFilterBuffer", NULL, width, height, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
+		tr.swapTempFilterBufferImage = R_CreateImage("*swapTempFilterBuffer", NULL, width, height, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
+	}
 
 	{
 		unsigned short sdata[4];
@@ -3230,43 +3295,41 @@ void R_CreateBuiltinImages(void) {
 			p = data;
 		}
 
-		tr.calcLevelsImage = R_CreateImage("*calcLevels", (byte *)p, 1, 1, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
-		tr.targetLevelsImage = R_CreateImage("*targetLevels", (byte *)p, 1, 1, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
-		tr.fixedLevelsImage = R_CreateImage("*fixedLevels", (byte *)p, 1, 1, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
+		tr.calcLevelsImage = R_CreateImage("*calcLevels", (byte *)p, 1, 1, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
+		tr.targetLevelsImage = R_CreateImage("*targetLevels", (byte *)p, 1, 1, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
+		tr.fixedLevelsImage = R_CreateImage("*fixedLevels", (byte *)p, 1, 1, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
 	}
 
 	for (x = 0; x < 2; x++)
 	{
-		tr.textureScratchImage[x] = R_CreateImage(va("*textureScratch%d", x), NULL, 256, 256, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+		tr.textureScratchImage[x] = R_CreateImage(va("*textureScratch%d", x), NULL, 256, 256, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
 	}
 	for (x = 0; x < 2; x++)
 	{
-		tr.quarterImage[x] = R_CreateImage(va("*quarter%d", x), NULL, width / 2, height / 2, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+		tr.quarterImage[x] = R_CreateImage(va("*quarter%d", x), NULL, width / 2, height / 2, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
 	}
 
 	if (r_ssao->integer)
 	{
-		tr.screenSsaoImage = R_CreateImage("*screenSsao", NULL, width / 2, height / 2, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
-		tr.hdrDepthImage = R_CreateImage("*hdrDepth", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_INTENSITY32F_ARB);
+		tr.screenSsaoImage = R_CreateImage("*screenSsao", NULL, width / 2, height / 2, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+		tr.hdrDepthImage = R_CreateImage("*hdrDepth", NULL, width, height, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_INTENSITY32F_ARB);
 	}
 
-	if (r_refraction->integer) 
+	if ( r_refraction->integer || r_ssr->integer)
 	{
-		tr.refractiveImage = R_CreateImage("*refractiveFbo", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
+		tr.prevRenderImage = R_CreateImage("*prevRender", NULL, width / 2, height / 2, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_NPOT_MIP, hdrFormat);
 	}
-
-	tr.prefilterEnvMapImage = R_CreateImage("*prefilterEnvMapFbo", NULL, r_cubemapSize->integer / 2, r_cubemapSize->integer / 2, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
 
 	for (x = 0; x < MAX_DRAWN_PSHADOWS; x++)
 	{
-		tr.pshadowMaps[x] = R_CreateImage(va("*shadowmap%i", x), NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
+		tr.pshadowMaps[x] = R_CreateImage(va("*shadowmap%i", x), NULL, PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
 	}
 
 	if (r_sunlightMode->integer)
 	{
 		for (x = 0; x < 4; x++)
 		{
-			tr.sunShadowDepthImage[x] = R_CreateImage(va("*sunshadowdepth%i", x), NULL, r_shadowMapSize->integer, r_shadowMapSize->integer, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
+			tr.sunShadowDepthImage[x] = R_CreateImage(va("*sunshadowdepth%i", x), NULL, r_shadowMapSize->integer, r_shadowMapSize->integer, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
 			GL_Bind(tr.sunShadowDepthImage[x]);
 			qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 			qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -3274,13 +3337,26 @@ void R_CreateBuiltinImages(void) {
 			qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 		}
 
-		tr.screenShadowImage = R_CreateImage("*screenShadow", NULL, width, height, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+		tr.screenShadowImage = R_CreateImage("*screenShadow", NULL, width, height, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
 	}
 
 	if (r_cubeMapping->integer)
 	{
-		tr.renderCubeImage = R_CreateImage("*renderCube", NULL, r_cubemapSize->integer, r_cubemapSize->integer, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP | IMGFLAG_CUBEMAP, hdrFormat);
+		tr.renderCubeImage = R_CreateImage("*renderCube", NULL, r_cubemapSize->integer, r_cubemapSize->integer, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP | IMGFLAG_CUBEMAP, hdrFormat);
+		tr.prefilterEnvMapImage = R_CreateImage("*prefilterEnvMap", NULL, r_cubemapSize->integer / 2, r_cubemapSize->integer / 2, 0, IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, hdrFormat);
 	}
+
+		
+	tr.weatherDepthImage = R_CreateImage(
+		"*weatherDepth",
+		NULL,
+		1024,
+		1024,
+		0,
+		IMGTYPE_COLORALPHA,
+		IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE,
+		GL_DEPTH_COMPONENT24);
+
 }
 
 
@@ -3315,14 +3391,14 @@ void R_SetColorMappings(void) {
 	tr.identityLightByte = 255 * tr.identityLight;
 
 	if (r_intensity->value <= 1) {
-		ri->Cvar_Set("r_intensity", "1");
+		ri.Cvar_Set("r_intensity", "1");
 	}
 
 	if (r_gamma->value < 0.5f) {
-		ri->Cvar_Set("r_gamma", "0.5");
+		ri.Cvar_Set("r_gamma", "0.5");
 	}
 	else if (r_gamma->value > 3.0f) {
-		ri->Cvar_Set("r_gamma", "3.0");
+		ri.Cvar_Set("r_gamma", "3.0");
 	}
 
 	g = r_gamma->value;
@@ -3365,7 +3441,7 @@ void R_SetColorMappings(void) {
 
 	if (glConfig.deviceSupportsGamma)
 	{
-		ri->WIN_SetGamma(&glConfig, s_gammatable, s_gammatable, s_gammatable);
+		ri.WIN_SetGamma(&glConfig, s_gammatable, s_gammatable, s_gammatable);
 	}
 }
 

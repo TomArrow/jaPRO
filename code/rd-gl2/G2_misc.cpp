@@ -579,7 +579,7 @@ void G2_TransformModel(CGhoul2Info_v &ghoul2, const int frameNum, vec3_t scale, 
 
 	if (cg_g2MarksAllModels == NULL)
 	{
-		cg_g2MarksAllModels = ri->Cvar_Get("cg_g2MarksAllModels", "0", 0);
+		cg_g2MarksAllModels = ri.Cvar_Get("cg_g2MarksAllModels", "0", 0);
 	}
 
 	if (cg_g2MarksAllModels == NULL
@@ -1565,7 +1565,7 @@ void G2_TraceModels(CGhoul2Info_v &ghoul2, vec3_t rayStart, vec3_t rayEnd, CColl
 
 	if (cg_g2MarksAllModels == NULL)
 	{
-		cg_g2MarksAllModels = ri->Cvar_Get("cg_g2MarksAllModels", "0", 0);
+		cg_g2MarksAllModels = ri.Cvar_Get("cg_g2MarksAllModels", "0", 0);
 	}
 
 	if (cg_g2MarksAllModels == NULL
@@ -1779,7 +1779,7 @@ void G2_SaveGhoul2Models(
 	CGhoul2Info_v& ghoul2)
 {
 	ojk::SavedGameHelper saved_game(
-		::ri->saved_game);
+		::ri.saved_game);
 
 	saved_game.reset_buffer();
 
@@ -1860,7 +1860,7 @@ void G2_LoadGhoul2Model(
 	static_cast<void>(buffer);
 
 	ojk::SavedGameHelper saved_game(
-		::ri->saved_game);
+		::ri.saved_game);
 
 	// first thing, lets see how many ghoul2 models we have, and resize our buffers accordingly
 	int model_count = 0;

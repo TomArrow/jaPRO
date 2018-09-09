@@ -53,6 +53,7 @@ uniform mat4 u_ModelViewProjectionMatrix;
 uniform vec4 u_BaseColor;
 uniform vec4 u_VertColor;
 uniform mat4 u_ModelMatrix;
+uniform mat4 u_NormalMatrix;
 
 #if defined(USE_VERTEX_ANIMATION)
 uniform float u_VertexLerp;
@@ -236,14 +237,11 @@ void main()
 	gl_Position = u_ModelViewProjectionMatrix * vec4(position, 1.0);
 
 	position  = (u_ModelMatrix * vec4(position, 1.0)).xyz;
-	normal    = (u_ModelMatrix * vec4(normal,   0.0)).xyz;
+	normal    = mat3(u_NormalMatrix) * normal;
   #if defined(PER_PIXEL_LIGHTING)
-	tangent   = (u_ModelMatrix * vec4(tangent,  0.0)).xyz;
-  #endif
-
-#if defined(PER_PIXEL_LIGHTING)
+	tangent   = mat3(u_NormalMatrix) * tangent;
 	vec3 bitangent = cross(normal, tangent) * (attr_Tangent.w * 2.0 - 1.0);
-#endif
+  #endif
 
 #if defined(USE_LIGHT_VECTOR)
 	vec3 L = u_LightOrigin.xyz - (position * u_LightOrigin.w);
@@ -308,6 +306,8 @@ void main()
 /*[Fragment]*/
 #if defined(USE_LIGHT) && !defined(USE_FAST_LIGHT)
 #define PER_PIXEL_LIGHTING
+uniform sampler2D u_ScreenDiffuseMap;
+uniform sampler2D u_ScreenSpecularMap;
 #endif
 
 uniform sampler2D u_DiffuseMap;
@@ -365,9 +365,8 @@ uniform sampler2D u_EnvBrdfMap;
 #endif
 #endif
 
-#if defined(USE_ATEST)
+uniform int u_AlphaTestFunction;
 uniform float u_AlphaTestValue;
-#endif
 
 in vec4      var_TexCoords;
 in vec4      var_Color;
@@ -533,7 +532,7 @@ vec3 CalcDiffuse(vec3 diffuseAlbedo, float NH, float EH, float roughness)
 	burley *= burley;
 	return diffuseAlbedo * burley;
 #else
-	return diffuseAlbedo / M_PI;
+	return diffuseAlbedo ;
 #endif
 }
 
@@ -600,7 +599,7 @@ float pcfShadow(samplerCubeShadow depthMap, vec3 L, float distance)
 {
 	float shadow = 0.0;
 	int samples = 20;
-	float diskRadius = 128.0/512.0;
+	float diskRadius = 1.0;
 	for (int i = 0; i < samples; ++i)
 	{
 		shadow += texture(depthMap, vec4(L + sampleOffsetDirections[i] * diskRadius, distance));
@@ -685,9 +684,7 @@ void main()
   #if defined(RGBM_LIGHTMAP)
 	lightmapColor.rgb *= lightmapColor.a;
   #endif
-  #if defined(USE_PBR) && !defined(USE_FAST_LIGHT)
 	lightmapColor.rgb *= lightmapColor.rgb;
-  #endif
 #endif
 
 	vec2 texCoords = var_TexCoords.xy;
@@ -707,23 +704,15 @@ void main()
 	L /= lightDist;
 
 	vec3 ambientLight = texture(u_LightGridAmbientLightMap, gridCell).rgb * isLightgrid;
-  #if defined(USE_PBR)
-	vertexColor = var_Color.rgb * var_Color.rgb;
 	ambientLight *= ambientLight;
+
+	vertexColor = var_Color.rgb * var_Color.rgb;
 	#if defined(USE_LIGHT_VECTOR)
 	  L -= normalize(texture(u_LightGridDirectionMap, gridCell).rgb * 2.0 - vec3(1.0)) * isLightgrid;
 	  vec3 directedLight = texture(u_LightGridDirectionalLightMap, gridCell).rgb * isLightgrid;
 	  directedLight *= directedLight;
-	  directedLight += u_DirectedLight * u_DirectedLight;
 	#endif
-  #else
-	vertexColor = var_Color.rgb;
-	#if defined(USE_LIGHT_VECTOR)
-	  L -= normalize(texture(u_LightGridDirectionMap, gridCell).rgb * 2.0 - vec3(1.0)) * isLightgrid;
-	  vec3 directedLight = texture(u_LightGridDirectionalLightMap, gridCell).rgb * isLightgrid;
-	  directedLight += u_DirectedLight;
-	#endif
-  #endif
+
 	ambientColor = ambientLight * vertexColor;
   #if defined(USE_LIGHTMAP)
 	lightColor	 = lightmapColor.rgb * vertexColor;
@@ -751,16 +740,19 @@ void main()
 #endif
 
 	diffuse = texture(u_DiffuseMap, texCoords);
-#if defined(USE_ATEST)
-#  if USE_ATEST == ATEST_CMP_LT
-	if (diffuse.a >= u_AlphaTestValue)
-#  elif USE_ATEST == ATEST_CMP_GT
-	if (diffuse.a <= u_AlphaTestValue)
-#  elif USE_ATEST == ATEST_CMP_GE
-	if (diffuse.a < u_AlphaTestValue)
-#  endif
-		discard;
-#endif
+
+	if (u_AlphaTestFunction == ATEST_CMP_GE){
+		if (diffuse.a < u_AlphaTestValue)
+			discard;
+	}
+	else if (u_AlphaTestFunction == ATEST_CMP_LT){
+		if (diffuse.a >= u_AlphaTestValue)
+			discard;
+	}	
+	else if (u_AlphaTestFunction == ATEST_CMP_GT){
+		if (diffuse.a <= u_AlphaTestValue)
+			discard;
+	}
 
 	N = CalcNormal(var_Normal.xyz, texCoords, tangentToWorld);
 
@@ -788,12 +780,12 @@ void main()
   #endif
 	specular *= u_SpecularScale;
 
-#if defined(USE_PBR)
+
 	diffuse.rgb *= diffuse.rgb;
 	specular.rgb *= specular.rgb;
-	// energy conservation, requires specular workflow to use an albedo texture too
+	// energy conservation
 	diffuse.rgb *= vec3(1.0) - specular.rgb;
-#endif
+
 
 	// diffuse rgb is diffuse
 	// specular rgb is specular reflectance at normal incidence
@@ -807,7 +799,7 @@ void main()
 	
 	reflectance = CalcDiffuse(diffuse.rgb, NH, EH, roughness);
 
-  #if defined(USE_LIGHTMAP) || defined(USE_LIGHT_VERTEX)
+  #if (defined(USE_LIGHTMAP) || defined(USE_LIGHT_VERTEX)) && defined(USE_DELUXEMAP)
 	NE = abs(dot(N, E)) + 1e-5;
 	reflectance += CalcSpecular(specular.rgb, NH, NL, NE, EH, roughness) * 1.0;
   #endif
@@ -820,6 +812,15 @@ void main()
 	if (u_EnableTextures.x == 0.0)
 		out_Color.rgb += ambientColor * diffuse.rgb;
 
+	ivec2 windowCoordinate = ivec2(gl_FragCoord.xy);
+	vec3 diffuseBufferColor = texelFetch(u_ScreenDiffuseMap, windowCoordinate, 0).rgb;
+	diffuseBufferColor *= diffuseBufferColor;
+	out_Color.rgb += diffuse.rgb * diffuseBufferColor;
+
+	vec4 specBufferColor = texelFetch(u_ScreenSpecularMap, windowCoordinate, 0);
+	specBufferColor.rgb *= specBufferColor.rgb;
+	out_Color.rgb += specBufferColor.rgb;
+
   #if defined(USE_CUBEMAP)
 	NE = clamp(dot(N, E), 0.0, 1.0);
 	vec3 EnvBRDF = texture(u_EnvBrdfMap, vec2(roughness, NE)).rgb;
@@ -831,22 +832,21 @@ void main()
 	vec3 parallax = u_CubeMapInfo.xyz + u_CubeMapInfo.w * viewDir;
 
 	vec3 cubeLightColor = textureLod(u_CubeMap, R + parallax, ROUGHNESS_MIPS * roughness).rgb * u_EnableTextures.w;
+	cubeLightColor *= cubeLightColor;
 	vec3 shColor = CalcSHColor(-N) * u_EnableTextures.x;
 
 	float horiz = 1.0;
 	// from http://marmosetco.tumblr.com/post/81245981087
 	#if defined(HORIZON_FADE)
-		const float horizonFade = HORIZON_FADE;
-		horiz = clamp( 1.0 + horizonFade * dot(-R,var_Normal.xyz), 0.0, 1.0 );
+		horiz = clamp( 1.0 + HORIZON_FADE * dot(-R,var_Normal.xyz), 0.0, 1.0 );
 		horiz *= horiz;
 	#endif
 
-    #if defined(USE_PBR)
-		cubeLightColor *= cubeLightColor;
-    #endif
 	if (u_EnableTextures.x == 1.0)
 		out_Color.rgb += shColor * diffuse.rgb;
-	out_Color.rgb += cubeLightColor * (specular.rgb * EnvBRDF.x + EnvBRDF.y) * horiz;
+
+	out_Color.rgb += cubeLightColor * (1.0 - specBufferColor.a) * (specular.rgb * EnvBRDF.x + EnvBRDF.y) * horiz;
+
   #endif
 
   #if defined(USE_PRIMARY_LIGHT) || defined(SHADOWMAP_MODULATE)
@@ -886,22 +886,24 @@ void main()
 		out_Color.rgb = N.rgb * 0.5 + 0.5;
   #endif
 
-  #if defined(USE_PBR)
 	out_Color.rgb = sqrt(out_Color.rgb);
-  #endif
 
 #else
 	diffuse = texture(u_DiffuseMap, texCoords);
-#if defined(USE_ATEST)
-#  if USE_ATEST == ATEST_CMP_LT
-	if (diffuse.a >= u_AlphaTestValue)
-#  elif USE_ATEST == ATEST_CMP_GT
-	if (diffuse.a <= u_AlphaTestValue)
-#  elif USE_ATEST == ATEST_CMP_GE
-	if (diffuse.a < u_AlphaTestValue)
-#  endif
-		discard;
-#endif
+
+	if (u_AlphaTestFunction == ATEST_CMP_GE){
+		if (diffuse.a < u_AlphaTestValue)
+			discard;
+	}
+	else if (u_AlphaTestFunction == ATEST_CMP_LT){
+		if (diffuse.a >= u_AlphaTestValue)
+			discard;
+	}	
+	else if (u_AlphaTestFunction == ATEST_CMP_GT){
+		if (diffuse.a <= u_AlphaTestValue)
+			discard;
+	}
+
 	lightColor = var_Color.rgb;
 	out_Color.rgb = diffuse.rgb * lightColor;
 #endif

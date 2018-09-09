@@ -129,7 +129,7 @@ typedef struct {
 
 } refimport_t;
 
-extern refimport_t *ri;
+extern refimport_t ri;
 
 //
 // these are the functions exported by the refresh module
@@ -171,7 +171,7 @@ typedef struct {
 	//qboolean(*inPVS)(const vec3_t p1, const vec3_t p2, byte *mask);
 	//DT EDIT: Rend2 - END
 	void	(*LoadWorld)( const char *name );
-	void	(*R_LoadImage)( const char *name, byte **pic, int *width, int *height );
+	void(*R_LoadImage)(const char *name, byte **pic, int *width, int *height, int *depth);
 
 	// these two functions added to help with the new model alloc scheme...
 	//

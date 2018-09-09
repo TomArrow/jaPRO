@@ -34,7 +34,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define GL_INDEX_TYPE		GL_UNSIGNED_INT
 typedef unsigned int glIndex_t;
 
-extern refimport_t *ri;
+extern refimport_t ri;
 
 
 // 13 bits
@@ -1836,7 +1836,7 @@ qboolean	RE_InitDissolve(qboolean bForceCircularExtroWipe);
 
 
 long generateHashValue( const char *fname );
-void R_LoadImage( const char *name, byte **pic, int *width, int *height );
+void R_LoadImage( const char *name, byte **pic, int *width, int *height, int *depth );
 void		RE_InsertModelIntoHash(const char *name, model_t *mod);
 qboolean R_FogParmsMatch( int fog1, int fog2 );
 

@@ -125,10 +125,10 @@ if(BuildSPRdGL2 OR BuildJK2SPRdGL2)
 		"${SPDir}/rd-gl2/tr_main.cpp"
 		"${SPDir}/rd-gl2/tr_marks.cpp"
 		"${SPDir}/rd-gl2/tr_model.cpp"
+		"${SPDir}/rd-gl2/tr_model_iqm.cpp"
 		"${SPDir}/rd-gl2/tr_model_mdr.cpp"
 		"${SPDir}/rd-gl2/tr_model_md3.cpp"
 		"${SPDir}/rd-gl2/tr_model_ghoul2.cpp"
-		"${SPDir}/rd-gl2/tr_model_iqm.cpp"
 		"${SPDir}/rd-gl2/tr_postprocess.cpp"
 		"${SPDir}/rd-gl2/tr_postprocess.h"
 		"${SPDir}/rd-gl2/tr_scene.cpp"
@@ -156,12 +156,14 @@ if(BuildSPRdGL2 OR BuildJK2SPRdGL2)
 	
 	set(SPRDGL2RdCommonFiles
 		"${SPDir}/rd-common/mdx_format.h"
+		"${SPDir}/rd-common/stb_image.h"
 		"${SPDir}/rd-common/tr_common.h"
 		"${SPDir}/rd-common/tr_font.cpp"
 		"${SPDir}/rd-common/tr_font.h"
 		"${SPDir}/rd-common/tr_image_load.cpp"
 		"${SPDir}/rd-common/tr_image_jpg.cpp"
 		"${SPDir}/rd-common/tr_image_tga.cpp"
+		"${SPDir}/rd-common/tr_image_stb.cpp"
 		"${SPDir}/rd-common/tr_image_png.cpp"
 		"${SPDir}/rd-common/tr_noise.cpp"
 		"${SPDir}/rd-common/tr_public.h"
@@ -173,8 +175,14 @@ if(BuildSPRdGL2 OR BuildJK2SPRdGL2)
 	set(SPRDGL2RendererIncludeDirectories ${SPRDGL2RendererIncludeDirectories} ${OPENGL_INCLUDE_DIR})
 	set(SPRDGL2RendererLibraries ${SPRDGL2RendererLibraries} ${OPENGL_LIBRARIES})
 
-	source_group("renderer" FILES ${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp)
-	set(SPRDGL2Files ${SPRDGL2Files} ${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp)
+	source_group("renderer" 
+		FILES
+		${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.h
+		${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp)
+	set(SPRDGL2Files
+		${SPRDGL2Files}
+		${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.h
+		${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp)
 	
 	set(SPRDGL2RendererIncludeDirectories ${SPRDGL2RendererIncludeDirectories} ${OpenJKLibDir})
 
@@ -213,6 +221,8 @@ if(BuildSPRdGL2 OR BuildJK2SPRdGL2)
 		set_target_properties(${ProjectName} PROPERTIES PROJECT_LABEL ${Label})
 
 		target_link_libraries(${ProjectName} ${SPRDGL2RendererLibraries})
+		target_include_directories(${ProjectName} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
 	endfunction(add_sp_renderer_project)
 
 	if(BuildSPRdGL2)
@@ -231,11 +241,19 @@ if(BuildSPRdGL2 OR BuildJK2SPRdGL2)
 		${SPDir}/rd-gl2/tr_allocator.h
 		${SPDir}/rd-gl2/tr_glsl_parse.cpp
 		)
-	set_target_properties(compact_glsl PROPERTIES COMPILE_DEFINITIONS "GLSL_BUILDTOOL")
+	# set_target_properties(compact_glsl PROPERTIES COMPILE_DEFINITIONS "GLSL_BUILDTOOL")
+	target_compile_definitions(compact_glsl PRIVATE "GLSL_BUILDTOOL" ${SharedDefines})
 	set_target_properties(compact_glsl PROPERTIES INCLUDE_DIRECTORIES "${SPRDGL2RendererIncludeDirectories}")
 	add_custom_command(
-		OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp
-		COMMAND compact_glsl ${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp ${SPRDGL2GLSLFiles}
-		DEPENDS compact_glsl ${SPRDGL2GLSLFiles})
+		OUTPUT
+			${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp
+			${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.h
+		COMMAND
+			compact_glsl
+				${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp
+				${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.h
+				${SPRDGL2GLSLFiles}
+		DEPENDS
+			compact_glsl ${SPRDGL2GLSLFiles})
 
 endif(BuildSPRdGL2 OR BuildJK2SPRdGL2)

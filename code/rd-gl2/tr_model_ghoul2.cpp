@@ -2229,7 +2229,7 @@ void G2API_SetSurfaceOnOffFromSkin(CGhoul2Info *ghlInfo, qhandle_t renderSkin)
 }
 
 // set up each surface ready for rendering in the back end
-void RenderSurfaces(CRenderSurface &RS, int entityNum)
+void RenderSurfaces(CRenderSurface &RS, const trRefEntity_t *ent, int entityNum)
 {
 	int			i;
 	const shader_t	*shader = 0;
@@ -2286,19 +2286,21 @@ void RenderSurfaces(CRenderSurface &RS, int entityNum)
 			shader = R_GetShaderByHandle(surfInfo->shaderIndex);
 		}
 
-		int cubemapIndex = R_CubemapForPoint(tr.currentEntity->e.origin);
+		int cubemapIndex = R_CubemapForPoint(ent->e.origin);
+		
+		vec3_t transformed;
+		VectorSubtract(ent->e.origin, tr.refdef.vieworg, transformed);
+		float distance = VectorLength(transformed);
 
 		// don't add third_person objects if not viewing through a portal
 		if (!RS.personalModel)
 		{		// set the surface info to point at the where the transformed bone list is going to be for when the surface gets rendered out
 			CRenderableSurface *newSurf = AllocRS();
-			if (&RS.currentModel->data.glm->vboModels[RS.lod] == NULL)
-				return;
 			newSurf->vboMesh = &RS.currentModel->data.glm->vboModels[RS.lod].vboMeshes[RS.surfaceNum];
 			assert(newSurf->vboMesh != NULL && RS.surfaceNum == surface->thisSurfaceIndex);
 			newSurf->surfaceData = surface;
 			newSurf->boneCache = RS.boneCache;
-			R_AddDrawSurf((surfaceType_t *)newSurf, entityNum, (shader_t *)shader, RS.fogNum, qfalse, R_IsPostRenderEntity(entityNum, tr.currentEntity), cubemapIndex);
+			R_AddDrawSurf((surfaceType_t *)newSurf, entityNum, (shader_t *)shader, RS.fogNum, qfalse, R_IsPostRenderEntity(ent), cubemapIndex, distance);
 
 #ifdef _G2_GORE
 			if (RS.gore_set && drawGore)
@@ -2378,7 +2380,7 @@ void RenderSurfaces(CRenderSurface &RS, int entityNum)
 
 						last->goreChain = newSurf2;
 						last = newSurf2;
-						R_AddDrawSurf((surfaceType_t *)newSurf2, entityNum, gshader, RS.fogNum, qfalse, R_IsPostRenderEntity(entityNum, tr.currentEntity), cubemapIndex);
+						R_AddDrawSurf((surfaceType_t *)newSurf2, entityNum, gshader, RS.fogNum, qfalse, R_IsPostRenderEntity(tr.currentEntity), cubemapIndex, distance);
 					}
 				}
 			}
@@ -2397,7 +2399,7 @@ void RenderSurfaces(CRenderSurface &RS, int entityNum)
 			assert(newSurf->vboMesh != NULL && RS.surfaceNum == surface->thisSurfaceIndex);
 			newSurf->surfaceData = surface;
 			newSurf->boneCache = RS.boneCache;
-			R_AddDrawSurf((surfaceType_t *)newSurf, entityNum, tr.shadowShader, 0, qfalse, qfalse, 0);
+			R_AddDrawSurf((surfaceType_t *)newSurf, entityNum, tr.shadowShader, 0, qfalse, qfalse, 0, distance);
 		}
 
 		// projection shadows work fine with personal models
@@ -2411,7 +2413,7 @@ void RenderSurfaces(CRenderSurface &RS, int entityNum)
 			assert(newSurf->vboMesh != NULL && RS.surfaceNum == surface->thisSurfaceIndex);
 			newSurf->surfaceData = surface;
 			newSurf->boneCache = RS.boneCache;
-			R_AddDrawSurf((surfaceType_t *)newSurf, entityNum, tr.projectionShadowShader, 0, qfalse, qfalse, 0);
+			R_AddDrawSurf((surfaceType_t *)newSurf, entityNum, tr.projectionShadowShader, 0, qfalse, qfalse, 0, distance);
 		}
 
 	}
@@ -2426,7 +2428,7 @@ void RenderSurfaces(CRenderSurface &RS, int entityNum)
 	for (i = 0; i< surfInfo->numChildren; i++)
 	{
 		RS.surfaceNum = surfInfo->childIndexes[i];
-		RenderSurfaces(RS, entityNum);
+		RenderSurfaces(RS, ent, entityNum);
 	}
 }
 
@@ -2682,7 +2684,7 @@ void R_AddGhoulSurfaces(trRefEntity_t *ent, int entityNum) {
 			{
 				RS.renderfx |= RF_NOSHADOW;
 			}
-			RenderSurfaces(RS, entityNum);
+			RenderSurfaces(RS, ent, entityNum);
 		}
 	}
 	HackadelicOnClient = false;
@@ -3225,7 +3227,7 @@ qboolean R_LoadMDXM(model_t *mod, void *buffer, const char *mod_name, qboolean &
 #ifdef _DEBUG
 		Com_Error(ERR_DROP, "R_LoadMDXM: %s has wrong version (%i should be %i)\n", mod_name, version, MDXM_VERSION);
 #else
-		ri->Printf(PRINT_WARNING, "R_LoadMDXM: %s has wrong version (%i should be %i)\n", mod_name, version, MDXM_VERSION);
+		ri.Printf(PRINT_WARNING, "R_LoadMDXM: %s has wrong version (%i should be %i)\n", mod_name, version, MDXM_VERSION);
 #endif
 		return qfalse;
 	}
@@ -3234,9 +3236,13 @@ qboolean R_LoadMDXM(model_t *mod, void *buffer, const char *mod_name, qboolean &
 	mod->dataSize += size;
 
 	qboolean bAlreadyFound = qfalse;
+
 	mdxm = (mdxmHeader_t*)CModelCache->Allocate(size, buffer, mod_name, &bAlreadyFound, TAG_MODEL_GLM);
 	mod->data.glm = (mdxmData_t*)R_Hunk_Alloc(sizeof(mdxmData_t), qtrue);
 	mod->data.glm->header = mdxm;
+	if(bAlreadyFound)
+		ri.Printf(PRINT_WARNING, "R_LoadMDXM: %s already found\n", mod_name, mdxm->name);
+	ri.Printf(PRINT_WARNING, "R_LoadMDXM: %s is processing, headername %s\n", mod_name, mdxm->name);
 	//RE_RegisterModels_Malloc(size, buffer, mod_name, &bAlreadyFound, TAG_MODEL_GLM);
 
 	assert(bAlreadyCached == bAlreadyFound);
@@ -3263,11 +3269,16 @@ qboolean R_LoadMDXM(model_t *mod, void *buffer, const char *mod_name, qboolean &
 		LL(mdxm->ofsEnd);
 	}
 
-	// first up, go load in the animation file we need that has the skeletal animation info for this model
 	mdxm->animIndex = RE_RegisterModel(va("%s.gla", mdxm->animName));
+
+	// Register additional GLAs for _humanoid
+	//----------------------------------------
 	if (!strcmp(mdxm->animName, "models/players/_humanoid/_humanoid"))
-	{	//if we're loading the humanoid, look for a cinematic gla for this map
+	{
+		// Register the cinematic GLA
+		//----------------------------
 		const char*mapname = sv_mapname->string;
+
 		if (strcmp(mapname, "nomap"))
 		{
 			if (strrchr(mapname, '/'))	//maps in subfolders use the root name, ( presuming only one level deep!)
@@ -3276,19 +3287,22 @@ qboolean R_LoadMDXM(model_t *mod, void *buffer, const char *mod_name, qboolean &
 			}
 			RE_RegisterModel(va("models/players/_humanoid_%s/_humanoid_%s.gla", mapname, mapname));
 		}
-	}
 
+		// Register the DF2 GLA
+		//-----------------------
+		//RE_RegisterModel("models/players/_humanoid_df2/_humanoid_df2.gla");
+	}
 #ifndef JK2_MODE
 	bool isAnOldModelFile = false;
+
 	if (mdxm->numBones == 72 && strstr(mdxm->animName, "_humanoid"))
 	{
 		isAnOldModelFile = true;
 	}
 #endif
-
 	if (!mdxm->animIndex)
 	{
-		ri->Printf(PRINT_WARNING, "R_LoadMDXM: missing animation file %s for mesh %s\n", mdxm->animName, mdxm->name);
+		ri.Printf(PRINT_WARNING, "R_LoadMDXM: missing animation file %s for mesh %s\n", mdxm->animName, mdxm->name);
 		return qfalse;
 	}
 #ifndef JK2_MODE
@@ -3299,14 +3313,14 @@ qboolean R_LoadMDXM(model_t *mod, void *buffer, const char *mod_name, qboolean &
 		{
 			if (isAnOldModelFile)
 			{
-				ri->Printf(PRINT_WARNING, "R_LoadMDXM: converting jk2 model %s\n", mod_name);
+				ri.Printf(PRINT_WARNING, "R_LoadMDXM: converting jk2 model %s\n", mod_name);
 			}
 			else
 			{
 #ifdef _DEBUG
 				Com_Error(ERR_DROP, "R_LoadMDXM: %s has different bones than anim (%i != %i)\n", mod_name, mdxm->numBones, tr.models[mdxm->animIndex]->data.gla->numBones);
 #else
-				ri->Printf(PRINT_WARNING, "R_LoadMDXM: %s has different bones than anim (%i != %i)\n", mod_name, mdxm->numBones, tr.models[mdxm->animIndex]->data.gla->numBones);
+				ri.Printf(PRINT_WARNING, "R_LoadMDXM: %s has different bones than anim (%i != %i)\n", mod_name, mdxm->numBones, tr.models[mdxm->animIndex]->data.gla->numBones);
 #endif
 			}
 			if (!isAnOldModelFile)
@@ -3316,12 +3330,12 @@ qboolean R_LoadMDXM(model_t *mod, void *buffer, const char *mod_name, qboolean &
 		}
 	}
 #endif
-
 	mod->numLods = mdxm->numLODs - 1;	//copy this up to the model for ease of use - it wil get inced after this.
 
 	if (bAlreadyFound)
 	{
-		return qtrue;	// All done. Stop, go no further, do not LittleLong(), do not pass Go...
+		//FIXME: caching seems to be non functional, gpu data is null if we return here
+		//return qtrue;	// All done. Stop, go no further, do not LittleLong(), do not pass Go...
 	}
 
 	surfInfo = (mdxmSurfHierarchy_t *)((byte *)mdxm + mdxm->ofsSurfHierarchy);
@@ -3463,7 +3477,6 @@ qboolean R_LoadMDXM(model_t *mod, void *buffer, const char *mod_name, qboolean &
 				v++;
 			}
 #endif
-
 #ifndef JK2_MODE
 			if (isAnOldModelFile)
 			{
@@ -3491,6 +3504,7 @@ qboolean R_LoadMDXM(model_t *mod, void *buffer, const char *mod_name, qboolean &
 
 	// Make a copy on the GPU
 	lod = (mdxmLOD_t *)((byte *)mdxm + mdxm->ofsLODs);
+	//ri.Printf(PRINT_WARNING, "R_LoadMDXM: %s has %i lods\n", mod_name, mdxm->numLODs);
 
 	mod->data.glm->vboModels = (mdxmVBOModel_t *)R_Hunk_Alloc(sizeof(mdxmVBOModel_t) * mdxm->numLODs, qtrue);
 	for (l = 0; l < mdxm->numLODs; l++)
@@ -3521,6 +3535,9 @@ qboolean R_LoadMDXM(model_t *mod, void *buffer, const char *mod_name, qboolean &
 		int *indexOffsets = (int *)R_Malloc(sizeof(int)* mdxm->numSurfaces, TAG_TEMP_WORKSPACE, qfalse);
 
 		vboModel->numVBOMeshes = mdxm->numSurfaces;
+
+		//ri.Printf(PRINT_WARNING, "R_LoadMDXM: %s lod %i has %i surfaces\n", mod_name, l, mdxm->numSurfaces);
+
 		vboModel->vboMeshes = (mdxmVBOMesh_t *)R_Hunk_Alloc(sizeof(mdxmVBOMesh_t) * mdxm->numSurfaces, qtrue);
 		vboMeshes = vboModel->vboMeshes;
 
@@ -3772,6 +3789,7 @@ qboolean R_LoadMDXM(model_t *mod, void *buffer, const char *mod_name, qboolean &
 
 		surf = (mdxmSurface_t *)((byte *)lod + sizeof(mdxmLOD_t) + (mdxm->numSurfaces * sizeof(mdxmLODSurfOffset_t)));
 
+		//ri.Printf(PRINT_WARNING, "R_LoadMDXM 2: %s lod %i has %i surfaces\n", mod_name, l, mdxm->numSurfaces);
 		for (int n = 0; n < mdxm->numSurfaces; n++)
 		{
 			vboMeshes[n].vbo = vbo;
@@ -3783,11 +3801,16 @@ qboolean R_LoadMDXM(model_t *mod, void *buffer, const char *mod_name, qboolean &
 			vboMeshes[n].numVertexes = surf->numVerts;
 			vboMeshes[n].numIndexes = surf->numTriangles * 3;
 
+			//ri.Printf(PRINT_WARNING, "R_LoadMDXM 2: %s lod %i surface %i has %i indexes\n", mod_name, l, n, vboMeshes[n].numIndexes);
+
 			surf = (mdxmSurface_t *)((byte *)surf + surf->ofsEnd);
 		}
 
 		vboModel->vbo = vbo;
 		vboModel->ibo = ibo;
+
+		assert(vboModel->vbo);
+		assert(vboModel->ibo);
 
 		R_Free(indexOffsets);
 		R_Free(baseVertexes);
@@ -3833,7 +3856,7 @@ qboolean R_LoadMDXA(model_t *mod, void *buffer, const char *mod_name, qboolean &
 	}
 
 	if (version != MDXA_VERSION) {
-		ri->Printf(PRINT_WARNING, "R_LoadMDXA: %s has wrong version (%i should be %i)\n",
+		ri.Printf(PRINT_WARNING, "R_LoadMDXA: %s has wrong version (%i should be %i)\n",
 			mod_name, version, MDXA_VERSION);
 		return qfalse;
 	}
@@ -3872,7 +3895,7 @@ qboolean R_LoadMDXA(model_t *mod, void *buffer, const char *mod_name, qboolean &
 	}
 
 	if (mdxa->numFrames < 1) {
-		ri->Printf(PRINT_WARNING, "R_LoadMDXA: %s has no frames\n", mod_name);
+		ri.Printf(PRINT_WARNING, "R_LoadMDXA: %s has no frames\n", mod_name);
 		return qfalse;
 	}
 

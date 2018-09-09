@@ -241,7 +241,7 @@ void R_AddMD3Surfaces(trRefEntity_t *ent, int entityNum) {
 		|| (ent->e.frame < 0)
 		|| (ent->e.oldframe >= tr.currentModel->data.mdv[0]->numFrames)
 		|| (ent->e.oldframe < 0)) {
-		ri->Printf(PRINT_DEVELOPER, "R_AddMD3Surfaces: no such frame %d to %d for '%s'\n",
+		ri.Printf(PRINT_DEVELOPER, "R_AddMD3Surfaces: no such frame %d to %d for '%s'\n",
 			ent->e.oldframe, ent->e.frame,
 			tr.currentModel->name);
 		ent->e.frame = 0;
@@ -278,6 +278,10 @@ void R_AddMD3Surfaces(trRefEntity_t *ent, int entityNum) {
 
 	cubemapIndex = R_CubemapForPoint(ent->e.origin);
 
+	vec3_t transformed;
+	VectorSubtract(ent->e.origin, tr.refdef.vieworg, transformed);
+	float distance = VectorLength(transformed);
+
 	//
 	// draw all surfaces
 	//
@@ -303,10 +307,10 @@ void R_AddMD3Surfaces(trRefEntity_t *ent, int entityNum) {
 				}
 			}
 			if (shader == tr.defaultShader) {
-				ri->Printf(PRINT_DEVELOPER, "WARNING: no shader for surface %s in skin %s\n", surface->name, skin->name);
+				ri.Printf(PRINT_DEVELOPER, "WARNING: no shader for surface %s in skin %s\n", surface->name, skin->name);
 			}
 			else if (shader->defaultShader) {
-				ri->Printf(PRINT_DEVELOPER, "WARNING: shader %s in skin %s not found\n", shader->name, skin->name);
+				ri.Printf(PRINT_DEVELOPER, "WARNING: shader %s in skin %s not found\n", shader->name, skin->name);
 			}
 		} 
 		else if (surface->numShaderIndexes <= 0) {
@@ -319,7 +323,7 @@ void R_AddMD3Surfaces(trRefEntity_t *ent, int entityNum) {
 		// don't add third_person objects if not viewing through a portal
 		if (!personalModel)
 		{
-			R_AddDrawSurf((surfaceType_t *)&model->vboSurfaces[i], entityNum, shader, fogNum, qfalse, R_IsPostRenderEntity(entityNum, ent), cubemapIndex);
+			R_AddDrawSurf((surfaceType_t *)&model->vboSurfaces[i], entityNum, shader, fogNum, qfalse, R_IsPostRenderEntity(ent), cubemapIndex, distance);
 		}
 
 		// we will add shadows even if the main object isn't visible in the view
@@ -330,7 +334,7 @@ void R_AddMD3Surfaces(trRefEntity_t *ent, int entityNum) {
 			&& fogNum == 0
 			&& !(ent->e.renderfx & (RF_NOSHADOW | RF_DEPTHHACK))
 			&& shader->sort == SS_OPAQUE) {
-			R_AddDrawSurf((surfaceType_t *)&model->vboSurfaces[i], entityNum, tr.shadowShader, 0, qfalse, qfalse, 0);
+			R_AddDrawSurf((surfaceType_t *)&model->vboSurfaces[i], entityNum, tr.shadowShader, 0, qfalse, qfalse, 0, distance);
 		}
 
 		// projection shadows work fine with personal models
@@ -338,7 +342,7 @@ void R_AddMD3Surfaces(trRefEntity_t *ent, int entityNum) {
 			&& fogNum == 0
 			&& (ent->e.renderfx & RF_SHADOW_PLANE)
 			&& shader->sort == SS_OPAQUE) {
-			R_AddDrawSurf((surfaceType_t *)&model->vboSurfaces[i], entityNum, tr.projectionShadowShader, 0, qfalse, qfalse, 0);
+			R_AddDrawSurf((surfaceType_t *)&model->vboSurfaces[i], entityNum, tr.projectionShadowShader, 0, qfalse, qfalse, 0, distance);
 		}
 
 		surface++;

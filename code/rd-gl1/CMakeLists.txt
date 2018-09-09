@@ -138,6 +138,7 @@ if(BuildSPRdGL1 OR BuildJK2SPRdGL1)
 
 	set(SPRDGL1RdCommonFiles
 		"${SPDir}/rd-common/mdx_format.h"
+		"${SPDir}/rd-common/stb_image.h"
 		"${SPDir}/rd-common/tr_common.h"
 		"${SPDir}/rd-common/tr_font.cpp"
 		"${SPDir}/rd-common/tr_font.h"
@@ -145,6 +146,7 @@ if(BuildSPRdGL1 OR BuildJK2SPRdGL1)
 		"${SPDir}/rd-common/tr_image_jpg.cpp"
 		"${SPDir}/rd-common/tr_image_tga.cpp"
 		"${SPDir}/rd-common/tr_image_png.cpp"
+		"${SPDir}/rd-common/tr_image_stb.cpp"
 		"${SPDir}/rd-common/tr_noise.cpp"
 		"${SPDir}/rd-common/tr_public.h"
 		"${SPDir}/rd-common/tr_types.h")

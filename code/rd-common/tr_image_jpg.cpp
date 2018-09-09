@@ -59,7 +59,7 @@ static void R_JPGOutputMessage(j_common_ptr cinfo)
 	Com_Printf("%s\n", buffer);
 }
 
-void LoadJPG( const char *filename, unsigned char **pic, int *width, int *height ) {
+void LoadJPG( const char *filename, unsigned char **pic, int *width, int *height, int *depth) {
 	/* This struct contains the JPEG decompression parameters and pointers to
 	* working space (which is allocated as needed by the JPEG library).
 	*/
@@ -94,7 +94,7 @@ void LoadJPG( const char *filename, unsigned char **pic, int *width, int *height
 	* requires it in order to read binary files.
 	*/
 
-	int len = ri->FS_ReadFile ( ( char * ) filename, &fbuffer.v);
+	int len = ri.FS_ReadFile ( ( char * ) filename, &fbuffer.v);
 	if (!fbuffer.b || len < 0) {
 		return;
 	}
@@ -155,10 +155,10 @@ void LoadJPG( const char *filename, unsigned char **pic, int *width, int *height
 		)
 	{
 		// Free the memory to make sure we don't leak memory
-		ri->FS_FreeFile (fbuffer.v);
+		ri.FS_FreeFile (fbuffer.v);
 		jpeg_destroy_decompress(&cinfo);
 
-		ri->Printf( PRINT_ALL, "LoadJPG: %s has an invalid image format: %dx%d*4=%d, components: %d", filename,
+		ri.Printf( PRINT_ALL, "LoadJPG: %s has an invalid image format: %dx%d*4=%d, components: %d", filename,
 			cinfo.output_width, cinfo.output_height, pixelcount * 4, cinfo.output_components);
 		return;
 	}
@@ -170,6 +170,7 @@ void LoadJPG( const char *filename, unsigned char **pic, int *width, int *height
 
 	*width = cinfo.output_width;
 	*height = cinfo.output_height;
+	*depth = 8;
 
 	/* Step 6: while (scan lines remain to be read) */
 	/*           jpeg_read_scanlines(...); */
@@ -218,7 +219,7 @@ void LoadJPG( const char *filename, unsigned char **pic, int *width, int *height
 	* so as to simplify the setjmp error logic above.  (Actually, I don't
 	* think that jpeg_destroy can do an error exit, but why assume anything...)
 	*/
-	ri->FS_FreeFile (fbuffer.v);
+	ri.FS_FreeFile (fbuffer.v);
 	/* At this point you may want to check to see whether any corrupt-data
 	* warnings occurred (test whether jerr.pub.num_warnings is nonzero).
 	*/
@@ -315,7 +316,7 @@ void LoadJPGFromBuffer( byte *inputBuffer, size_t len, unsigned char **pic, int 
 		// Free the memory to make sure we don't leak memory
 		jpeg_destroy_decompress(&cinfo);
 
-		ri->Printf( PRINT_ALL, "LoadJPG: invalid image format: %dx%d*4=%d, components: %d",
+		ri.Printf( PRINT_ALL, "LoadJPG: invalid image format: %dx%d*4=%d, components: %d",
 				  cinfo.output_width, cinfo.output_height, pixelcount * 4, cinfo.output_components);
 		return;
 	}
@@ -578,7 +579,7 @@ void RE_SaveJPG(const char * filename, int quality, int image_width, int image_h
 	out = (byte *) R_Malloc( bufSize, TAG_TEMP_WORKSPACE, qfalse );
 
 	bufSize = RE_SaveJPGToBuffer(out, bufSize, quality, image_width, image_height, image_buffer, padding, false);
-	ri->FS_WriteFile(filename, out, bufSize);
+	ri.FS_WriteFile(filename, out, bufSize);
 
 	R_Free(out);
 }

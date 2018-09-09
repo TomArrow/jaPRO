@@ -52,41 +52,41 @@ qboolean R_CheckFBO(const FBO_t * fbo)
 			break;
 
 		case GL_FRAMEBUFFER_UNSUPPORTED:
-			ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Unsupported framebuffer format\n", fbo->name);
+			ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Unsupported framebuffer format\n", fbo->name);
 			break;
 
 		case GL_FRAMEBUFFER_UNDEFINED:
-			ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Default framebuffer was checked, but does not exist\n", fbo->name);
+			ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Default framebuffer was checked, but does not exist\n", fbo->name);
 			break;
 
 		case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
-			ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete attachment\n", fbo->name);
+			ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete attachment\n", fbo->name);
 			break;
 
 		case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
-			ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, no attachments attached\n", fbo->name);
+			ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, no attachments attached\n", fbo->name);
 			break;
 
 		case GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
-			ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, mismatched multisampling values\n", fbo->name);
+			ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, mismatched multisampling values\n", fbo->name);
 			break;
 
 		case GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS:
-			ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, mismatched layer targets\n",
+			ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, mismatched layer targets\n",
 					  fbo->name);
 			break;
 
 		case GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER:
-			ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, missing draw buffer\n", fbo->name);
+			ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, missing draw buffer\n", fbo->name);
 			break;
 
 		case GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER:
-			ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, missing read buffer\n", fbo->name);
+			ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, missing read buffer\n", fbo->name);
 			break;
 
 		default:
-			ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) unknown error 0x%X\n", fbo->name, code);
-			//ri->Error(ERR_FATAL, "R_CheckFBO: (%s) unknown error 0x%X", fbo->name, code);
+			ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) unknown error 0x%X\n", fbo->name, code);
+			//ri.Error(ERR_FATAL, "R_CheckFBO: (%s) unknown error 0x%X", fbo->name, code);
 			//assert(0);
 			break;
 	}
@@ -105,22 +105,22 @@ FBO_t          *FBO_Create(const char *name, int width, int height)
 
 	if(strlen(name) >= MAX_QPATH)
 	{
-		ri->Error(ERR_DROP, "FBO_Create: \"%s\" is too long", name);
+		ri.Error(ERR_DROP, "FBO_Create: \"%s\" is too long", name);
 	}
 
 	if(width <= 0 || width > glRefConfig.maxRenderbufferSize)
 	{
-		ri->Error(ERR_DROP, "FBO_Create: bad width %i", width);
+		ri.Error(ERR_DROP, "FBO_Create: bad width %i", width);
 	}
 
 	if(height <= 0 || height > glRefConfig.maxRenderbufferSize)
 	{
-		ri->Error(ERR_DROP, "FBO_Create: bad height %i", height);
+		ri.Error(ERR_DROP, "FBO_Create: bad height %i", height);
 	}
 
 	if(tr.numFBOs == MAX_FBOS)
 	{
-		ri->Error(ERR_DROP, "FBO_Create: MAX_FBOS hit");
+		ri.Error(ERR_DROP, "FBO_Create: MAX_FBOS hit");
 	}
 
 	fbo = tr.fbos[tr.numFBOs] = (FBO_t *)R_Hunk_Alloc(sizeof(*fbo), qtrue);
@@ -182,7 +182,7 @@ void FBO_CreateBuffer(FBO_t *fbo, int format, int index, int multisample)
 			break;
 
 		default:
-			ri->Printf(PRINT_WARNING, "FBO_CreateBuffer: invalid format %d\n", format);
+			ri.Printf(PRINT_WARNING, "FBO_CreateBuffer: invalid format %d\n", format);
 			return;
 	}
 
@@ -222,7 +222,7 @@ void R_AttachFBOTexture1D(int texId, int index)
 {
 	if(index < 0 || index >= glRefConfig.maxColorAttachments)
 	{
-		ri->Printf(PRINT_WARNING, "R_AttachFBOTexture1D: invalid attachment index %i\n", index);
+		ri.Printf(PRINT_WARNING, "R_AttachFBOTexture1D: invalid attachment index %i\n", index);
 		return;
 	}
 
@@ -238,13 +238,13 @@ void R_AttachFBOTexture2D(int target, int texId, int index)
 {
 	if(target != GL_TEXTURE_2D && (target < GL_TEXTURE_CUBE_MAP_POSITIVE_X || target > GL_TEXTURE_CUBE_MAP_NEGATIVE_Z))
 	{
-		ri->Printf(PRINT_WARNING, "R_AttachFBOTexture2D: invalid target %i\n", target);
+		ri.Printf(PRINT_WARNING, "R_AttachFBOTexture2D: invalid target %i\n", target);
 		return;
 	}
 
 	if(index < 0 || index >= glRefConfig.maxColorAttachments)
 	{
-		ri->Printf(PRINT_WARNING, "R_AttachFBOTexture2D: invalid attachment index %i\n", index);
+		ri.Printf(PRINT_WARNING, "R_AttachFBOTexture2D: invalid attachment index %i\n", index);
 		return;
 	}
 
@@ -260,7 +260,7 @@ void R_AttachFBOTexture3D(int texId, int index, int zOffset)
 {
 	if(index < 0 || index >= glRefConfig.maxColorAttachments)
 	{
-		ri->Printf(PRINT_WARNING, "R_AttachFBOTexture3D: invalid attachment index %i\n", index);
+		ri.Printf(PRINT_WARNING, "R_AttachFBOTexture3D: invalid attachment index %i\n", index);
 		return;
 	}
 
@@ -295,17 +295,16 @@ void R_AttachFBOTextureDepthCubemap(int texId)
 R_AttachFBOTexturePackedDepthStencil
 =================
 */
-void R_AttachFBOTexturePackedDepthStencil(int texId)
+void FBO_AttachTexturePackedDepthStencil(int texId)
 {
-	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, texId, 0);
-	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_TEXTURE_2D, texId, 0);
+	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, texId, 0);
 }
 
 void FBO_AttachTextureImage(image_t *img, int index)
 {
 	if (!glState.currentFBO)
 	{
-		ri->Printf(PRINT_WARNING, "FBO: attempted to attach a texture image with no FBO bound!\n");
+		ri.Printf(PRINT_WARNING, "FBO: attempted to attach a texture image with no FBO bound!\n");
 		return;
 	}
 
@@ -318,7 +317,7 @@ static void FBO_SetupDrawBuffers()
 {
 	if (!glState.currentFBO)
 	{
-		ri->Printf(PRINT_WARNING, "FBO: attempted to attach a texture image with no FBO bound!\n");
+		ri.Printf(PRINT_WARNING, "FBO: attempted to attach a texture image with no FBO bound!\n");
 		return;
 	}
 
@@ -388,7 +387,7 @@ void FBO_Init(void)
 	// int             width, height, hdrFormat, multisample;
 	int             hdrFormat, multisample;
 
-	ri->Printf(PRINT_ALL, "------- FBO_Init -------\n");
+	ri.Printf(PRINT_ALL, "------- FBO_Init -------\n");
 
 	tr.numFBOs = 0;
 
@@ -410,7 +409,7 @@ void FBO_Init(void)
 	hdrFormat = GL_RGBA8;
 	if (r_hdr->integer)
 	{
-		hdrFormat = GL_RGB16F;
+		hdrFormat = GL_RGBA16F;
 	}
 
 	qglGetIntegerv(GL_MAX_SAMPLES, &multisample);
@@ -425,7 +424,7 @@ void FBO_Init(void)
 
 	if (multisample != r_ext_framebuffer_multisample->integer)
 	{
-		ri->Cvar_SetValue("r_ext_framebuffer_multisample", (float)multisample);
+		ri.Cvar_SetValue("r_ext_framebuffer_multisample", (float)multisample);
 	}
 	
 	// only create a render FBO if we need to resolve MSAA or do HDR
@@ -449,7 +448,7 @@ void FBO_Init(void)
 		FBO_AttachTextureImage(tr.renderImage, 0);
 		FBO_AttachTextureImage(tr.glowImage, 1);
 
-		R_AttachFBOTextureDepth(tr.renderDepthImage->texnum);
+		FBO_AttachTexturePackedDepthStencil(tr.renderDepthImage->texnum);
 
 		FBO_SetupDrawBuffers();
 
@@ -463,7 +462,7 @@ void FBO_Init(void)
 		FBO_AttachTextureImage(tr.renderImage, 0);
 		FBO_AttachTextureImage(tr.glowImage, 1);
 
-		R_AttachFBOTextureDepth(tr.renderDepthImage->texnum);
+		FBO_AttachTexturePackedDepthStencil(tr.renderDepthImage->texnum);
 
 		FBO_SetupDrawBuffers();
 
@@ -475,9 +474,66 @@ void FBO_Init(void)
 	if (tr.renderFbo)
 	{
 		FBO_Bind(tr.renderFbo);
-		qglClearColor( 1, 0, 0.5, 1 );
-		qglClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+		qglClearColor(1, 0, 0.5, 1);
+		qglClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		FBO_Bind(NULL);
+	}
+
+	{
+		tr.preBuffersFbo = FBO_Create("_preBuffers", tr.normalBufferImage->width, tr.normalBufferImage->height);
+		FBO_Bind(tr.preBuffersFbo);
+
+		FBO_AttachTextureImage(tr.normalBufferImage, 0);	// out_Color
+		FBO_AttachTextureImage(tr.specBufferImage, 1);		// out_Glow
+
+		if (r_ssr->integer)
+			FBO_AttachTextureImage(tr.velocityImage, 2);	// out_Velocity
+
+		FBO_AttachTexturePackedDepthStencil(tr.renderDepthImage->texnum);
+
+		FBO_SetupDrawBuffers();
+
+		R_CheckFBO(tr.preBuffersFbo);
+	}
+
+	{
+		for (int i = 0; i < PRELIGHT_FBO_COUNT; i++) {
+			tr.preLightFbo[i]= FBO_Create(va("_preLight_",i), tr.renderDepthImage->width, tr.renderDepthImage->height);
+			FBO_Bind(tr.preLightFbo[i]);
+
+			if (i == PRELIGHT_DIFFUSE_FBO || i == PRELIGHT_DIFFUSE_SPECULAR_FBO)
+				FBO_AttachTextureImage(tr.diffuseLightingImage, 0); //out_Color
+			if (i == PRELIGHT_SPECULAR_FBO)
+				FBO_AttachTextureImage(tr.specularLightingImage, 0); //out_Color
+			if (i == PRELIGHT_DIFFUSE_SPECULAR_FBO)
+				FBO_AttachTextureImage(tr.specularLightingImage, 1); //out_Glow
+
+			if (r_ssr->integer) {
+				if (i == PRELIGHT_PRE_SSR_FBO)
+				{
+					FBO_AttachTextureImage(tr.preSSRImage[0], 0); //out_Color
+					FBO_AttachTextureImage(tr.preSSRImage[1], 1); //out_Glow
+				}
+				if (i == PRELIGHT_TEMP_FBO)
+				{
+					FBO_AttachTextureImage(tr.specularLightingImage, 0); //out_Color
+					FBO_AttachTextureImage(tr.swapTempFilterBufferImage, 1); //out_Color
+				}
+				if (i == PRELIGHT_SWAP_TEMP_FBO)
+				{
+					FBO_AttachTextureImage(tr.tempFilterBufferImage, 0); //out_Color
+				}
+			}
+			else
+			{
+				if ((i == PRELIGHT_PRE_SSR_FBO) || (i == PRELIGHT_TEMP_FBO) || (i == PRELIGHT_SWAP_TEMP_FBO))
+					continue;
+			}
+
+			FBO_SetupDrawBuffers();
+
+			R_CheckFBO(tr.preLightFbo[i]);
+		}
 	}
 
 	// glow buffers
@@ -503,7 +559,7 @@ void FBO_Init(void)
 
 		FBO_AttachTextureImage(tr.sunRaysImage, 0);
 
-		R_AttachFBOTextureDepth(tr.renderDepthImage->texnum);
+		FBO_AttachTexturePackedDepthStencil(tr.renderDepthImage->texnum);
 
 		FBO_SetupDrawBuffers();
 
@@ -522,8 +578,6 @@ void FBO_Init(void)
 			qglDrawBuffer(GL_NONE);
 			qglReadBuffer(GL_NONE);
 
-			//FBO_AttachTextureImage(tr.pshadowMaps[i], 0);
-			//FBO_CreateBuffer(tr.pshadowFbos[i], GL_DEPTH_COMPONENT24, 0, 0);
 			R_AttachFBOTextureDepth(tr.pshadowMaps[i]->texnum);
 
 			FBO_SetupDrawBuffers();
@@ -538,13 +592,10 @@ void FBO_Init(void)
 		tr.shadowCubeFbo = FBO_Create("_shadowCubeFbo", PSHADOW_MAP_SIZE, PSHADOW_MAP_SIZE);
 		FBO_Bind(tr.shadowCubeFbo);
 
-		//FBO_CreateBuffer(tr.shadowCubeFbo, GL_DEPTH_COMPONENT24, 0, 0);
+		qglFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, tr.cubeDepthImage->texnum, 0);
 
 		qglDrawBuffer(GL_NONE);
-
-		R_AttachFBOTextureDepth(tr.cubeDepthImage->texnum);
-
-		FBO_SetupDrawBuffers();
+		qglReadBuffer(GL_NONE);
 
 		R_CheckFBO(tr.shadowCubeFbo);
 	}
@@ -556,12 +607,9 @@ void FBO_Init(void)
 			tr.sunShadowFbo[i] = FBO_Create("_sunshadowmap", tr.sunShadowDepthImage[i]->width, tr.sunShadowDepthImage[i]->height);
 			FBO_Bind(tr.sunShadowFbo[i]);
 
-			//FBO_CreateBuffer(tr.sunShadowFbo[i], GL_RGBA8, 0, 0);
-			//FBO_AttachTextureImage(tr.sunShadowImage, 0);
 			qglDrawBuffer(GL_NONE);
 			qglReadBuffer(GL_NONE);
 
-			//FBO_CreateBuffer(tr.sunShadowFbo, GL_DEPTH_COMPONENT24, 0, 0);
 			R_AttachFBOTextureDepth(tr.sunShadowDepthImage[i]->texnum);
 
 			FBO_SetupDrawBuffers();
@@ -650,12 +698,12 @@ void FBO_Init(void)
 		R_CheckFBO(tr.screenSsaoFbo);
 	}
 
-	if (r_refraction->integer) 
+	if (r_refraction->integer || r_ssr->integer) 
 	{
-		tr.refractiveFbo = FBO_Create("_refractiveFbo", tr.refractiveImage->width, tr.refractiveImage->height);
+		tr.refractiveFbo = FBO_Create("_refractiveFbo", tr.prevRenderImage->width, tr.prevRenderImage->height);
 		FBO_Bind(tr.refractiveFbo);
 		
-		FBO_AttachTextureImage(tr.refractiveImage, 0);
+		FBO_AttachTextureImage(tr.prevRenderImage, 0);
 		
 		FBO_SetupDrawBuffers();
 		
@@ -671,19 +719,33 @@ void FBO_Init(void)
 		glState.currentFBO->colorImage[0] = tr.renderCubeImage;
 		glState.currentFBO->colorBuffers[0] = tr.renderCubeImage->texnum;
 
-		R_AttachFBOTextureDepth(tr.renderDepthImage->texnum);
+		FBO_AttachTexturePackedDepthStencil(tr.renderDepthImage->texnum);
 
 		FBO_SetupDrawBuffers();
 
 		R_CheckFBO(tr.renderCubeFbo);
 	}
 
-	if ((r_pbr->integer == 1) && (tr.renderCubeImage != NULL)) {
+	if (tr.renderCubeImage != NULL) {
 		tr.preFilterEnvMapFbo = FBO_Create("_preFilterEnvMapFbo", tr.renderCubeImage->width, tr.renderCubeImage->height);
 		FBO_Bind(tr.preFilterEnvMapFbo);
 		FBO_AttachTextureImage(tr.prefilterEnvMapImage, 0);
 		FBO_SetupDrawBuffers();
 		R_CheckFBO(tr.preFilterEnvMapFbo);
+	}
+
+	if (tr.weatherDepthImage != NULL)
+	{
+		tr.weatherDepthFbo = FBO_Create(
+			"_weatherDepthFbo",
+			tr.weatherDepthImage->width,
+			tr.weatherDepthImage->height);
+
+		FBO_Bind(tr.weatherDepthFbo);
+		R_AttachFBOTextureDepth(tr.weatherDepthImage->texnum);
+		FBO_SetupDrawBuffers();
+
+		R_CheckFBO(tr.weatherDepthFbo);
 	}
 
 	GL_CheckErrors();
@@ -701,7 +763,7 @@ void FBO_Shutdown(void)
 	int             i, j;
 	FBO_t          *fbo;
 
-	ri->Printf(PRINT_ALL, "------- FBO_Shutdown -------\n");
+	ri.Printf(PRINT_ALL, "------- FBO_Shutdown -------\n");
 
 	FBO_Bind(NULL);
 
@@ -736,17 +798,17 @@ void R_FBOList_f(void)
 	int             i;
 	FBO_t          *fbo;
 
-	ri->Printf(PRINT_ALL, "             size       name\n");
-	ri->Printf(PRINT_ALL, "----------------------------------------------------------\n");
+	ri.Printf(PRINT_ALL, "             size       name\n");
+	ri.Printf(PRINT_ALL, "----------------------------------------------------------\n");
 
 	for(i = 0; i < tr.numFBOs; i++)
 	{
 		fbo = tr.fbos[i];
 
-		ri->Printf(PRINT_ALL, "  %4i: %4i %4i %s\n", i, fbo->width, fbo->height, fbo->name);
+		ri.Printf(PRINT_ALL, "  %4i: %4i %4i %s\n", i, fbo->width, fbo->height, fbo->name);
 	}
 
-	ri->Printf(PRINT_ALL, " %i FBOs\n", tr.numFBOs);
+	ri.Printf(PRINT_ALL, " %i FBOs\n", tr.numFBOs);
 }
 
 void FBO_BlitFromTexture(struct image_s *src, vec4i_t inSrcBox, vec2_t inSrcTexScale, FBO_t *dst, vec4i_t inDstBox, struct shaderProgram_s *shaderProgram, vec4_t inColor, int blend)
@@ -879,7 +941,7 @@ void FBO_Blit(FBO_t *src, vec4i_t inSrcBox, vec2_t srcTexScale, FBO_t *dst, vec4
 
 	if (!src)
 	{
-		ri->Printf(PRINT_WARNING, "Tried to blit from a NULL FBO!\n");
+		ri.Printf(PRINT_WARNING, "Tried to blit from a NULL FBO!\n");
 		return;
 	}
 

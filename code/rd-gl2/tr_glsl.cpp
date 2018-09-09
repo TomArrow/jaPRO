@@ -22,36 +22,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // tr_glsl.c
 #include "tr_local.h"
 #include "tr_allocator.h"
+#include "glsl_shaders.h"
 
 void GLSL_BindNullProgram(void);
-
-extern const GPUProgramDesc fallback_bokehProgram;
-extern const GPUProgramDesc fallback_calclevels4xProgram;
-extern const GPUProgramDesc fallback_depthblurProgram;
-extern const GPUProgramDesc fallback_prefilterEnvMapProgram;
-extern const GPUProgramDesc fallback_dlightProgram;
-extern const GPUProgramDesc fallback_down4xProgram;
-extern const GPUProgramDesc fallback_fogpassProgram;
-extern const GPUProgramDesc fallback_gaussian_blurProgram;
-extern const GPUProgramDesc fallback_genericProgram;
-extern const GPUProgramDesc fallback_lightallProgram;
-extern const GPUProgramDesc fallback_pshadowProgram;
-extern const GPUProgramDesc fallback_shadowfillProgram;
-extern const GPUProgramDesc fallback_shadowmaskProgram;
-extern const GPUProgramDesc fallback_ssaoProgram;
-extern const GPUProgramDesc fallback_refractionProgram;
-extern const GPUProgramDesc fallback_texturecolorProgram;
-extern const GPUProgramDesc fallback_tonemapProgram;
-extern const GPUProgramDesc fallback_dglow_downsampleProgram;
-extern const GPUProgramDesc fallback_dglow_upsampleProgram;
-extern const GPUProgramDesc fallback_surface_spritesProgram;
-extern const GPUProgramDesc fallback_weatherProgram;
-
 
 const uniformBlockInfo_t uniformBlocksInfo[UNIFORM_BLOCK_COUNT] = {
 	{ 0, "SurfaceSprite", sizeof(SurfaceSpriteBlock) },
 	{ 1, "Liquid", sizeof(LiquidBlock) },
-	{ 2, "Liquid2", sizeof(LiquidBlock2) }
+	{ 2, "CubemapMatrices", sizeof(CubemapTransforms) }
 };
 
 typedef struct uniformInfo_s
@@ -78,6 +56,10 @@ static uniformInfo_t uniformsInfo[] =
 
 	{ "u_ScreenImageMap", GLSL_INT, 1 },
 	{ "u_ScreenDepthMap", GLSL_INT, 1 },
+	{ "u_ScreenDiffuseMap", GLSL_INT, 1 },
+	{ "u_ScreenSpecularMap", GLSL_INT, 1 },
+	{ "u_ScreenOffsetMap", GLSL_INT, 1 },
+	{ "u_ScreenOffsetMap2", GLSL_INT, 1 },
 
 	{ "u_LightGridDirectionMap", GLSL_INT, 1 },
 	{ "u_LightGridDirectionalLightMap", GLSL_INT, 1 },
@@ -115,6 +97,7 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_Color",     GLSL_VEC4, 1 },
 	{ "u_BaseColor", GLSL_VEC4, 1 },
 	{ "u_VertColor", GLSL_VEC4, 1 },
+	{ "u_VertOffset", GLSL_INT, 1 },
 
 	{ "u_DlightInfo",    GLSL_VEC4, 1 },
 	{ "u_LightForward",  GLSL_VEC3, 1 },
@@ -125,6 +108,10 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_LightRadius",   GLSL_FLOAT, 1 },
 	{ "u_AmbientLight",  GLSL_VEC3, 1 },
 	{ "u_DirectedLight", GLSL_VEC3, 1 },
+	{ "u_LightTransforms", GLSL_VEC4, MAX_DLIGHTS },
+	{ "u_LightColors", GLSL_VEC3, MAX_DLIGHTS },
+	{ "u_CubemapTransforms", GLSL_VEC4, MAX_DLIGHTS },
+	{ "u_NumCubemaps", GLSL_INT, 1 },
 
 	{ "u_PortalRange", GLSL_FLOAT, 1 },
 
@@ -136,8 +123,11 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_FogHasPlane",	GLSL_INT, 1 },
 	{ "u_FogDepthToOpaque", GLSL_FLOAT, 1 },
 
-	{ "u_ModelMatrix",               GLSL_MAT4x4, 1 },
-	{ "u_ModelViewProjectionMatrix", GLSL_MAT4x4, 1 },
+	{ "u_ModelMatrix",					GLSL_MAT4x4, 1 },
+	{ "u_ModelViewProjectionMatrix",	GLSL_MAT4x4, 1 },
+	{ "u_PrevViewProjectionMatrix",		GLSL_MAT4x4, 1 },
+	{ "u_NormalMatrix",					GLSL_MAT4x4, 1 },
+	{ "u_InvViewProjectionMatrix",		GLSL_MAT4x4, 1 },
 
 	{ "u_Time",          GLSL_FLOAT, 1 },
 	{ "u_VertexLerp" ,   GLSL_FLOAT, 1 },
@@ -164,10 +154,12 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_SphericalHarmonic",	GLSL_VEC3, 9 },
 
 	{ "u_BoneMatrices",			GLSL_MAT4x3, 20 },
+	{ "u_AlphaTestFunction",	GLSL_INT, 1 },
 	{ "u_AlphaTestValue",		GLSL_FLOAT, 1 },
 
 	{ "u_FXVolumetricBase",		GLSL_FLOAT, 1 },
 	{ "u_MapZExtents",			GLSL_VEC2, 1 },
+	{ "u_ZoneOffset",			GLSL_VEC2, 1 },
 };
 
 static void GLSL_PrintProgramInfoLog(GLuint object, qboolean developerOnly)
@@ -180,11 +172,11 @@ static void GLSL_PrintProgramInfoLog(GLuint object, qboolean developerOnly)
 
 	if (maxLength <= 0)
 	{
-		ri->Printf(printLevel, "No compile log.\n");
+		ri.Printf(printLevel, "No compile log.\n");
 		return;
 	}
 
-	ri->Printf(printLevel, "compile log:\n");
+	ri.Printf(printLevel, "compile log:\n");
 
 	if (maxLength < 1023)
 	{
@@ -192,7 +184,7 @@ static void GLSL_PrintProgramInfoLog(GLuint object, qboolean developerOnly)
 
 		msgPart[maxLength + 1] = '\0';
 
-		ri->Printf(printLevel, "%s\n", msgPart);
+		ri.Printf(printLevel, "%s\n", msgPart);
 	}
 	else
 	{
@@ -204,7 +196,7 @@ static void GLSL_PrintProgramInfoLog(GLuint object, qboolean developerOnly)
 		{
 			Q_strncpyz(msgPart, msg + i, sizeof(msgPart));
 
-			ri->Printf(printLevel, "%s\n", msgPart);
+			ri.Printf(printLevel, "%s\n", msgPart);
 		}
 
 		R_Free(msg);
@@ -223,11 +215,11 @@ static void GLSL_PrintShaderInfoLog(GLuint object, qboolean developerOnly)
 
 	if (maxLength <= 0)
 	{
-		ri->Printf(printLevel, "No compile log.\n");
+		ri.Printf(printLevel, "No compile log.\n");
 		return;
 	}
 
-	ri->Printf(printLevel, "compile log:\n");
+	ri.Printf(printLevel, "compile log:\n");
 
 	if (maxLength < 1023)
 	{
@@ -235,7 +227,7 @@ static void GLSL_PrintShaderInfoLog(GLuint object, qboolean developerOnly)
 
 		msgPart[maxLength + 1] = '\0';
 
-		ri->Printf(printLevel, "%s\n", msgPart);
+		ri.Printf(printLevel, "%s\n", msgPart);
 	}
 	else
 	{
@@ -247,7 +239,7 @@ static void GLSL_PrintShaderInfoLog(GLuint object, qboolean developerOnly)
 		{
 			Q_strncpyz(msgPart, msg + i, sizeof(msgPart));
 
-			ri->Printf(printLevel, "%s\n", msgPart);
+			ri.Printf(printLevel, "%s\n", msgPart);
 		}
 
 		R_Free(msg);
@@ -272,7 +264,7 @@ static void GLSL_PrintShaderSource(GLuint shader)
 	{
 		char msgPart[1024];
 		Q_strncpyz(msgPart, msg + i, sizeof(msgPart));
-		ri->Printf(PRINT_ALL, "%s\n", msgPart);
+		ri.Printf(PRINT_ALL, "%s\n", msgPart);
 	}
 
 	R_Free(msg);
@@ -374,9 +366,9 @@ static size_t GLSL_GetShaderHeader(
 			GL_REPLACE));
 
 	Q_strcat(dest, size,
-		va("#define ATEST_CMP_LT %d\n"
-			"#define ATEST_CMP_GT %d\n"
-			"#define ATEST_CMP_GE %d\n",
+		va("#define ATEST_CMP_LT %i\n"
+			"#define ATEST_CMP_GT %i\n"
+			"#define ATEST_CMP_GE %i\n",
 			ATEST_CMP_LT,
 			ATEST_CMP_GT,
 			ATEST_CMP_GE));
@@ -389,9 +381,6 @@ static size_t GLSL_GetShaderHeader(
 			"#endif\n",
 			fbufWidthScale,
 			fbufHeightScale));
-
-	if (r_pbr->integer)
-		Q_strcat(dest, size, "#define USE_PBR\n");
 
 	if (r_debugVisuals->integer)
 		Q_strcat(dest, size, 
@@ -408,10 +397,9 @@ static size_t GLSL_GetShaderHeader(
 			cubeMipSize >>= 1;
 			numRoughnessMips++;
 		}
-		numRoughnessMips = MAX(1, numRoughnessMips - 2);
-		if (r_pbr->integer)
-			numRoughnessMips = MAX(1, numRoughnessMips - 4);
-		Q_strcat(dest, size, va("#define ROUGHNESS_MIPS float(%d)\n", numRoughnessMips));
+		numRoughnessMips = MAX(1, numRoughnessMips - 4);
+
+		Q_strcat(dest, size, va("#define ROUGHNESS_MIPS float(%i)\n", numRoughnessMips));
 	}
 
 	if (r_horizonFade->integer)
@@ -462,7 +450,7 @@ static GLuint GLSL_CompileGPUShader(
 
 		qglDeleteShader(shader);
 
-		ri->Error(ERR_FATAL, "Couldn't compile shader");
+		ri.Error(ERR_FATAL, "Couldn't compile shader");
 		return 0;
 	}
 
@@ -509,7 +497,7 @@ static size_t GLSL_LoadGPUShaderSource(
 	GLcharARB *buffer = nullptr;
 	if (r_externalGLSL->integer)
 	{
-		shaderTextLen = ri->FS_ReadFile(filename, (void **)&buffer);
+		shaderTextLen = ri.FS_ReadFile(filename, (void **)&buffer);
 	}
 
 	const char *shaderText = nullptr;
@@ -517,20 +505,20 @@ static size_t GLSL_LoadGPUShaderSource(
 	{
 		if (fallback)
 		{
-			ri->Printf(PRINT_DEVELOPER, "...loading built-in '%s'\n", filename);
+			ri.Printf(PRINT_DEVELOPER, "...loading built-in '%s'\n", filename);
 			shaderText = fallback;
 			shaderTextLen = strlen(shaderText);
-			ri->Printf(PRINT_DEVELOPER, "...loading '%s'\n", filename);
+			ri.Printf(PRINT_DEVELOPER, "...loading '%s'\n", filename);
 		}
 		else
 		{
-			ri->Printf(PRINT_DEVELOPER, "couldn't load '%s'\n", filename);
+			ri.Printf(PRINT_DEVELOPER, "couldn't load '%s'\n", filename);
 			return 0;
 		}
 	}
 	else
 	{
-		ri->Printf(PRINT_DEVELOPER, "...loading '%s'\n", filename);
+		ri.Printf(PRINT_DEVELOPER, "...loading '%s'\n", filename);
 		shaderText = buffer;
 	}
 
@@ -543,7 +531,7 @@ static size_t GLSL_LoadGPUShaderSource(
 
 	if (buffer)
 	{
-		ri->FS_FreeFile(buffer);
+		ri.FS_FreeFile(buffer);
 	}
 
 	return result;
@@ -558,8 +546,8 @@ static void GLSL_LinkProgram(GLuint program)
 	if (linked != GL_TRUE)
 	{
 		GLSL_PrintProgramInfoLog(program, qfalse);
-		ri->Printf(PRINT_ALL, "\n");
-		ri->Error(ERR_FATAL, "shaders failed to link");
+		ri.Printf(PRINT_ALL, "\n");
+		ri.Error(ERR_FATAL, "shaders failed to link");
 	}
 }
 
@@ -582,7 +570,7 @@ static void GLSL_ShowProgramUniforms(GLuint program)
 	{
 		qglGetActiveUniform(program, i, sizeof(uniformName), NULL, &size, &type, uniformName);
 
-		ri->Printf(PRINT_DEVELOPER, "active uniform: '%s'\n", uniformName);
+		ri.Printf(PRINT_DEVELOPER, "active uniform: '%s'\n", uniformName);
 	}
 
 	qglUseProgram(0);
@@ -609,25 +597,51 @@ static void GLSL_BindShaderInterface(shaderProgram_t *program)
 		"attr_Normal2",  // ATTR_INDEX_NORMAL2
 	};
 
+	static const char *xfbVarNames[XFB_VAR_COUNT] = {
+		"var_Position",
+		"var_Velocity",
+	};
+
 	static const char *shaderOutputNames[] = {
 		"out_Color",  // Color output
-		"out_Glow",  // Glow output
+		"out_Glow",  // Glow output 
+		"out_Velocity", // Velocity output
+		//"out_Specular" // Specular Gloss output
 	};
 
 	const uint32_t attribs = program->attribs;
-	for (int attribIndex = 0; attribIndex < ATTR_INDEX_MAX; ++attribIndex)
+	if (attribs != 0)
 	{
-		if (!(attribs & (1u << attribIndex)))
+		for (int attribIndex = 0; attribIndex < ATTR_INDEX_MAX; ++attribIndex)
 		{
-			continue;
-		}
+			if (!(attribs & (1u << attribIndex)))
+			{
+				continue;
+			}
 
-		qglBindAttribLocation(program->program, attribIndex, shaderInputNames[attribIndex]);
+			qglBindAttribLocation(program->program, attribIndex, shaderInputNames[attribIndex]);
+		}
 	}
 
 	for (int outputIndex = 0; outputIndex < ARRAY_LEN(shaderOutputNames); ++outputIndex)
 	{
 		qglBindFragDataLocation(program->program, outputIndex, shaderOutputNames[outputIndex]);
+	}
+
+	const uint32_t xfbVars = program->xfbVariables;
+	if (xfbVars != 0)
+	{
+		size_t activeXfbVarsCount = 0;
+		const char *activeXfbVarNames[XFB_VAR_COUNT] = {};
+		for (uint32_t xfbVarIndex = 0; xfbVarIndex < XFB_VAR_COUNT; ++xfbVarIndex)
+		{
+			if ((xfbVars & (1u << xfbVarIndex)) != 0)
+			{
+				activeXfbVarNames[activeXfbVarsCount++] = xfbVarNames[xfbVarIndex];
+			}
+		}
+		qglTransformFeedbackVaryings(
+			program->program, activeXfbVarsCount, activeXfbVarNames, GL_INTERLEAVED_ATTRIBS);
 	}
 
 }
@@ -662,7 +676,10 @@ public:
 	ShaderProgramBuilder(const ShaderProgramBuilder&) = delete;
 	ShaderProgramBuilder& operator=(const ShaderProgramBuilder&) = delete;
 
-	void Start(const char *name, const uint32_t attribs);
+	void Start(
+		const char *name, 
+		const uint32_t attribs,
+		const uint32_t xfbVariables);
 	bool AddShader(const GPUShaderDesc& shaderDesc, const char *extra);
 	bool Build(shaderProgram_t *program);
 
@@ -673,6 +690,7 @@ private:
 
 	const char *name;
 	uint32_t attribs;
+	uint32_t xfbVariables;
 	GLuint program;
 	GLuint shaderNames[GPUSHADER_TYPE_COUNT];
 	size_t numShaderNames;
@@ -698,11 +716,15 @@ ShaderProgramBuilder::~ShaderProgramBuilder()
 	}
 }
 
-void ShaderProgramBuilder::Start(const char *name, const uint32_t attribs)
+void ShaderProgramBuilder::Start(
+	const char *name,
+	const uint32_t attribs,
+	const uint32_t xfbVariables)
 {
 	this->program = qglCreateProgram();
 	this->name = name;
 	this->attribs = attribs;
+	this->xfbVariables = xfbVariables;
 }
 
 bool ShaderProgramBuilder::AddShader(const GPUShaderDesc& shaderDesc, const char *extra)
@@ -739,7 +761,7 @@ bool ShaderProgramBuilder::AddShader(const GPUShaderDesc& shaderDesc, const char
 
 	if (sourceLen == 0)
 	{
-		ri->Printf(
+		ri.Printf(
 			PRINT_ALL,
 			"ShaderProgramBuilder::AddShader: Failed to allocate enough memory for "
 			"shader '%s'\n",
@@ -755,7 +777,7 @@ bool ShaderProgramBuilder::AddShader(const GPUShaderDesc& shaderDesc, const char
 		apiShader);
 	if (shader == 0)
 	{
-		ri->Printf(
+		ri.Printf(
 			PRINT_ALL,
 			"ShaderProgramBuilder::AddShader: Unable to load \"%s\"\n",
 			name);
@@ -771,12 +793,11 @@ bool ShaderProgramBuilder::AddShader(const GPUShaderDesc& shaderDesc, const char
 bool ShaderProgramBuilder::Build(shaderProgram_t *shaderProgram)
 {
 	const size_t nameBufferSize = strlen(name) + 1;
-	shaderProgram->name = (char *)R_Malloc(nameBufferSize, TAG_GP2, qfalse);
+	shaderProgram->name = (char *)R_Malloc(nameBufferSize, TAG_GP2);
 	Q_strncpyz(shaderProgram->name, name, nameBufferSize);
-
 	shaderProgram->program = program;
 	shaderProgram->attribs = attribs;
-
+	shaderProgram->xfbVariables = xfbVariables;
 	GLSL_BindShaderInterface(shaderProgram);
 	GLSL_LinkProgram(shaderProgram->program);
 
@@ -802,12 +823,17 @@ static bool GLSL_LoadGPUShader(
 	shaderProgram_t *program,
 	const char *name,
 	const uint32_t attribs,
+	const uint32_t xfbVariables,
 	const GLcharARB *extra,
-	const GPUProgramDesc& programDesc)
+	const GPUProgramDesc& programDesc,
+	const uint32_t shaders)
 {
-	builder.Start(name, attribs);
+	builder.Start(name, attribs, xfbVariables);
 	for (int i = 0; i < programDesc.numShaders; ++i)
 	{
+		if (!(shaders & programDesc.shaders[i].type) && programDesc.shaders[i].type != GPUSHADER_VERTEX)
+			continue;
+
 		const GPUShaderDesc& shaderDesc = programDesc.shaders[i];
 		if (!builder.AddShader(shaderDesc, extra))
 		{
@@ -842,19 +868,19 @@ void GLSL_InitUniforms(shaderProgram_t *program)
 			size += sizeof(GLfloat) * uniformsInfo[i].size;
 			break;
 		case GLSL_VEC2:
-			size += sizeof(float) * 2 * uniformsInfo[i].size;
+			size += sizeof(GLfloat) * 2 * uniformsInfo[i].size;
 			break;
 		case GLSL_VEC3:
-			size += sizeof(float) * 3 * uniformsInfo[i].size;
+			size += sizeof(GLfloat) * 3 * uniformsInfo[i].size;
 			break;
 		case GLSL_VEC4:
-			size += sizeof(float) * 4 * uniformsInfo[i].size;
+			size += sizeof(GLfloat) * 4 * uniformsInfo[i].size;
 			break;
 		case GLSL_MAT4x3:
-			size += sizeof(float) * 12 * uniformsInfo[i].size;
+			size += sizeof(GLfloat) * 12 * uniformsInfo[i].size;
 			break;
 		case GLSL_MAT4x4:
-			size += sizeof(float) * 16 * uniformsInfo[i].size;
+			size += sizeof(GLfloat) * 16 * uniformsInfo[i].size;
 			break;
 		default:
 			break;
@@ -890,6 +916,9 @@ void GLSL_FinishGPUShader(shaderProgram_t *program)
 void GLSL_SetUniforms(shaderProgram_t *program, UniformData *uniformData)
 {
 	UniformData *data = uniformData;
+	if (data == NULL)
+		return;
+
 	while (data->index != UNIFORM_COUNT)
 	{
 		switch (uniformsInfo[data->index].type)
@@ -905,6 +934,7 @@ void GLSL_SetUniforms(shaderProgram_t *program, UniformData *uniformData)
 
 		case GLSL_FLOAT:
 		{
+			assert(data->numElements > 0);
 			GLfloat *value = (GLfloat *)(data + 1);
 			GLSL_SetUniformFloatN(program, data->index, value, data->numElements);
 			data = reinterpret_cast<UniformData *>(value + data->numElements);
@@ -913,15 +943,16 @@ void GLSL_SetUniforms(shaderProgram_t *program, UniformData *uniformData)
 
 		case GLSL_VEC2:
 		{
-			assert(data->numElements == 1);
+			assert(data->numElements > 0);
 			GLfloat *value = (GLfloat *)(data + 1);
-			GLSL_SetUniformVec2(program, data->index, value);
+			GLSL_SetUniformVec2N(program, data->index, value, data->numElements);
 			data = reinterpret_cast<UniformData *>(value + data->numElements * 2);
 			break;
 		}
 
 		case GLSL_VEC3:
 		{
+			assert(data->numElements > 0);
 			GLfloat *value = (GLfloat *)(data + 1);
 			GLSL_SetUniformVec3N(program, data->index, value, data->numElements);
 			data = reinterpret_cast<UniformData *>(value + data->numElements * 3);
@@ -930,9 +961,9 @@ void GLSL_SetUniforms(shaderProgram_t *program, UniformData *uniformData)
 
 		case GLSL_VEC4:
 		{
-			assert(data->numElements == 1);
+			assert(data->numElements > 0);
 			GLfloat *value = (GLfloat *)(data + 1);
-			GLSL_SetUniformVec4(program, data->index, value);
+			GLSL_SetUniformVec4N(program, data->index, value, data->numElements);
 			data = reinterpret_cast<UniformData *>(value + data->numElements * 4);
 			break;
 		}
@@ -972,7 +1003,7 @@ void GLSL_SetUniformInt(shaderProgram_t *program, int uniformNum, GLint value)
 
 	if (uniformsInfo[uniformNum].type != GLSL_INT)
 	{
-		ri->Printf(PRINT_WARNING, "GLSL_SetUniformInt: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformInt: wrong type for uniform %i in program %s\n", uniformNum, program->name);
 		return;
 	}
 
@@ -996,7 +1027,7 @@ void GLSL_SetUniformFloat(shaderProgram_t *program, int uniformNum, GLfloat valu
 
 	if (uniformsInfo[uniformNum].type != GLSL_FLOAT)
 	{
-		ri->Printf(PRINT_WARNING, "GLSL_SetUniformFloat: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformFloat: wrong type for uniform %i in program %s\n", uniformNum, program->name);
 		return;
 	}
 
@@ -1020,7 +1051,7 @@ void GLSL_SetUniformVec2(shaderProgram_t *program, int uniformNum, const vec2_t 
 
 	if (uniformsInfo[uniformNum].type != GLSL_VEC2)
 	{
-		ri->Printf(PRINT_WARNING, "GLSL_SetUniformVec2: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformVec2: wrong type for uniform %i in program %s\n", uniformNum, program->name);
 		return;
 	}
 
@@ -1035,6 +1066,39 @@ void GLSL_SetUniformVec2(shaderProgram_t *program, int uniformNum, const vec2_t 
 	qglUniform2f(uniforms[uniformNum], v[0], v[1]);
 }
 
+void GLSL_SetUniformVec2N(shaderProgram_t *program, int uniformNum, const float *v, int numVec3s)
+{
+	GLint *uniforms = program->uniforms;
+	float *compare = (float *)(program->uniformBuffer + program->uniformBufferOffsets[uniformNum]);
+
+	if (uniforms[uniformNum] == -1)
+		return;
+
+	if (uniformsInfo[uniformNum].type != GLSL_VEC2)
+	{
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformVec3N: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+		return;
+	}
+
+	if (uniformsInfo[uniformNum].size < numVec3s)
+	{
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformVec3N: uniform %i only has %d elements! Tried to set %d\n",
+			uniformNum,
+			uniformsInfo[uniformNum].size,
+			numVec3s);
+		return;
+	}
+
+	if (memcmp(compare, v, sizeof(vec2_t) * numVec3s) == 0)
+	{
+		return;
+	}
+
+	memcpy(compare, v, sizeof(vec2_t) * numVec3s);
+
+	qglUniform2fv(uniforms[uniformNum], numVec3s, (float *)v);
+}
+
 void GLSL_SetUniformVec3(shaderProgram_t *program, int uniformNum, const vec3_t v)
 {
 	GLint *uniforms = program->uniforms;
@@ -1045,7 +1109,7 @@ void GLSL_SetUniformVec3(shaderProgram_t *program, int uniformNum, const vec3_t 
 
 	if (uniformsInfo[uniformNum].type != GLSL_VEC3)
 	{
-		ri->Printf(PRINT_WARNING, "GLSL_SetUniformVec3: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformVec3: wrong type for uniform %i in program %s\n", uniformNum, program->name);
 		return;
 	}
 
@@ -1069,13 +1133,13 @@ void GLSL_SetUniformVec3N(shaderProgram_t *program, int uniformNum, const float 
 
 	if (uniformsInfo[uniformNum].type != GLSL_VEC3)
 	{
-		ri->Printf(PRINT_WARNING, "GLSL_SetUniformVec3N: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformVec3N: wrong type for uniform %i in program %s\n", uniformNum, program->name);
 		return;
 	}
 
 	if (uniformsInfo[uniformNum].size < numVec3s)
 	{
-		ri->Printf(PRINT_WARNING, "GLSL_SetUniformVec3N: uniform %i only has %d elements! Tried to set %d\n",
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformVec3N: uniform %i only has %d elements! Tried to set %d\n",
 			uniformNum,
 			uniformsInfo[uniformNum].size,
 			numVec3s);
@@ -1102,7 +1166,7 @@ void GLSL_SetUniformVec4(shaderProgram_t *program, int uniformNum, const vec4_t 
 
 	if (uniformsInfo[uniformNum].type != GLSL_VEC4)
 	{
-		ri->Printf(PRINT_WARNING, "GLSL_SetUniformVec4: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformVec4: wrong type for uniform %i in program %s\n", uniformNum, program->name);
 		return;
 	}
 
@@ -1116,6 +1180,37 @@ void GLSL_SetUniformVec4(shaderProgram_t *program, int uniformNum, const vec4_t 
 	qglUniform4f(uniforms[uniformNum], v[0], v[1], v[2], v[3]);
 }
 
+void GLSL_SetUniformVec4N(shaderProgram_t *program, int uniformNum, const float *v, int numVec4s)
+{
+	GLint *uniforms = program->uniforms;
+	float *compare = (float *)(program->uniformBuffer + program->uniformBufferOffsets[uniformNum]);
+
+	if (uniforms[uniformNum] == -1)
+		return;
+	if (uniformsInfo[uniformNum].type != GLSL_VEC4)
+	{
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformVec4N: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+		return;
+	}
+
+	if (uniformsInfo[uniformNum].size < numVec4s)
+	{
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformVec4N: uniform %i only has %d elements! Tried to set %d\n",
+			uniformNum,
+			uniformsInfo[uniformNum].size,
+			numVec4s);
+		return;
+	}
+
+	if (memcmp(compare, v, sizeof(vec4_t) * numVec4s) == 0)
+	{
+		return;
+	}
+	memcpy(compare, v, sizeof(vec4_t) * numVec4s);
+
+	qglUniform4fv(uniforms[uniformNum], numVec4s, (float *)v);
+}
+
 void GLSL_SetUniformFloatN(shaderProgram_t *program, int uniformNum, const float *v, int numFloats)
 {
 	GLint *uniforms = program->uniforms;
@@ -1126,13 +1221,13 @@ void GLSL_SetUniformFloatN(shaderProgram_t *program, int uniformNum, const float
 
 	if (uniformsInfo[uniformNum].type != GLSL_FLOAT)
 	{
-		ri->Printf(PRINT_WARNING, "GLSL_SetUniformFloatN: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformFloatN: wrong type for uniform %i in program %s\n", uniformNum, program->name);
 		return;
 	}
 
 	if (uniformsInfo[uniformNum].size < numFloats)
 	{
-		ri->Printf(PRINT_WARNING, "GLSL_SetUniformFloatN: uniform %i only has %d elements! Tried to set %d\n",
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformFloatN: uniform %i only has %d elements! Tried to set %d\n",
 			uniformNum,
 			uniformsInfo[uniformNum].size,
 			numFloats);
@@ -1159,7 +1254,7 @@ void GLSL_SetUniformMatrix4x3(shaderProgram_t *program, int uniformNum, const fl
 
 	if (uniformsInfo[uniformNum].type != GLSL_MAT4x3)
 	{
-		ri->Printf(PRINT_WARNING, "GLSL_SetUniformMatrix4x3: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformMatrix4x3: wrong type for uniform %i in program %s\n", uniformNum, program->name);
 		return;
 	}
 
@@ -1187,7 +1282,7 @@ void GLSL_SetUniformMatrix4x4(shaderProgram_t *program, int uniformNum, const fl
 
 	if (uniformsInfo[uniformNum].type != GLSL_MAT4x4)
 	{
-		ri->Printf(PRINT_WARNING, "GLSL_SetUniformMatrix4x4: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+		ri.Printf(PRINT_WARNING, "GLSL_SetUniformMatrix4x4: wrong type for uniform %i in program %s\n", uniformNum, program->name);
 		return;
 	}
 
@@ -1224,6 +1319,18 @@ static bool GLSL_IsValidPermutationForGeneric(int shaderCaps)
 {
 	if ((shaderCaps & GENERICDEF_USE_VERTEX_ANIMATION) &&
 		(shaderCaps & GENERICDEF_USE_SKELETAL_ANIMATION))
+		return false;
+
+	return true;
+}
+
+static bool GLSL_IsValidPermutationForPrepass(int shaderCaps)
+{
+	if ((shaderCaps & LIGHTDEF_USE_PARALLAXMAP) && !r_parallaxMapping->integer)
+		return false;
+
+	if ((shaderCaps & PREPASS_USE_VERTEX_ANIMATION) &&
+		(shaderCaps & PREPASS_USE_SKELETAL_ANIMATION))
 		return false;
 
 	return true;
@@ -1317,13 +1424,13 @@ static const GPUProgramDesc *LoadProgramSource(
 		char programPath[MAX_QPATH];
 		Com_sprintf(programPath, sizeof(programPath), "glsl/%s.glsl", programName);
 
-		long size = ri->FS_ReadFile(programPath, (void **)&buffer);
+		long size = ri.FS_ReadFile(programPath, (void **)&buffer);
 		if (size)
 		{
 			GPUProgramDesc *externalProgramDesc = ojkAlloc<GPUProgramDesc>(allocator);
 			*externalProgramDesc = ParseProgramSource(allocator, buffer);
 			result = externalProgramDesc;
-			ri->FS_FreeFile(buffer);
+			ri.FS_FreeFile(buffer);
 		}
 	}
 
@@ -1380,37 +1487,15 @@ static int GLSL_LoadGPUProgramGeneric(
 		if (i & GENERICDEF_USE_GLOW_BUFFER)
 			Q_strcat(extradefines, sizeof(extradefines), "#define USE_GLOW_BUFFER\n");
 
-		switch (i & GENERICDEF_USE_ATEST_MASK)
-		{
-		case GENERICDEF_USE_ATEST_LT:
-		{
-			Q_strcat(extradefines, sizeof(extradefines),
-				"#define USE_ATEST ATEST_CMP_LT\n");
-			break;
-		}
+		uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT;
 
-		case GENERICDEF_USE_ATEST_GT:
-		{
-			Q_strcat(extradefines, sizeof(extradefines),
-				"#define USE_ATEST ATEST_CMP_GT\n");
-			break;
-		}
+		//TODO: use culling or cubemapping layering
+		//shaderTypes |= GPUSHADER_GEOMETRY;
 
-		case GENERICDEF_USE_ATEST_GE:
+		if (!GLSL_LoadGPUShader(builder, &tr.genericShader[i], "generic", attribs, NO_XFB_VARS,
+			extradefines, *programDesc, shaderTypes))
 		{
-			Q_strcat(extradefines, sizeof(extradefines),
-				"#define USE_ATEST ATEST_CMP_GE\n");
-			break;
-		}
-
-		default:
-			break;
-		}
-
-		if (!GLSL_LoadGPUShader(builder, &tr.genericShader[i], "generic", attribs,
-			extradefines, *programDesc))
-		{
-			ri->Error(ERR_FATAL, "Could not load generic shader!");
+			ri.Error(ERR_FATAL, "Could not load generic shader!");
 		}
 
 		GLSL_InitUniforms(&tr.genericShader[i]);
@@ -1421,6 +1506,178 @@ static int GLSL_LoadGPUProgramGeneric(
 		qglUseProgram(0);
 
 		GLSL_FinishGPUShader(&tr.genericShader[i]);
+
+		++numPrograms;
+	}
+
+	return numPrograms;
+}
+
+static int GLSL_LoadGPUProgramPrepass(
+	ShaderProgramBuilder& builder,
+	Allocator& scratchAlloc)
+{
+	int numPrograms = 0;
+	Allocator allocator(scratchAlloc.Base(), scratchAlloc.GetSize());
+
+	char extradefines[1200];
+	const GPUProgramDesc *programDesc =
+		LoadProgramSource("prepass", allocator, fallback_prepassProgram);
+	for (int i = 0; i < PREPASS_COUNT; i++)
+	{
+		if (!GLSL_IsValidPermutationForPrepass(i))
+		{
+			continue;
+		}
+
+		uint32_t attribs = ATTR_POSITION | ATTR_NORMAL;
+		uint32_t shaderTypes = GPUSHADER_VERTEX ;
+		extradefines[0] = '\0';
+
+		if (i & PREPASS_USE_DEFORM_VERTEXES)
+		{
+			Q_strcat(extradefines, sizeof(extradefines), "#define USE_DEFORM_VERTEXES\n");
+			attribs |= ATTR_TEXCOORD0;
+		}
+
+		if (i & PREPASS_USE_VERTEX_ANIMATION)
+		{
+			Q_strcat(extradefines, sizeof(extradefines), "#define USE_VERTEX_ANIMATION\n");
+			attribs |= ATTR_POSITION2;
+			if (i & PREPASS_USE_G_BUFFERS)
+				attribs |= ATTR_NORMAL2 | ATTR_TANGENT2;
+		}
+
+		if (i & PREPASS_USE_SKELETAL_ANIMATION)
+		{
+			Q_strcat(extradefines, sizeof(extradefines), "#define USE_SKELETAL_ANIMATION\n");
+			attribs |= ATTR_BONE_INDEXES | ATTR_BONE_WEIGHTS;
+		}
+
+		if (i & PREPASS_USE_G_BUFFERS)
+		{
+			Q_strcat(extradefines, sizeof(extradefines), "#define USE_G_BUFFERS\n");
+			attribs &= ~ATTR_TEXCOORD0;
+			attribs |= ATTR_TEXCOORD0 | ATTR_COLOR | ATTR_TANGENT;
+			shaderTypes |= GPUSHADER_FRAGMENT;
+		}
+
+		if (i & PREPASS_USE_CUBEMAP_TRANSFORMS)
+		{
+			Q_strcat(extradefines, sizeof(extradefines), "#define USE_CUBEMAP_TRANSFORMS\n");
+			shaderTypes |= GPUSHADER_FRAGMENT | GPUSHADER_GEOMETRY;
+		}
+
+		if (i & PREPASS_USE_PARALLAX)
+		{
+			Q_strcat(extradefines, sizeof(extradefines), "#define USE_PARALLAXMAP\n");
+			if (r_parallaxMapping->integer > 1)
+				Q_strcat(extradefines, sizeof(extradefines), "#define USE_RELIEFMAP\n");
+		}
+
+		if (!GLSL_LoadGPUShader(builder, &tr.prepassShader[i], "prepass", attribs, NO_XFB_VARS,
+			extradefines, *programDesc, shaderTypes))
+		{
+			ri.Error(ERR_FATAL, "Could not load prepass shader!");
+		}
+
+		GLSL_InitUniforms(&tr.prepassShader[i]);
+
+		qglUseProgram(tr.prepassShader[i].program);
+		GLSL_SetUniformInt(&tr.prepassShader[i], UNIFORM_DIFFUSEMAP, TB_DIFFUSEMAP);
+		GLSL_SetUniformInt(&tr.prepassShader[i], UNIFORM_SPECULARMAP, TB_SPECULARMAP);
+		GLSL_SetUniformInt(&tr.prepassShader[i], UNIFORM_NORMALMAP, TB_NORMALMAP);
+		qglUseProgram(0);
+
+		GLSL_FinishGPUShader(&tr.prepassShader[i]);
+
+		++numPrograms;
+	}
+
+	return numPrograms;
+}
+
+static int GLSL_LoadGPUProgramPrelight(
+	ShaderProgramBuilder& builder,
+	Allocator& scratchAlloc)
+{
+	int numPrograms = 0;
+	Allocator allocator(scratchAlloc.Base(), scratchAlloc.GetSize());
+
+	char extradefines[1200];
+	const GPUProgramDesc *programDesc =
+		LoadProgramSource("prelight", allocator, fallback_prelightProgram);
+	for (int i = 0; i < PRELIGHT_COUNT; i++)
+	{
+		uint32_t attribs = ATTR_POSITION;
+		extradefines[0] = '\0';
+
+		if (i == PRELIGHT_SUN_LIGHT)
+			Q_strcat(extradefines, sizeof(extradefines), "#define SUN_LIGHT\n");
+
+		if (i == PRELIGHT_POINT_LIGHT) {
+			Q_strcat(extradefines, sizeof(extradefines), "#define POINT_LIGHT\n");
+			if (r_dlightMode->integer >= 2)
+				Q_strcat(extradefines, sizeof(extradefines), "#define USE_DSHADOWS\n");
+		}
+		if (i == PRELIGHT_SPOT_LIGHT)
+			Q_strcat(extradefines, sizeof(extradefines), "#define SPOT_LIGHT\n");
+
+		if (i == PRELIGHT_TUBE_LIGHT)
+			Q_strcat(extradefines, sizeof(extradefines), "#define TUBE_LIGHT\n");
+
+		if (i == PRELIGHT_CUBEMAP) 
+		{
+			if (r_cubeMapping->integer)
+			{
+				Q_strcat(extradefines, sizeof(extradefines), "#define CUBEMAP\n");
+			}
+			else
+				continue;
+		}
+			
+		if (i == PRELIGHT_SSR)
+			Q_strcat(extradefines, sizeof(extradefines), "#define SSR\n");
+
+		if (i == PRELIGHT_SSR_RESOLVE)
+			Q_strcat(extradefines, sizeof(extradefines), "#define SSR_RESOLVE\n");
+
+		if (i == PRELIGHT_TEMPORAL_FILTER)
+			Q_strcat(extradefines, sizeof(extradefines), "#define TEMPORAL_FILTER\n");
+
+		if (r_ssr->integer == 2)
+			Q_strcat(extradefines, sizeof(extradefines), "#define TWO_RAYS_PER_PIXEL\n");
+
+		uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT;
+
+		//TODO: use culling or cubemapping layering
+		//shaderTypes |= GPUSHADER_GEOMETRY;
+
+		if (!GLSL_LoadGPUShader(builder, &tr.prelightShader[i], "prelight", attribs, NO_XFB_VARS,
+			extradefines, *programDesc, shaderTypes))
+		{
+			ri.Error(ERR_FATAL, "Could not load prelight shader!");
+		}
+
+		GLSL_InitUniforms(&tr.prelightShader[i]);
+
+		qglUseProgram(tr.prelightShader[i].program);
+		GLSL_SetUniformInt(&tr.prelightShader[i], UNIFORM_SCREENIMAGEMAP, 0);
+		GLSL_SetUniformInt(&tr.prelightShader[i], UNIFORM_SCREENDEPTHMAP, 1);
+		GLSL_SetUniformInt(&tr.prelightShader[i], UNIFORM_NORMALMAP, 2);
+		GLSL_SetUniformInt(&tr.prelightShader[i], UNIFORM_SPECULARMAP, 3);
+		GLSL_SetUniformInt(&tr.prelightShader[i], UNIFORM_SCREENOFFSETMAP, 4);
+		GLSL_SetUniformInt(&tr.prelightShader[i], UNIFORM_SCREENOFFSETMAP2, 5);
+		GLSL_SetUniformInt(&tr.prelightShader[i], UNIFORM_ENVBRDFMAP, 7);
+		
+		GLSL_SetUniformInt(&tr.prelightShader[i], UNIFORM_SHADOWMAP, 6);
+		GLSL_SetUniformInt(&tr.prelightShader[i], UNIFORM_SHADOWMAP2, 8);
+		GLSL_SetUniformInt(&tr.prelightShader[i], UNIFORM_SHADOWMAP3, 9);
+		GLSL_SetUniformInt(&tr.prelightShader[i], UNIFORM_SHADOWMAP4, 10);
+		
+		qglUseProgram(0);
+
+		GLSL_FinishGPUShader(&tr.prelightShader[i]);
 
 		++numPrograms;
 	}
@@ -1461,37 +1718,15 @@ static int GLSL_LoadGPUProgramFogPass(
 			attribs |= ATTR_BONE_INDEXES | ATTR_BONE_WEIGHTS;
 		}
 
-		switch (i & FOGDEF_USE_ATEST_MASK)
-		{
-		case FOGDEF_USE_ATEST_LT:
-		{
-			Q_strcat(extradefines, sizeof(extradefines),
-				"#define USE_ATEST ATEST_CMP_LT\n");
-			break;
-		}
+		uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT;
 
-		case FOGDEF_USE_ATEST_GT:
-		{
-			Q_strcat(extradefines, sizeof(extradefines),
-				"#define USE_ATEST ATEST_CMP_GT\n");
-			break;
-		}
+		//TODO: use culling or cubemapping layering
+		//shaderTypes |= GPUSHADER_GEOMETRY;
 
-		case FOGDEF_USE_ATEST_GE:
+		if (!GLSL_LoadGPUShader(builder, &tr.fogShader[i], "fogpass", attribs, NO_XFB_VARS,
+			extradefines, *programDesc, shaderTypes))
 		{
-			Q_strcat(extradefines, sizeof(extradefines),
-				"#define USE_ATEST ATEST_CMP_GE\n");
-			break;
-		}
-
-		default:
-			break;
-		}
-
-		if (!GLSL_LoadGPUShader(builder, &tr.fogShader[i], "fogpass", attribs,
-			extradefines, *programDesc))
-		{
-			ri->Error(ERR_FATAL, "Could not load fogpass shader!");
+			ri.Error(ERR_FATAL, "Could not load fogpass shader!");
 		}
 
 		GLSL_InitUniforms(&tr.fogShader[i]);
@@ -1523,37 +1758,15 @@ static int GLSL_LoadGPUProgramDLight(
 			Q_strcat(extradefines, sizeof(extradefines), "#define USE_DEFORM_VERTEXES\n");
 		}
 
-		switch (i & DLIGHTDEF_USE_ATEST_MASK)
-		{
-		case DLIGHTDEF_USE_ATEST_LT:
-		{
-			Q_strcat(extradefines, sizeof(extradefines),
-				"#define USE_ATEST ATEST_CMP_LT\n");
-			break;
-		}
+		uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT;
 
-		case DLIGHTDEF_USE_ATEST_GT:
-		{
-			Q_strcat(extradefines, sizeof(extradefines),
-				"#define USE_ATEST ATEST_CMP_GT\n");
-			break;
-		}
+		//TODO: use culling or cubemapping layering
+		//shaderTypes |= GPUSHADER_GEOMETRY;
 
-		case DLIGHTDEF_USE_ATEST_GE:
+		if (!GLSL_LoadGPUShader(builder, &tr.dlightShader[i], "dlight", attribs, NO_XFB_VARS,
+			extradefines, *programDesc, shaderTypes))
 		{
-			Q_strcat(extradefines, sizeof(extradefines),
-				"#define USE_ATEST ATEST_CMP_GE\n");
-			break;
-		}
-
-		default:
-			break;
-		}
-
-		if (!GLSL_LoadGPUShader(builder, &tr.dlightShader[i], "dlight", attribs,
-			extradefines, *programDesc))
-		{
-			ri->Error(ERR_FATAL, "Could not load dlight shader!");
+			ri.Error(ERR_FATAL, "Could not load dlight shader!");
 		}
 
 		GLSL_InitUniforms(&tr.dlightShader[i]);
@@ -1648,7 +1861,7 @@ static int GLSL_LoadGPUProgramLightAll(
 				{
 					Q_strcat(extradefines, sizeof(extradefines), "#define USE_PARALLAXMAP\n");
 					if (r_parallaxMapping->integer > 1)
-						Q_strcat(extradefines, 1024, "#define USE_RELIEFMAP\n");
+						Q_strcat(extradefines, sizeof(extradefines), "#define USE_RELIEFMAP\n");
 				}
 				attribs |= ATTR_TANGENT;
 			}
@@ -1694,40 +1907,18 @@ static int GLSL_LoadGPUProgramLightAll(
 			attribs |= ATTR_BONE_INDEXES | ATTR_BONE_WEIGHTS;
 		}
 
-		switch (i & LIGHTDEF_USE_ATEST_MASK)
-		{
-		case LIGHTDEF_USE_ATEST_LT:
-		{
-			Q_strcat(extradefines, sizeof(extradefines),
-				"#define USE_ATEST ATEST_CMP_LT\n");
-			break;
-		}
-
-		case LIGHTDEF_USE_ATEST_GT:
-		{
-			Q_strcat(extradefines, sizeof(extradefines),
-				"#define USE_ATEST ATEST_CMP_GT\n");
-			break;
-		}
-
-		case LIGHTDEF_USE_ATEST_GE:
-		{
-			Q_strcat(extradefines, sizeof(extradefines),
-				"#define USE_ATEST ATEST_CMP_GE\n");
-			break;
-		}
-
-		default:
-			break;
-		}
-
 		if (i & LIGHTDEF_USE_GLOW_BUFFER)
 			Q_strcat(extradefines, sizeof(extradefines), "#define USE_GLOW_BUFFER\n");
 
-		if (!GLSL_LoadGPUShader(builder, &tr.lightallShader[i], "lightall", attribs,
-			extradefines, *programDesc))
+		uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT;
+
+		//TODO: use culling or cubemapping layering
+		//shaderTypes |= GPUSHADER_GEOMETRY;
+
+		if (!GLSL_LoadGPUShader(builder, &tr.lightallShader[i], "lightall", attribs, NO_XFB_VARS,
+			extradefines, *programDesc, shaderTypes))
 		{
-			ri->Error(ERR_FATAL, "Could not load lightall shader!");
+			ri.Error(ERR_FATAL, "Could not load lightall shader!");
 		}
 
 		GLSL_InitUniforms(&tr.lightallShader[i]);
@@ -1745,6 +1936,8 @@ static int GLSL_LoadGPUProgramLightAll(
 		GLSL_SetUniformInt(&tr.lightallShader[i], UNIFORM_LIGHTGRIDDIRECTIONMAP, TB_LGDIRECTION);
 		GLSL_SetUniformInt(&tr.lightallShader[i], UNIFORM_LIGHTGRIDDIRECTIONALLIGHTMAP, TB_LGLIGHTCOLOR);
 		GLSL_SetUniformInt(&tr.lightallShader[i], UNIFORM_LIGHTGRIDAMBIENTLIGHTMAP, TB_LGAMBIENT);
+		GLSL_SetUniformInt(&tr.lightallShader[i], UNIFORM_SCREENDIFFUSEMAP, TB_DIFFUSELIGHTBUFFER);
+		GLSL_SetUniformInt(&tr.lightallShader[i], UNIFORM_SCREENSPECULARMAP, TB_SPECLIGHTBUFFER);
 		qglUseProgram(0);
 
 		GLSL_FinishGPUShader(&tr.lightallShader[i]);
@@ -1755,22 +1948,53 @@ static int GLSL_LoadGPUProgramLightAll(
 	return numPrograms;
 }
 
+static int GLSL_LoadGPUProgramBasicWithDefinitions(
+	ShaderProgramBuilder& builder,
+	Allocator& scratchAlloc,
+	shaderProgram_t *shaderProgram,
+	const char *programName,
+	const GPUProgramDesc& programFallback,
+	const char *extraDefines,
+	const uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT,
+	const uint32_t attribs = ATTR_POSITION | ATTR_TEXCOORD0,
+	const uint32_t xfbVariables = NO_XFB_VARS)
+{
+	Allocator allocator(scratchAlloc.Base(), scratchAlloc.GetSize());
+	const GPUProgramDesc *programDesc =
+		LoadProgramSource(programName, allocator, programFallback);
+	if (!GLSL_LoadGPUShader(
+		builder,
+		shaderProgram,
+		programName,
+		attribs,
+		xfbVariables,
+		extraDefines,
+		*programDesc,
+		shaderTypes))
+	{
+		ri.Error(ERR_FATAL, "Could not load %s shader!", programName);
+	}
+	return 1;
+}
+
 static int GLSL_LoadGPUProgramBasic(
 	ShaderProgramBuilder& builder,
 	Allocator& scratchAlloc,
 	shaderProgram_t *shaderProgram,
 	const char *programName,
 	const GPUProgramDesc& programFallback,
-	const uint32_t attribs = ATTR_POSITION | ATTR_TEXCOORD0)
+	const uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT,
+	const uint32_t attribs = ATTR_POSITION | ATTR_TEXCOORD0,
+	const uint32_t xfbVariables = NO_XFB_VARS)
 {
 	Allocator allocator(scratchAlloc.Base(), scratchAlloc.GetSize());
-
 	const GPUProgramDesc *programDesc =
 		LoadProgramSource(programName, allocator, programFallback);
-	if (!GLSL_LoadGPUShader(builder, shaderProgram, programName, attribs,
-		nullptr, *programDesc))
+
+	if (!GLSL_LoadGPUShader(builder, shaderProgram, programName, attribs, xfbVariables,
+		nullptr, *programDesc, shaderTypes))
 	{
-		ri->Error(ERR_FATAL, "Could not load %s shader!", programName);
+		ri.Error(ERR_FATAL, "Could not load %s shader!", programName);
 	}
 
 	return 1;
@@ -1834,10 +2058,16 @@ static int GLSL_LoadGPUProgramDepthFill(
 		ATTR_POSITION | ATTR_POSITION2 | ATTR_NORMAL | ATTR_NORMAL2 | ATTR_TEXCOORD0;
 
 	extradefines[0] = '\0';
-	if (!GLSL_LoadGPUShader(builder, &tr.shadowmapShader, "shadowfill", attribs,
-		nullptr, *programDesc))
+
+	uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT;
+
+	//TODO: use culling or cubemapping layering
+	//shaderTypes |= GPUSHADER_GEOMETRY;
+
+	if (!GLSL_LoadGPUShader(builder, &tr.shadowmapShader, "shadowfill", attribs, NO_XFB_VARS,
+		nullptr, *programDesc, shaderTypes))
 	{
-		ri->Error(ERR_FATAL, "Could not load shadowfill shader!");
+		ri.Error(ERR_FATAL, "Could not load shadowfill shader!");
 	}
 
 	GLSL_InitUniforms(&tr.shadowmapShader);
@@ -1860,10 +2090,15 @@ static int GLSL_LoadGPUProgramPShadow(
 	extradefines[0] = '\0';
 	Q_strcat(extradefines, sizeof(extradefines), "#define USE_PCF\n#define USE_DISCARD\n");
 
-	if (!GLSL_LoadGPUShader(builder, &tr.pshadowShader, "pshadow", attribs,
-		extradefines, *programDesc))
+	uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT;
+
+	//TODO: use culling or cubemapping layering
+	//shaderTypes |= GPUSHADER_GEOMETRY;
+
+	if (!GLSL_LoadGPUShader(builder, &tr.pshadowShader, "pshadow", attribs, NO_XFB_VARS,
+		extradefines, *programDesc, shaderTypes))
 	{
-		ri->Error(ERR_FATAL, "Could not load pshadow shader!");
+		ri.Error(ERR_FATAL, "Could not load pshadow shader!");
 	}
 
 	GLSL_InitUniforms(&tr.pshadowShader);
@@ -1962,10 +2197,15 @@ static int GLSL_LoadGPUProgramCalcLuminanceLevel(
 		if (!i)
 			Q_strcat(extradefines, sizeof(extradefines), "#define FIRST_PASS\n");
 
-		if (!GLSL_LoadGPUShader(builder, &tr.calclevels4xShader[i], "calclevels4x", attribs,
-			extradefines, *programDesc))
+		uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT;
+
+		//TODO: use culling or cubemapping layering
+		//shaderTypes |= GPUSHADER_GEOMETRY;
+
+		if (!GLSL_LoadGPUShader(builder, &tr.calclevels4xShader[i], "calclevels4x", attribs, NO_XFB_VARS,
+			extradefines, *programDesc, shaderTypes))
 		{
-			ri->Error(ERR_FATAL, "Could not load calclevels4x shader!");
+			ri.Error(ERR_FATAL, "Could not load calclevels4x shader!");
 		}
 
 		GLSL_InitUniforms(&tr.calclevels4xShader[i]);
@@ -2009,10 +2249,15 @@ static int GLSL_LoadGPUProgramShadowMask(
 		extradefines, sizeof(extradefines),
 		va("#define r_shadowCascadeZFar %f\n", r_shadowCascadeZFar->value));
 
-	if (!GLSL_LoadGPUShader(builder, &tr.shadowmaskShader, "shadowmask", attribs,
-		extradefines, *programDesc))
+	uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT;
+
+	//TODO: use culling or cubemapping layering
+	//shaderTypes |= GPUSHADER_GEOMETRY;
+
+	if (!GLSL_LoadGPUShader(builder, &tr.shadowmaskShader, "shadowmask", attribs, NO_XFB_VARS,
+		extradefines, *programDesc, shaderTypes))
 	{
-		ri->Error(ERR_FATAL, "Could not load shadowmask shader!");
+		ri.Error(ERR_FATAL, "Could not load shadowmask shader!");
 	}
 
 	GLSL_InitUniforms(&tr.shadowmaskShader);
@@ -2078,30 +2323,56 @@ static int GLSL_LoadGPUProgramRefraction(
 	ShaderProgramBuilder& builder,
 	Allocator& scratchAlloc)
 {
+	int numPrograms = 0;
 	Allocator allocator(scratchAlloc.Base(), scratchAlloc.GetSize());
-
+	
 	char extradefines[1200];
 	const GPUProgramDesc *programDesc =
 		LoadProgramSource("refraction", allocator, fallback_refractionProgram);
-	const uint32_t attribs = ATTR_POSITION | ATTR_NORMAL | ATTR_TEXCOORD0;
-	extradefines[0] = '\0';
-
-	if (!GLSL_LoadGPUShader(builder, &tr.refractionShader, "refraction", attribs,
-		extradefines, *programDesc))
+	for (int i = 0; i < REFRACTION_COUNT; i++)
 	{
-		ri->Error(ERR_FATAL, "Could not load refraction shader!");
+		uint32_t attribs = ATTR_POSITION | ATTR_TEXCOORD0 | ATTR_NORMAL | ATTR_COLOR | ATTR_TANGENT;
+		extradefines[0] = '\0';
+
+		if (i & REFRACTION_USE_DEFORM_VERTEXES)
+			Q_strcat(extradefines, sizeof(extradefines), "#define USE_DEFORM_VERTEXES\n");
+
+		if (i & REFRACTION_USE_VERTEX_ANIMATION)
+		{
+			Q_strcat(extradefines, sizeof(extradefines), "#define USE_VERTEX_ANIMATION\n");
+			attribs |= ATTR_POSITION2 | ATTR_NORMAL2 | ATTR_TANGENT2;
+		}
+
+		if (i & REFRACTION_USE_SKELETAL_ANIMATION)
+		{
+			Q_strcat(extradefines, sizeof(extradefines), "#define USE_SKELETAL_ANIMATION\n");
+			attribs |= ATTR_BONE_INDEXES | ATTR_BONE_WEIGHTS;
+		}
+
+		uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT;
+
+		//TODO: use culling or cubemapping layering
+		//shaderTypes |= GPUSHADER_GEOMETRY;
+
+		if (!GLSL_LoadGPUShader(builder, &tr.refractionShader[i], "refraction", attribs, NO_XFB_VARS,
+			extradefines, *programDesc, shaderTypes))
+		{
+			ri.Error(ERR_FATAL, "Could not load refraction shader!");
+		}
+
+		GLSL_InitUniforms(&tr.refractionShader[i]);
+
+		qglUseProgram(tr.refractionShader[i].program);
+		GLSL_SetUniformInt(&tr.refractionShader[i], UNIFORM_SCREENIMAGEMAP, TB_COLORMAP);
+		GLSL_SetUniformInt(&tr.refractionShader[i], UNIFORM_SCREENDEPTHMAP, TB_COLORMAP2);
+		GLSL_SetUniformInt(&tr.refractionShader[i], UNIFORM_CUBEMAP, TB_CUBEMAP);
+		GLSL_SetUniformInt(&tr.refractionShader[i], UNIFORM_SHADOWMAP, TB_SHADOWMAP);
+		qglUseProgram(0);
+
+		GLSL_FinishGPUShader(&tr.refractionShader[i]);
+		++numPrograms;
 	}
-
-	GLSL_InitUniforms(&tr.refractionShader);
-
-	qglUseProgram(tr.refractionShader.program);
-	GLSL_SetUniformInt(&tr.refractionShader, UNIFORM_CUBEMAP, TB_CUBEMAP);
-	GLSL_SetUniformInt(&tr.refractionShader, UNIFORM_SHADOWMAP, TB_SHADOWMAP);
-	qglUseProgram(0);
-
-	GLSL_FinishGPUShader(&tr.refractionShader);
-
-	return 1;
+	return numPrograms;
 }
 
 static int GLSL_LoadGPUProgramDepthBlur(
@@ -2124,11 +2395,15 @@ static int GLSL_LoadGPUProgramDepthBlur(
 		else
 			Q_strcat(extradefines, sizeof(extradefines), "#define USE_HORIZONTAL_BLUR\n");
 
+		uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT;
 
-		if (!GLSL_LoadGPUShader(builder, &tr.depthBlurShader[i], "depthBlur", attribs,
-			extradefines, *programDesc))
+		//TODO: use culling or cubemapping layering
+		//shaderTypes |= GPUSHADER_GEOMETRY;
+
+		if (!GLSL_LoadGPUShader(builder, &tr.depthBlurShader[i], "depthBlur", attribs, NO_XFB_VARS,
+			extradefines, *programDesc, shaderTypes))
 		{
-			ri->Error(ERR_FATAL, "Could not load depthBlur shader!");
+			ri.Error(ERR_FATAL, "Could not load depthBlur shader!");
 		}
 
 		GLSL_InitUniforms(&tr.depthBlurShader[i]);
@@ -2160,22 +2435,35 @@ static int GLSL_LoadGPUProgramGaussianBlur(
 	extradefines[0] = '\0';
 	Q_strcat(extradefines, sizeof(extradefines), "#define BLUR_X");
 
-	if (!GLSL_LoadGPUShader(builder, &tr.gaussianBlurShader[0], "gaussian_blur", attribs,
-		extradefines, *programDesc))
+	uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT;
+
+	//TODO: use culling or cubemapping layering
+	//shaderTypes |= GPUSHADER_GEOMETRY;
+
+	if (!GLSL_LoadGPUShader(builder, &tr.gaussianBlurShader[0], "gaussian_blur", attribs, NO_XFB_VARS,
+		extradefines, *programDesc, shaderTypes))
 	{
-		ri->Error(ERR_FATAL, "Could not load gaussian_blur (X-direction) shader!");
+		ri.Error(ERR_FATAL, "Could not load gaussian_blur (X-direction) shader!");
 	}
 
-	if (!GLSL_LoadGPUShader(builder, &tr.gaussianBlurShader[1], "gaussian_blur", attribs,
-		nullptr, *programDesc))
+	shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT;
+
+	//TODO: use culling or cubemapping layering
+	//shaderTypes |= GPUSHADER_GEOMETRY;
+
+	if (!GLSL_LoadGPUShader(builder, &tr.gaussianBlurShader[1], "gaussian_blur", attribs, NO_XFB_VARS,
+		nullptr, *programDesc, shaderTypes))
 	{
-		ri->Error(ERR_FATAL, "Could not load gaussian_blur (Y-direction) shader!");
+		ri.Error(ERR_FATAL, "Could not load gaussian_blur (Y-direction) shader!");
 	}
 
 	int numPrograms = 0;
 	for (int i = 0; i < 2; i++)
 	{
 		GLSL_InitUniforms(&tr.gaussianBlurShader[i]);
+		qglUseProgram(tr.gaussianBlurShader[i].program);
+		GLSL_SetUniformInt(&tr.gaussianBlurShader[i], UNIFORM_TEXTUREMAP, TB_COLORMAP);
+		qglUseProgram(0);
 		GLSL_FinishGPUShader(&tr.gaussianBlurShader[i]);
 		++numPrograms;
 	}
@@ -2193,6 +2481,7 @@ static int GLSL_LoadGPUProgramDynamicGlowUpsample(
 		&tr.dglowUpsample,
 		"dglow_upsample",
 		fallback_dglow_upsampleProgram,
+		GPUSHADER_VERTEX | GPUSHADER_FRAGMENT,
 		0);
 
 	GLSL_InitUniforms(&tr.dglowDownsample);
@@ -2210,6 +2499,7 @@ static int GLSL_LoadGPUProgramDynamicGlowDownsample(
 		&tr.dglowDownsample,
 		"dglow_downsample",
 		fallback_dglow_downsampleProgram,
+		GPUSHADER_VERTEX | GPUSHADER_FRAGMENT,
 		0);
 
 	GLSL_InitUniforms(&tr.dglowUpsample);
@@ -2247,10 +2537,16 @@ static int GLSL_LoadGPUProgramSurfaceSprites(
 				"#define ALPHA_TEST\n");
 
 		shaderProgram_t *program = tr.spriteShader + i;
-		if (!GLSL_LoadGPUShader(builder, program, "surface_sprites", attribs,
-			extradefines, *programDesc))
+		
+		uint32_t shaderTypes = GPUSHADER_VERTEX | GPUSHADER_FRAGMENT;
+
+		//TODO: use culling or cubemapping layering
+		//shaderTypes |= GPUSHADER_GEOMETRY;
+
+		if (!GLSL_LoadGPUShader(builder, program, "surface_sprites", attribs, NO_XFB_VARS,
+			extradefines, *programDesc, shaderTypes))
 		{
-			ri->Error(ERR_FATAL, "Could not load surface sprites shader!");
+			ri.Error(ERR_FATAL, "Could not load surface sprites shader!");
 		}
 
 		GLSL_InitUniforms(program);
@@ -2277,12 +2573,26 @@ static int GLSL_LoadGPUProgramWeather(
 		&tr.weatherShader,
 		"weather",
 		fallback_weatherProgram,
+		GPUSHADER_VERTEX | GPUSHADER_FRAGMENT | GPUSHADER_GEOMETRY,
 		ATTR_POSITION | ATTR_COLOR);
 
 	GLSL_InitUniforms(&tr.weatherShader);
 	GLSL_FinishGPUShader(&tr.weatherShader);
 
-	return 1;
+	GLSL_LoadGPUProgramBasic(
+		builder,
+		scratchAlloc,
+		&tr.weatherUpdateShader,
+		"weatherUpdate",
+		fallback_weatherUpdateProgram,
+		GPUSHADER_VERTEX | GPUSHADER_FRAGMENT | GPUSHADER_GEOMETRY,
+		ATTR_POSITION | ATTR_COLOR,
+		(1u << XFB_VAR_POSITION) | (1u << XFB_VAR_VELOCITY));
+
+	GLSL_InitUniforms(&tr.weatherUpdateShader);
+	GLSL_FinishGPUShader(&tr.weatherUpdateShader);
+
+	return 2;
 }
 
 void GLSL_LoadGPUShaders()
@@ -2339,11 +2649,11 @@ void GLSL_LoadGPUShaders()
 	};
 #endif
 
-	ri->Printf(PRINT_ALL, "------- GLSL_InitGPUShaders -------\n");
+	ri.Printf(PRINT_ALL, "------- GLSL_InitGPUShaders -------\n");
 
 	R_IssuePendingRenderCommands();
 
-	int startTime = ri->Milliseconds();
+	int startTime = ri.Milliseconds();
 
 	Allocator allocator(512 * 1024);
 	ShaderProgramBuilder builder;
@@ -2354,6 +2664,8 @@ void GLSL_LoadGPUShaders()
 	GLSL_LoadGPUProgramSplashScreen(builder, allocator);
 	numGenShaders += GLSL_LoadGPUProgramGeneric(builder, allocator);
 	numLightShaders += GLSL_LoadGPUProgramLightAll(builder, allocator);
+	numEtcShaders += GLSL_LoadGPUProgramPrepass(builder, allocator);
+	numEtcShaders += GLSL_LoadGPUProgramPrelight(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramFogPass(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramDLight(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramTextureColor(builder, allocator);
@@ -2374,16 +2686,16 @@ void GLSL_LoadGPUShaders()
 	numEtcShaders += GLSL_LoadGPUProgramSurfaceSprites(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramWeather(builder, allocator);
 
-	ri->Printf(PRINT_ALL, "loaded %i GLSL shaders (%i gen %i light %i etc) in %5.2f seconds\n",
+	ri.Printf(PRINT_ALL, "loaded %i GLSL shaders (%i gen %i light %i etc) in %5.2f seconds\n",
 		numGenShaders + numLightShaders + numEtcShaders, numGenShaders, numLightShaders,
-		numEtcShaders, (ri->Milliseconds() - startTime) / 1000.0);
+		numEtcShaders, (ri.Milliseconds() - startTime) / 1000.0);
 }
 
 void GLSL_ShutdownGPUShaders(void)
 {
 	int i;
 
-	ri->Printf(PRINT_ALL, "------- GLSL_ShutdownGPUShaders -------\n");
+	ri.Printf(PRINT_ALL, "------- GLSL_ShutdownGPUShaders -------\n");
 
 	for (int i = 0; i < ATTR_INDEX_MAX; i++)
 		qglDisableVertexAttribArray(i);
@@ -2391,6 +2703,12 @@ void GLSL_ShutdownGPUShaders(void)
 	GLSL_BindNullProgram();
 
 	GLSL_DeleteGPUShader(&tr.splashScreenShader);
+
+	for (i = 0; i < PREPASS_COUNT; i++)
+		GLSL_DeleteGPUShader(&tr.prepassShader[i]);
+
+	for (i = 0; i < PRELIGHT_COUNT; i++)
+		GLSL_DeleteGPUShader(&tr.prelightShader[i]);
 
 	for (i = 0; i < GENERICDEF_COUNT; i++)
 		GLSL_DeleteGPUShader(&tr.genericShader[i]);
@@ -2417,8 +2735,21 @@ void GLSL_ShutdownGPUShaders(void)
 
 	GLSL_DeleteGPUShader(&tr.shadowmaskShader);
 	GLSL_DeleteGPUShader(&tr.ssaoShader);
-	GLSL_DeleteGPUShader(&tr.refractionShader);
+
+	for (i = 0; i < REFRACTION_COUNT; i++)
+		GLSL_DeleteGPUShader(&tr.refractionShader[i]);
+
 	GLSL_DeleteGPUShader(&tr.prefilterEnvMapShader);
+	GLSL_DeleteGPUShader(&tr.testcubeShader);
+	GLSL_DeleteGPUShader(&tr.dglowDownsample);
+	GLSL_DeleteGPUShader(&tr.dglowUpsample);
+
+	for (i = 0; i < SSDEF_COUNT; ++i)
+		GLSL_DeleteGPUShader(&tr.spriteShader[i]);
+
+	for (i = 0; i < 2; ++i)
+		GLSL_DeleteGPUShader(&tr.gaussianBlurShader[i]);
+
 
 	for (i = 0; i < 2; i++)
 		GLSL_DeleteGPUShader(&tr.depthBlurShader[i]);
@@ -2562,17 +2893,6 @@ shaderProgram_t *GLSL_GetGenericShaderProgram(int stage)
 	if (tess.fogNum && pStage->adjustColorsForFog)
 	{
 		shaderAttribs |= GENERICDEF_USE_FOG;
-	}
-
-	if (pStage->alphaTestCmp != ATEST_CMP_NONE)
-	{
-		switch (pStage->alphaTestCmp)
-		{
-		case ATEST_CMP_LT:	shaderAttribs |= GENERICDEF_USE_ATEST_LT; break;
-		case ATEST_CMP_GT:	shaderAttribs |= GENERICDEF_USE_ATEST_GT; break;
-		case ATEST_CMP_GE:	shaderAttribs |= GENERICDEF_USE_ATEST_GE; break;
-		default: break;
-		}
 	}
 
 	switch (pStage->rgbGen)

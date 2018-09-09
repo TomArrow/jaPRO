@@ -86,8 +86,8 @@ void R_BindAnimatedImageToTMU( textureBundle_t *bundle, int tmu ) {
 	if ( bundle->isVideoMap ) {
 		int oldtmu = glState.currenttmu;
 		GL_SelectTexture(tmu);
-		ri->CIN_RunCinematic(bundle->videoMapHandle);
-		ri->CIN_UploadCinematic(bundle->videoMapHandle);
+		ri.CIN_RunCinematic(bundle->videoMapHandle);
+		ri.CIN_UploadCinematic(bundle->videoMapHandle);
 		GL_SelectTexture(oldtmu);
 		return;
 	}
@@ -146,7 +146,7 @@ Draws triangle outlines for debugging
 ================
 */
 static void DrawTris (shaderCommands_t *input) {
-#if 0
+#if 1
 	GL_Bind( tr.whiteImage );
 
 	GL_State( GLS_POLYMODE_LINE | GLS_DEPTHMASK_TRUE );
@@ -293,7 +293,7 @@ static void ComputeTexMods( shaderStage_t *pStage, int bundleNum, float *outMatr
 			break;
 
 		default:
-			ri->Error( ERR_DROP, "ERROR: unknown texmod '%d' in shader '%s'", bundle->texMods[tm].type, tess.shader->name );
+			ri.Error( ERR_DROP, "ERROR: unknown texmod '%d' in shader '%s'", bundle->texMods[tm].type, tess.shader->name );
 			break;
 		}
 
@@ -727,7 +727,7 @@ static void CaptureDrawData(const shaderCommands_t *input, shaderStage_t *stage,
 				glState.currentVBO->vertexesVBO,
 				glState.currentIBO->indexesVBO,
 				numIndexes / 3);
-		ri->FS_Write(data, strlen(data), tr.debugFile);
+		ri.FS_Write(data, strlen(data), tr.debugFile);
 	}
 	else
 	{
@@ -743,7 +743,7 @@ static void CaptureDrawData(const shaderCommands_t *input, shaderStage_t *stage,
 				glState.currentVBO->vertexesVBO,
 				glState.currentIBO->indexesVBO,
 				input->numIndexes / 3);
-		ri->FS_Write(data, strlen(data), tr.debugFile);
+		ri.FS_Write(data, strlen(data), tr.debugFile);
 	}
 }
 
@@ -902,9 +902,10 @@ static void ForwardDlight( const shaderCommands_t *input,  VertexArraysPropertie
 	int index;
 	shaderProgram_t *shaderGroup;
 	uint32_t stateBits = 0;
-	if ( input->shader->numUnfoggedPasses == 1 &&
+	/*if ( input->shader->numUnfoggedPasses == 1 &&
 			pStage->glslShaderGroup == tr.lightallShader &&
-			(pStage->glslShaderIndex & LIGHTDEF_LIGHTTYPE_MASK) )
+			(pStage->glslShaderIndex & LIGHTDEF_LIGHTTYPE_MASK) )*/
+	if(1)
 	{
 		index = pStage->glslShaderIndex;
 
@@ -991,7 +992,13 @@ static void ForwardDlight( const shaderCommands_t *input,  VertexArraysPropertie
 		uniformDataWriter.SetUniformVec4(UNIFORM_NORMALSCALE, pStage->normalScale);
 		uniformDataWriter.SetUniformVec4(UNIFORM_SPECULARSCALE, pStage->specularScale);
 
+		matrix_t invModelMatrix;
+		matrix_t transInvModelMatrix;
+		Matrix16Inverse(backEnd.ori.modelMatrix, invModelMatrix);
+		Matrix16Transpose(invModelMatrix, transInvModelMatrix);
+
 		uniformDataWriter.SetUniformMatrix4x4(UNIFORM_MODELMATRIX, backEnd.ori.modelMatrix);
+		uniformDataWriter.SetUniformMatrix4x4(UNIFORM_NORMALMATRIX, transInvModelMatrix);
 
 		if (pStage->bundle[TB_DIFFUSEMAP].image[0])
 			samplerBindingsWriter.AddAnimatedImage( &pStage->bundle[TB_DIFFUSEMAP], TB_DIFFUSEMAP);
@@ -1035,10 +1042,10 @@ static void ForwardDlight( const shaderCommands_t *input,  VertexArraysPropertie
 
 		// include GLS_DEPTHFUNC_EQUAL so alpha tested surfaces don't add light
 		// where they aren't rendered
-		item.stateBits = stateBits;
-		item.cullType = cullType;
+		item.renderState.stateBits = stateBits;
+		item.renderState.cullType = cullType;
+		item.renderState.depthRange = RB_GetDepthRange(backEnd.currentEntity, input->shader);
 		item.program = sp;
-		item.depthRange = RB_GetDepthRange(backEnd.currentEntity, input->shader);
 		item.ibo = input->externalIBO ? input->externalIBO : backEndData->currentFrame->dynamicIbo;
 
 		item.numAttributes = vertexArrays->numVertexArrays;
@@ -1132,10 +1139,10 @@ static void ProjectPshadowVBOGLSL( const shaderCommands_t *input, const VertexAr
 
 		// include GLS_DEPTHFUNC_EQUAL so alpha tested surfaces don't add light
 		// where they aren't rendered
-		item.stateBits = stateBits;
-		item.cullType = cullType;
+		item.renderState.stateBits = stateBits;
+		item.renderState.cullType = cullType;
+		item.renderState.depthRange = RB_GetDepthRange(backEnd.currentEntity, input->shader);
 		item.program = sp;
-		item.depthRange = RB_GetDepthRange(backEnd.currentEntity, input->shader);
 		item.ibo = input->externalIBO ? input->externalIBO : backEndData->currentFrame->dynamicIbo;
 
 		item.numAttributes = vertexArrays->numVertexArrays;
@@ -1202,7 +1209,14 @@ static void RB_FogPass( shaderCommands_t *input, const fog_t *fog, const VertexA
 	backEnd.pc.c_fogDraws++;
 
 	uniformDataWriter.SetUniformMatrix4x4(UNIFORM_MODELVIEWPROJECTIONMATRIX, glState.modelviewProjection);
+
+	matrix_t invModelMatrix;
+	matrix_t transInvModelMatrix;
+	Matrix16Inverse(backEnd.ori.modelMatrix, invModelMatrix);
+	Matrix16Transpose(invModelMatrix, transInvModelMatrix);
+
 	uniformDataWriter.SetUniformMatrix4x4(UNIFORM_MODELMATRIX, backEnd.ori.modelMatrix);
+	uniformDataWriter.SetUniformMatrix4x4(UNIFORM_NORMALMATRIX, transInvModelMatrix);
 
 	uniformDataWriter.SetUniformFloat(UNIFORM_VERTEXLERP, glState.vertexAttribsInterpolation);
 	uniformDataWriter.SetUniformMatrix4x3(UNIFORM_BONE_MATRICES, &glState.boneMatrices[0][0], glState.numBones);
@@ -1226,10 +1240,10 @@ static void RB_FogPass( shaderCommands_t *input, const fog_t *fog, const VertexA
 		stateBits |= GLS_DEPTHFUNC_EQUAL;
 
 	DrawItem item = {};
-	item.stateBits = stateBits;
-	item.cullType = cullType;
+	item.renderState.stateBits = stateBits;
+	item.renderState.cullType = cullType;
+	item.renderState.depthRange = RB_GetDepthRange(backEnd.currentEntity, input->shader);
 	item.program = sp;
-	item.depthRange = RB_GetDepthRange(backEnd.currentEntity, input->shader);
 	item.ibo = input->externalIBO ? input->externalIBO : backEndData->currentFrame->dynamicIbo;
 
 	item.numAttributes = vertexArrays->numVertexArrays;
@@ -1269,105 +1283,61 @@ static unsigned int RB_CalcShaderVertexAttribs( const shader_t *shader )
 	return vertexAttribs;
 }
 
-static shaderProgram_t *SelectShaderProgram( int stageIndex, shaderStage_t *stage, shaderProgram_t *glslShaderGroup, bool useAlphaTestGE192 )
+static shaderProgram_t *SelectShaderProgram( int stageIndex, shaderStage_t *stage, shaderProgram_t *glslShaderGroup, bool forceRefraction)
 {
 	uint32_t index;
 	shaderProgram_t *result = nullptr;
 
-	if (backEnd.depthFill)
+	if (forceRefraction)
 	{
-		if (glslShaderGroup == tr.lightallShader)
+		index = 0;
+		if (tess.shader->numDeforms && !ShaderRequiresCPUDeforms(tess.shader))
 		{
-			index = 0;
-
-			if (backEnd.currentEntity && backEnd.currentEntity != &tr.worldEntity)
-			{
-				if (glState.vertexAnimation)
-				{
-					index |= LIGHTDEF_USE_VERTEX_ANIMATION;
-				}
-				else if (glState.skeletalAnimation)
-				{
-					index |= LIGHTDEF_USE_SKELETAL_ANIMATION;
-				}
-			}
-
-			if ( !useAlphaTestGE192 )
-			{
-				if (stage->alphaTestCmp != ATEST_CMP_NONE)
-				{
-					index |= LIGHTDEF_USE_TCGEN_AND_TCMOD;
-					switch ( stage->alphaTestCmp )
-					{
-						case ATEST_CMP_LT:
-							index |= LIGHTDEF_USE_ATEST_LT;
-							break;
-						case ATEST_CMP_GT:
-							index |= LIGHTDEF_USE_ATEST_GT;
-							break;
-						case ATEST_CMP_GE:
-							index |= LIGHTDEF_USE_ATEST_GE;
-							break;
-						default:
-							break;
-					}
-				}
-			}
-			else
-			{
-				index |= LIGHTDEF_USE_ATEST_GE;
-			}
-
-			result = &stage->glslShaderGroup[index];
-			backEnd.pc.c_lightallDraws++;
+			index |= REFRACTION_USE_DEFORM_VERTEXES;
 		}
-		else
+		if (glState.vertexAnimation)
 		{
-			index = 0;
-
+			index |= REFRACTION_USE_VERTEX_ANIMATION;
+		}
+		else if (glState.skeletalAnimation)
+		{
+			index |= REFRACTION_USE_SKELETAL_ANIMATION;
+		}
+		result = &tr.refractionShader[index];
+		backEnd.pc.c_lightallDraws++;
+	}
+	else if (backEnd.renderPass != MAIN_PASS)
+	{
+		index = 0;
+		if (backEnd.currentEntity && backEnd.currentEntity != &tr.worldEntity)
+		{
 			if (tess.shader->numDeforms && !ShaderRequiresCPUDeforms(tess.shader))
 			{
-				index |= GENERICDEF_USE_DEFORM_VERTEXES;
+				index |= PREPASS_USE_DEFORM_VERTEXES;
 			}
-
 			if (glState.vertexAnimation)
 			{
-				index |= GENERICDEF_USE_VERTEX_ANIMATION;
+				index |= PREPASS_USE_VERTEX_ANIMATION;
 			}
 			else if (glState.skeletalAnimation)
 			{
-				index |= GENERICDEF_USE_SKELETAL_ANIMATION;
+				index |= PREPASS_USE_SKELETAL_ANIMATION;
 			}
-
-			if ( !useAlphaTestGE192 )
-			{
-				if (stage->alphaTestCmp != ATEST_CMP_NONE)
-				{
-					index |= GENERICDEF_USE_TCGEN_AND_TCMOD;
-					switch ( stage->alphaTestCmp )
-					{
-						case ATEST_CMP_LT:
-							index |= GENERICDEF_USE_ATEST_LT;
-							break;
-						case ATEST_CMP_GT:
-							index |= GENERICDEF_USE_ATEST_GT;
-							break;
-						case ATEST_CMP_GE:
-							index |= GENERICDEF_USE_ATEST_GE;
-							break;
-						default:
-							break;
-					}
-				}
-			}
-			else
-			{
-				index |= GENERICDEF_USE_ATEST_GE;
-			}
-
-			result = &tr.genericShader[index];
-			backEnd.pc.c_genericDraws++;
 		}
+
+		if (tr.shadowCubeFbo && glState.currentFBO == tr.shadowCubeFbo)
+			index |= PREPASS_USE_CUBEMAP_TRANSFORMS;
+
+		if (backEnd.renderPass == PRE_PASS)
+			index |= PREPASS_USE_G_BUFFERS;
+
+		//FIX ME: UGLY, find better way of handling this
+		if (stage->bundle[TB_NORMALMAP].image[0] != 0)
+			if (stage->bundle[TB_NORMALMAP].image[0]->type == IMGTYPE_NORMALHEIGHT)
+				index |= PREPASS_USE_PARALLAX;
+
+		result = &tr.prepassShader[index];
+		backEnd.pc.c_genericDraws++;
 	}
 	else if (stage->glslShaderGroup == tr.lightallShader)
 	{
@@ -1397,32 +1367,6 @@ static shaderProgram_t *SelectShaderProgram( int stageIndex, shaderStage_t *stag
 					(index & LIGHTDEF_LIGHTTYPE_MASK))
 			{
 				index |= LIGHTDEF_USE_SHADOWMAP;
-			}
-
-			if ( !useAlphaTestGE192 )
-			{
-				if (stage->alphaTestCmp != ATEST_CMP_NONE)
-				{
-					index |= LIGHTDEF_USE_TCGEN_AND_TCMOD;
-					switch ( stage->alphaTestCmp )
-					{
-						case ATEST_CMP_LT:
-							index |= LIGHTDEF_USE_ATEST_LT;
-							break;
-						case ATEST_CMP_GT:
-							index |= LIGHTDEF_USE_ATEST_GT;
-							break;
-						case ATEST_CMP_GE:
-							index |= LIGHTDEF_USE_ATEST_GE;
-							break;
-						default:
-							break;
-					}
-				}
-			}
-			else
-			{
-				index |= LIGHTDEF_USE_ATEST_GE;
 			}
 		}
 
@@ -1500,12 +1444,19 @@ void RB_StageIteratorLiquid( void )
 
 	UniformDataWriter uniformDataWriter;
 	SamplerBindingsWriter samplerBindingsWriter;
-
-	uniformDataWriter.Start(&tr.refractionShader);
+	shaderProgram_t *liquidShader = SelectShaderProgram(0, NULL, NULL, true);
+	uniformDataWriter.Start(liquidShader);
 	uniformDataWriter.SetUniformMatrix4x4(UNIFORM_MODELVIEWPROJECTIONMATRIX, glState.modelviewProjection);
 	uniformDataWriter.SetUniformVec3(UNIFORM_VIEWORIGIN, backEnd.viewParms.ori.origin);
 	uniformDataWriter.SetUniformVec3(UNIFORM_LOCALVIEWORIGIN, backEnd.ori.viewOrigin);
+
+	matrix_t invModelMatrix;
+	matrix_t transInvModelMatrix;
+	Matrix16Inverse(backEnd.ori.modelMatrix, invModelMatrix);
+	Matrix16Transpose(invModelMatrix, transInvModelMatrix);
+
 	uniformDataWriter.SetUniformMatrix4x4(UNIFORM_MODELMATRIX, backEnd.ori.modelMatrix);
+	uniformDataWriter.SetUniformMatrix4x4(UNIFORM_NORMALMATRIX, transInvModelMatrix);
 
 	if (r_cubeMapping->integer)
 	{
@@ -1540,24 +1491,17 @@ void RB_StageIteratorLiquid( void )
 	data->freq = tess.shader->liquid.freq;
 	data->depth = tess.shader->liquid.depth;
 	data->time = tess.shaderTime;
-
-	LiquidBlock2 *data2 = ojkAlloc<LiquidBlock2>(*backEndData->perFrameMemory);
-	*data2 = {};
-
-	data2->water_color_r = tess.shader->liquid.water_color[0];
-	data2->water_color_g = tess.shader->liquid.water_color[1];
-	data2->water_color_b = tess.shader->liquid.water_color[2];
-	data2->fog_color_r = tess.shader->liquid.fog_color[0];
-	data2->fog_color_g = tess.shader->liquid.fog_color[1];
-	data2->fog_color_b = tess.shader->liquid.fog_color[2];
-	//ri->Printf(PRINT_ALL, "water_color should be: %f %f %f\n", tess.shader->liquid.water_color[0], tess.shader->liquid.water_color[1], tess.shader->liquid.water_color[2]);
-	//ri->Printf(PRINT_ALL, "water_color is: %f %f %f\n", data2.water_color_r, data2.water_color_g, data2.water_color_b);
+	VectorCopy(tess.shader->liquid.water_color, data->water_color);
+	VectorCopy(tess.shader->liquid.fog_color, data->fog_color);
+	
+	//ri.Printf(PRINT_ALL, "water_color should be: %f %f %f\n", tess.shader->liquid.water_color[0], tess.shader->liquid.water_color[1], tess.shader->liquid.water_color[2]);
+	//ri.Printf(PRINT_ALL, "water_color is: %f %f %f\n", data2.water_color_r, data2.water_color_g, data2.water_color_b);
 
 	DrawItem item = {};
-	item.stateBits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
-	item.cullType = cullType;
-	item.program = &tr.refractionShader;
-	item.depthRange = RB_GetDepthRange(backEnd.currentEntity, input->shader);
+	item.renderState.stateBits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+	item.renderState.cullType = cullType;
+	item.renderState.depthRange = RB_GetDepthRange(backEnd.currentEntity, input->shader);
+	item.program = liquidShader;
 	item.ibo = input->externalIBO ? input->externalIBO : backEndData->currentFrame->dynamicIbo;
 
 	item.numAttributes = vertexArrays.numVertexArrays;
@@ -1565,12 +1509,10 @@ void RB_StageIteratorLiquid( void )
 		*backEndData->perFrameMemory, vertexArrays.numVertexArrays);
 	memcpy(item.attributes, attribs, sizeof(*item.attributes)*vertexArrays.numVertexArrays);
 
-	item.numUniformBlockBindings = 2;
+	item.numUniformBlockBindings = 1;
 	item.uniformBlockBindings = ojkAllocArray<UniformBlockBinding>(*backEndData->perFrameMemory, item.numUniformBlockBindings);
 	item.uniformBlockBindings[0].data = data;
 	item.uniformBlockBindings[0].block = UNIFORM_BLOCK_LIQUID;
-	item.uniformBlockBindings[1].data = data2;
-	item.uniformBlockBindings[1].block = UNIFORM_BLOCK_LIQUID2;
 
 	item.uniformData = uniformDataWriter.Finish(*backEndData->perFrameMemory);
 	// FIXME: This is a bit ugly with the casting
@@ -1579,7 +1521,8 @@ void RB_StageIteratorLiquid( void )
 
 	RB_FillDrawCommand(item.draw, GL_TRIANGLES, 1, input);
 
-	uint32_t key = RB_CreateSortKey(item, 1, input->shader->sort);
+	int sortStage = backEnd.renderPass != MAIN_PASS ? input->currentDistanceBucket : 1;
+	uint32_t key = RB_CreateSortKey(item, sortStage, input->shader->sort);
 	RB_AddDrawItem(backEndData->currentPass, key, item);
 }
 
@@ -1588,10 +1531,12 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 	deform_t deformType;
 	genFunc_t deformGen;
 	float deformParams[7];
+	Pass *renderPass = backEndData->currentPass;
 
 	ComputeDeformValues(&deformType, &deformGen, deformParams);
 
 	bool renderToCubemap = tr.renderCubeFbo && glState.currentFBO == tr.renderCubeFbo;
+	bool renderSolid = backEnd.renderPass == MAIN_PASS && input->shader->sort == SS_OPAQUE;
 	
 	cullType_t cullType = RB_GetCullType(&backEnd.viewParms, backEnd.currentEntity, input->shader->cullType);
 
@@ -1615,6 +1560,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		colorGen_t forceRGBGen = CGEN_BAD;
 		alphaGen_t forceAlphaGen = AGEN_IDENTITY;
 		int index = 0;
+		bool forceRefraction = false;
 		bool useAlphaTestGE192 = false;
 
 		if ( !pStage )
@@ -1657,6 +1603,11 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 				forceRGBGen = CGEN_ENTITY;
 			}
 
+			if ((input->shader == tr.distortionShader) || backEnd.currentEntity->e.renderfx & RF_DISTORTION)
+			{
+				forceRefraction = true;
+				renderPass = backEndData->currentPostPass;
+			}
 			/*if ( backEnd.currentEntity->e.renderfx & RF_FORCE_ENT_ALPHA )
 			{
 				stateBits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
@@ -1671,13 +1622,20 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			}*/
 		}
 
-		sp = SelectShaderProgram(stage, pStage, pStage->glslShaderGroup, useAlphaTestGE192);
+		sp = SelectShaderProgram(stage, pStage, pStage->glslShaderGroup, forceRefraction);
 		assert(sp);
 
 		uniformDataWriter.Start(sp);
+		
+		int alphaTestFunction = useAlphaTestGE192 ? ATEST_CMP_GE : pStage->alphaTestCmp;
+		uniformDataWriter.SetUniformInt(UNIFORM_ALPHA_TEST_FUNCTION, alphaTestFunction);
+
 		uniformDataWriter.SetUniformMatrix4x4( UNIFORM_MODELVIEWPROJECTIONMATRIX, glState.modelviewProjection);
 		uniformDataWriter.SetUniformVec3(UNIFORM_VIEWORIGIN, backEnd.viewParms.ori.origin);
 		uniformDataWriter.SetUniformVec3(UNIFORM_LOCALVIEWORIGIN, backEnd.ori.viewOrigin);
+
+		if (backEnd.renderPass == PRE_PASS)
+			uniformDataWriter.SetUniformMatrix4x4(UNIFORM_PREVVIEWPROJECTIONMATRIX, tr.preViewProjectionMatrix);
 
 		if (glState.skeletalAnimation)
 		{
@@ -1778,7 +1736,13 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			uniformDataWriter.SetUniformVec3(UNIFORM_TCGEN0VECTOR1, pStage->bundle[0].tcGenVectors[1]);
 		}
 
+		matrix_t invModelMatrix;
+		matrix_t transInvModelMatrix;
+		Matrix16Inverse(backEnd.ori.modelMatrix, invModelMatrix);
+		Matrix16Transpose(invModelMatrix, transInvModelMatrix);
+
 		uniformDataWriter.SetUniformMatrix4x4(UNIFORM_MODELMATRIX, backEnd.ori.modelMatrix);
+		uniformDataWriter.SetUniformMatrix4x4(UNIFORM_NORMALMATRIX, transInvModelMatrix);
 
 		uniformDataWriter.SetUniformVec4(UNIFORM_NORMALSCALE, pStage->normalScale);
 		{
@@ -1798,12 +1762,26 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		bool enableShpericalHarmonics = 
 			(r_cubeMapping->integer && !(tr.viewParms.flags & VPF_NOCUBEMAPS) && input->cubemapIndex && tr.numfinishedSphericalHarmonics == tr.numSphericalHarmonics);
 
-		if ( backEnd.depthFill )
+		if (backEnd.renderPass != MAIN_PASS)
 		{
 			if (pStage->alphaTestCmp == ATEST_CMP_NONE)
 				samplerBindingsWriter.AddStaticImage(tr.whiteImage, 0);
 			else if ( pStage->bundle[TB_COLORMAP].image[0] != 0 )
 				samplerBindingsWriter.AddAnimatedImage(&pStage->bundle[TB_COLORMAP], TB_COLORMAP);
+
+			if (backEnd.renderPass == PRE_PASS) 
+			{
+				vec4_t enableTextures = {};
+				if (pStage->bundle[TB_NORMALMAP].image[0] != 0) {
+					samplerBindingsWriter.AddAnimatedImage(&pStage->bundle[TB_NORMALMAP], TB_NORMALMAP);
+					enableTextures[0] = 1.0f;
+				}
+				if (pStage->bundle[TB_SPECULARMAP].image[0] != 0) {
+					samplerBindingsWriter.AddAnimatedImage(&pStage->bundle[TB_SPECULARMAP], TB_SPECULARMAP);
+					enableTextures[2] = 1.0f;
+				}
+				uniformDataWriter.SetUniformVec4(UNIFORM_ENABLETEXTURES, enableTextures);
+			}
 		}
 		else if ( pStage->glslShaderGroup == tr.lightallShader )
 		{
@@ -1902,6 +1880,11 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 					{
 						samplerBindingsWriter.AddStaticImage(tr.whiteImage, TB_SPECULARMAP);
 					}
+
+					if (renderSolid) {
+						samplerBindingsWriter.AddStaticImage(tr.diffuseLightingImage, TB_DIFFUSELIGHTBUFFER);
+						samplerBindingsWriter.AddStaticImage(tr.specularLightingImage, TB_SPECLIGHTBUFFER);
+					}
 				}
 
 				if (enableShpericalHarmonics)
@@ -1961,19 +1944,66 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			}
 		}
 
+		LiquidBlock *data;
+		if (forceRefraction)
+		{
+			samplerBindingsWriter.AddStaticImage(tr.prevRenderImage, TB_COLORMAP);
+			samplerBindingsWriter.AddStaticImage(tr.renderDepthImage, TB_COLORMAP2);
+
+			stateBits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+			cullType = CT_TWO_SIDED;
+			vec4_t viewInfo;
+			float alpha = 0;
+			if (backEnd.currentEntity->e.shaderRGBA[3] > 10)
+				alpha = (backEnd.currentEntity->e.shaderRGBA[3]) / 255.0f;
+			float zmax = backEnd.viewParms.zFar;
+			float zmin = r_znear->value;
+			float x = tr.prevRenderImage->width;
+			float y = tr.prevRenderImage->height;
+			VectorSet4(viewInfo, zmax / zmin, zmax, x, alpha);
+
+			//we need the normal in projection space not in worldspace
+			matrix_t invModelViewProjectionMatrix;
+			matrix_t transInvModelViewProjectionMatrix;
+			Matrix16Inverse(glState.modelviewProjection, invModelViewProjectionMatrix);
+			Matrix16Transpose(invModelViewProjectionMatrix, transInvModelViewProjectionMatrix);
+
+			uniformDataWriter.SetUniformVec4(UNIFORM_VIEWINFO, viewInfo);
+			uniformDataWriter.SetUniformMatrix4x4(UNIFORM_NORMALMATRIX, transInvModelViewProjectionMatrix);
+
+			data = ojkAlloc<LiquidBlock>(*backEndData->perFrameMemory);
+			*data = {};
+
+			data->isLiquid = 0.0;
+			data->height = tess.shader->liquid.height;
+			data->choppy = tess.shader->liquid.choppy;
+			data->speed = tess.shader->liquid.speed;
+			data->freq = tess.shader->liquid.freq;
+			data->depth = tess.shader->liquid.depth;
+			data->time = tess.shaderTime;
+		}
+
 		CaptureDrawData(input, pStage, index, stage);
 
 		DrawItem item = {};
-		item.stateBits = stateBits;
-		item.cullType = cullType;
+		item.renderState.stateBits = stateBits;
+		item.renderState.cullType = cullType;
+		item.renderState.depthRange = RB_GetDepthRange(backEnd.currentEntity, input->shader);
 		item.program = sp;
-		item.depthRange = RB_GetDepthRange(backEnd.currentEntity, input->shader);
 		item.ibo = input->externalIBO ? input->externalIBO : backEndData->currentFrame->dynamicIbo;
 
 		item.numAttributes = vertexArrays->numVertexArrays;
 		item.attributes = ojkAllocArray<vertexAttribute_t>(
 			*backEndData->perFrameMemory, vertexArrays->numVertexArrays);
 		memcpy(item.attributes, attribs, sizeof(*item.attributes)*vertexArrays->numVertexArrays);
+
+		if (forceRefraction)
+		{
+			item.numUniformBlockBindings = 1;
+			item.uniformBlockBindings = ojkAllocArray<UniformBlockBinding>(*backEndData->perFrameMemory, item.numUniformBlockBindings);
+			item.uniformBlockBindings[0].data = data;
+			item.uniformBlockBindings[0].block = UNIFORM_BLOCK_LIQUID;
+		}
 
 		item.uniformData = uniformDataWriter.Finish(*backEndData->perFrameMemory);
 		// FIXME: This is a bit ugly with the casting
@@ -1982,8 +2012,9 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 
 		RB_FillDrawCommand(item.draw, GL_TRIANGLES, 1, input);
 
-		uint32_t key = RB_CreateSortKey(item, stage, input->shader->sort);
-		RB_AddDrawItem(backEndData->currentPass, key, item);
+		int sortStage = backEnd.renderPass != MAIN_PASS ? input->currentDistanceBucket : stage;
+		uint32_t key = RB_CreateSortKey(item, sortStage, input->shader->sort);
+		RB_AddDrawItem(renderPass, key, item);
 
 		// allow skipping out to show just lightmaps during development
 		if ( r_lightmap->integer && ( pStage->bundle[0].isLightmap || pStage->bundle[1].isLightmap ) )
@@ -1991,7 +2022,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			break;
 		}
 
-		if (backEnd.depthFill)
+		if (backEnd.renderPass != MAIN_PASS)
 			break;
 	}
 }
@@ -2022,9 +2053,10 @@ static void RB_RenderShadowmap( shaderCommands_t *input, const VertexArraysPrope
 	uniformDataWriter.SetUniformFloat(UNIFORM_TIME, tess.shaderTime);
 
 	DrawItem item = {};
-	item.cullType = cullType;
+	//item.renderState.stateBits = stateBits;
+	item.renderState.cullType = cullType;
+	item.renderState.depthRange = RB_GetDepthRange(backEnd.currentEntity, input->shader);
 	item.program = sp;
-	item.depthRange = RB_GetDepthRange(backEnd.currentEntity, input->shader);
 	item.ibo = input->externalIBO ? input->externalIBO : backEndData->currentFrame->dynamicIbo;
 
 	item.numAttributes = vertexArrays->numVertexArrays;
@@ -2036,8 +2068,8 @@ static void RB_RenderShadowmap( shaderCommands_t *input, const VertexArraysPrope
 
 	RB_FillDrawCommand(item.draw, GL_TRIANGLES, 1, input);
 
-	// FIXME: Use depth to object
-	uint32_t key = 0;
+	int sortStage = backEnd.renderPass != MAIN_PASS ? input->currentDistanceBucket : 0;
+	uint32_t key = RB_CreateSortKey(item, sortStage, input->shader->sort);
 	RB_AddDrawItem(backEndData->currentPass, key, item);
 }
 
@@ -2094,7 +2126,7 @@ void RB_StageIteratorGeneric( void )
 		CalculateVertexArraysFromVBO(vertexAttribs, glState.currentVBO, &vertexArrays);
 	}
 
-	if ( backEnd.depthFill )
+	if (backEnd.renderPass != MAIN_PASS)
 	{
 		RB_IterateStagesGeneric( input, &vertexArrays );
 	}
@@ -2125,7 +2157,8 @@ void RB_StageIteratorGeneric( void )
 		//
 		if ( r_debugVisuals->integer == 0 &&
 			 tess.dlightBits &&
-			 r_dlightMode->integer)
+			 r_dlightMode->integer &&
+			 input->shader->sort != SS_OPAQUE)
 		{
 			ForwardDlight(input, &vertexArrays);
 		}
@@ -2186,10 +2219,10 @@ void RB_EndSurface( void ) {
 	}
 
 	if (input->indexes[SHADER_MAX_INDEXES-1] != 0) {
-		ri->Error (ERR_DROP, "RB_EndSurface() - SHADER_MAX_INDEXES hit");
+		ri.Error (ERR_DROP, "RB_EndSurface() - SHADER_MAX_INDEXES hit");
 	}	
 	if (input->xyz[SHADER_MAX_VERTEXES-1][0] != 0) {
-		ri->Error (ERR_DROP, "RB_EndSurface() - SHADER_MAX_VERTEXES hit");
+		ri.Error (ERR_DROP, "RB_EndSurface() - SHADER_MAX_VERTEXES hit");
 	}
 
 	if ( tess.shader == tr.shadowShader ) {

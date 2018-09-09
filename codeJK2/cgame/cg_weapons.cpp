@@ -108,6 +108,7 @@ void CG_RegisterWeapon( int weaponNum ) {
 				Q_strcat (weaponModel, sizeof(weaponModel), ".glm");	//and change to ghoul2
 			}
 			gi.G2API_PrecacheGhoul2Model( weaponModel ); // correct way is item->world_model
+			Com_Printf("precaching model: %s\n", weaponModel);
 		}
 
 		if ( weaponInfo->weaponModel == NULL_HANDLE) 

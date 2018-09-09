@@ -3548,7 +3548,7 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 #ifdef _DEBUG
 		Com_Error( ERR_DROP,       "R_LoadMDXM: %s has wrong version (%i should be %i)\n", mod_name, version, MDXM_VERSION);
 #else
-		ri->Printf( PRINT_WARNING, "R_LoadMDXM: %s has wrong version (%i should be %i)\n", mod_name, version, MDXM_VERSION);
+		ri.Printf( PRINT_WARNING, "R_LoadMDXM: %s has wrong version (%i should be %i)\n", mod_name, version, MDXM_VERSION);
 #endif
 		return qfalse;
 	}
@@ -3559,7 +3559,7 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 	qboolean bAlreadyFound = qfalse;
 	mdxm = mod->mdxm = (mdxmHeader_t*) //R_Hunk_Alloc( size );
 										RE_RegisterModels_Malloc(size, buffer, mod_name, &bAlreadyFound, TAG_MODEL_GLM);
-
+	ri.Printf(PRINT_WARNING, "R_LoadMDXM: %s is processing, headername %s\n", mod_name, mdxm->name);
 	assert(bAlreadyCached == bAlreadyFound);
 
 	if (!bAlreadyFound)
@@ -3609,7 +3609,7 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 
 	if (!mdxm->animIndex)
 	{
-		ri->Printf( PRINT_WARNING, "R_LoadMDXM: missing animation file %s for mesh %s\n", mdxm->animName, mdxm->name);
+		ri.Printf( PRINT_WARNING, "R_LoadMDXM: missing animation file %s for mesh %s\n", mdxm->animName, mdxm->name);
 		return qfalse;
 	}
 #ifndef JK2_MODE
@@ -3620,14 +3620,14 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 		{
 			if ( isAnOldModelFile )
 			{
-				ri->Printf( PRINT_WARNING, "R_LoadMDXM: converting jk2 model %s\n", mod_name);
+				ri.Printf( PRINT_WARNING, "R_LoadMDXM: converting jk2 model %s\n", mod_name);
 			}
 			else
 			{
 #ifdef _DEBUG
 				Com_Error( ERR_DROP,       "R_LoadMDXM: %s has different bones than anim (%i != %i)\n", mod_name, mdxm->numBones, tr.models[mdxm->animIndex]->mdxa->numBones);
 #else
-				ri->Printf( PRINT_WARNING, "R_LoadMDXM: %s has different bones than anim (%i != %i)\n", mod_name, mdxm->numBones, tr.models[mdxm->animIndex]->mdxa->numBones);
+				ri.Printf( PRINT_WARNING, "R_LoadMDXM: %s has different bones than anim (%i != %i)\n", mod_name, mdxm->numBones, tr.models[mdxm->animIndex]->mdxa->numBones);
 #endif
 			}
 			if ( !isAnOldModelFile )
@@ -3706,9 +3706,12 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 
 	// swap all the LOD's	(we need to do the middle part of this even for intel, because of shader reg and err-check)
 	lod = (mdxmLOD_t *) ( (byte *)mdxm + mdxm->ofsLODs );
+	ri.Printf(PRINT_WARNING, "R_LoadMDXM: %s has %i lods\n", mod_name, mdxm->numLODs);
 	for ( l = 0 ; l < mdxm->numLODs ; l++)
 	{
 		int	triCount = 0;
+
+		ri.Printf(PRINT_WARNING, "R_LoadMDXM: %s lod %i has %i surfaces\n", mod_name, l, mdxm->numSurfaces);
 
 		LL(lod->ofsEnd);
 		// swap all the surfaces
@@ -3757,9 +3760,9 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 			tri = (mdxmTriangle_t *) ( (byte *)surf + surf->ofsTriangles );
 			for ( j = 0 ; j < surf->numTriangles ; j++, tri++ )
 			{
-				LL(tri->indexes[0]);
-				LL(tri->indexes[1]);
-				LL(tri->indexes[2]);
+				LL(tri.indexes[0]);
+				LL(tri.indexes[1]);
+				LL(tri.indexes[2]);
 			}
 
 			// swap all the vertexes
@@ -3848,7 +3851,7 @@ qboolean R_LoadMDXA( model_t *mod, void *buffer, const char *mod_name, qboolean 
 	}
 
 	if (version != MDXA_VERSION) {
-		ri->Printf( PRINT_WARNING, "R_LoadMDXA: %s has wrong version (%i should be %i)\n",
+		ri.Printf( PRINT_WARNING, "R_LoadMDXA: %s has wrong version (%i should be %i)\n",
 				 mod_name, version, MDXA_VERSION);
 		return qfalse;
 	}
@@ -3857,9 +3860,10 @@ qboolean R_LoadMDXA( model_t *mod, void *buffer, const char *mod_name, qboolean 
 	mod->dataSize  += size;
 
 	qboolean bAlreadyFound = qfalse;
+
 	mdxa = mod->mdxa = (mdxaHeader_t*) //R_Hunk_Alloc( size );
 										RE_RegisterModels_Malloc(size, buffer, mod_name, &bAlreadyFound, TAG_MODEL_GLA);
-
+	
 	assert(bAlreadyCached == bAlreadyFound);
 
 	if (!bAlreadyFound)
@@ -3886,7 +3890,7 @@ qboolean R_LoadMDXA( model_t *mod, void *buffer, const char *mod_name, qboolean 
 	}
 
  	if ( mdxa->numFrames < 1 ) {
-		ri->Printf( PRINT_WARNING, "R_LoadMDXA: %s has no frames\n", mod_name );
+		ri.Printf( PRINT_WARNING, "R_LoadMDXA: %s has no frames\n", mod_name );
 		return qfalse;
 	}
 
