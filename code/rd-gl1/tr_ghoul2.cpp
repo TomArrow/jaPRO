@@ -3559,7 +3559,6 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 	qboolean bAlreadyFound = qfalse;
 	mdxm = mod->mdxm = (mdxmHeader_t*) //R_Hunk_Alloc( size );
 										RE_RegisterModels_Malloc(size, buffer, mod_name, &bAlreadyFound, TAG_MODEL_GLM);
-	ri.Printf(PRINT_WARNING, "R_LoadMDXM: %s is processing, headername %s\n", mod_name, mdxm->name);
 	assert(bAlreadyCached == bAlreadyFound);
 
 	if (!bAlreadyFound)
@@ -3706,13 +3705,10 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 
 	// swap all the LOD's	(we need to do the middle part of this even for intel, because of shader reg and err-check)
 	lod = (mdxmLOD_t *) ( (byte *)mdxm + mdxm->ofsLODs );
-	ri.Printf(PRINT_WARNING, "R_LoadMDXM: %s has %i lods\n", mod_name, mdxm->numLODs);
 	for ( l = 0 ; l < mdxm->numLODs ; l++)
 	{
 		int	triCount = 0;
-
-		ri.Printf(PRINT_WARNING, "R_LoadMDXM: %s lod %i has %i surfaces\n", mod_name, l, mdxm->numSurfaces);
-
+		
 		LL(lod->ofsEnd);
 		// swap all the surfaces
 		surf = (mdxmSurface_t *) ( (byte *)lod + sizeof (mdxmLOD_t) + (mdxm->numSurfaces * sizeof(mdxmLODSurfOffset_t)) );
