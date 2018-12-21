@@ -296,60 +296,6 @@ public:
 	}
 	const mdxaBone_t &Eval(int index)
 	{
-		/*
-		bool wasEval=EvalLow(index);
-		if (mSmoothingActive)
-		{
-		if (mSmoothBones[index].touch!=incomingTime||wasEval)
-		{
-		float dif=float(incomingTime)-float(mSmoothBones[index].touch);
-		if (mSmoothBones[index].touch&&dif<300.0f)
-		{
-
-		if (dif<16.0f)  // 60 fps
-		{
-		dif=16.0f;
-		}
-		if (dif>100.0f) // 10 fps
-		{
-		dif=100.0f;
-		}
-		float f=1.0f-pow(1.0f-mSmoothFactor,16.0f/dif);
-
-		int i;
-		float *oldM=&mSmoothBones[index].boneMatrix.matrix[0][0];
-		float *newM=&mFinalBones[index].boneMatrix.matrix[0][0];
-		for (i=0;i<12;i++,oldM++,newM++)
-		{
-		*oldM=f*(*oldM-*newM)+*newM;
-		}
-		if (mUnsquash)
-		{
-		mdxaBone_t tempMatrix;
-		Multiply_3x4Matrix(&tempMatrix,&mSmoothBones[index].boneMatrix, &mSkels[index]->BasePoseMat);
-		float maxl;
-		maxl=VectorLength(&mSkels[index]->BasePoseMat.matrix[0][0]);
-		VectorNormalizeFast(&tempMatrix.matrix[0][0]);
-		VectorNormalizeFast(&tempMatrix.matrix[1][0]);
-		VectorNormalizeFast(&tempMatrix.matrix[2][0]);
-
-		VectorScale(&tempMatrix.matrix[0][0],maxl,&tempMatrix.matrix[0][0]);
-		VectorScale(&tempMatrix.matrix[1][0],maxl,&tempMatrix.matrix[1][0]);
-		VectorScale(&tempMatrix.matrix[2][0],maxl,&tempMatrix.matrix[2][0]);
-		Multiply_3x4Matrix(&mSmoothBones[index].boneMatrix,&tempMatrix,&mSkels[index]->BasePoseMatInv);
-		}
-		}
-		else
-		{
-		memcpy(&mSmoothBones[index].boneMatrix,&mFinalBones[index].boneMatrix,sizeof(mdxaBone_t));
-		}
-		mSmoothBones[index].touch=incomingTime;
-		}
-		return mSmoothBones[index].boneMatrix;
-		}
-		return mFinalBones[index].boneMatrix;
-		*/
-		//all above is not necessary, smoothing is taken care of when we want to use smoothlow (only when evalrender)
 		assert(index >= 0 && index<mNumBones);
 		if (mFinalBones[index].touch != mCurrentTouch)
 		{

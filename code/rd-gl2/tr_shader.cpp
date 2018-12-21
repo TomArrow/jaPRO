@@ -3858,7 +3858,7 @@ static shader_t *FinishShader( void ) {
 		int	numStyles;
 		int	i;
 
-		for(numStyles=0;numStyles<MAXLIGHTMAPS;numStyles++)
+		for(numStyles=0;numStyles< 1/*MAXLIGHTMAPS*/;numStyles++)
 		{
 			if (shader.styles[numStyles] >= LS_UNUSED)
 			{
