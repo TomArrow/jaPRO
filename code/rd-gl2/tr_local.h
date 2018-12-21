@@ -52,7 +52,7 @@ typedef unsigned int glIndex_t;
 #define SHADERNUM_BITS 14
 #define MAX_SHADERS (1<<SHADERNUM_BITS)
 
-#define	MAX_FBOS 64
+#define	MAX_FBOS 128
 #define MAX_VISCOUNTS 5
 #define MAX_VBOS 4096
 #define MAX_IBOS 4096
@@ -2420,6 +2420,7 @@ typedef struct trGlobals_s {
 	image_t                 *screenSsaoImage;
 	image_t					*hdrDepthImage;
 	image_t                 *renderCubeImage;
+	image_t					*equirectangularCubeImage;
 	image_t                 *prefilterEnvMapImage;
 	image_t                 *envBrdfImage;
 	
@@ -2445,6 +2446,7 @@ typedef struct trGlobals_s {
 	FBO_t					*screenSsaoFbo;
 	FBO_t					*hdrDepthFbo;
 	FBO_t                   *renderCubeFbo;
+	FBO_t                   *renderEquirectangularFbo;
 	FBO_t					*shadowCubeFbo;
 	FBO_t					*preFilterEnvMapFbo;
 	FBO_t					*weatherDepthFbo;
@@ -2494,6 +2496,7 @@ typedef struct trGlobals_s {
 	shaderProgram_t splashScreenShader;
 	shaderProgram_t genericShader[GENERICDEF_COUNT];
 	shaderProgram_t textureColorShader;
+	shaderProgram_t equirectangularShader;
 	shaderProgram_t prepassShader[PREPASS_COUNT];
 	shaderProgram_t prelightShader[PRELIGHT_COUNT];
 	shaderProgram_t fogShader[FOGDEF_COUNT];
@@ -3000,6 +3003,7 @@ SCENE GENERATION
 
 void R_InitNextFrame( void );
 void RE_ClearScene( void );
+void RE_ClearDrawData( void );
 void RE_AddRefEntityToScene( const refEntity_t *ent );
 void RE_AddPolyToScene(qhandle_t hShader, int numVerts, const polyVert_t *verts);
 void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b );
