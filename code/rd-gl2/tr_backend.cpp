@@ -2215,17 +2215,17 @@ static void RB_RenderSSAO()
 
 	qglDrawArrays(GL_TRIANGLES, 0, 3);
 
-	/*FBO_Bind(tr.quarterFbo[1]);
+	FBO_Bind(tr.quarterFbo[1]);
 	GLSL_BindProgram(&tr.depthBlurShader[0]);
 	GL_BindToTMU(tr.quarterImage[0], TB_COLORMAP);
 	GL_BindToTMU(tr.hdrDepthImage, TB_LIGHTMAP);
-	VectorSet4(viewInfo, zmax / zmin, zmax, 1.0f, -1.0f );
+	VectorSet4(viewInfo, zmax / zmin, zmax, 2.0f, -2.0f );
 	GLSL_SetUniformVec4(&tr.depthBlurShader[0], UNIFORM_VIEWINFO, viewInfo);
 	qglDrawArrays(GL_TRIANGLES, 0, 3);
 
 	FBO_Bind(tr.quarterFbo[0]);
 	GL_BindToTMU(tr.quarterImage[1], TB_COLORMAP);
-	VectorSet4(viewInfo, zmax / zmin, zmax, 1.0f, 1.0f);
+	VectorSet4(viewInfo, zmax / zmin, zmax, 2.0f, 2.0f);
 	GLSL_SetUniformVec4(&tr.depthBlurShader[0], UNIFORM_VIEWINFO, viewInfo);
 	qglDrawArrays(GL_TRIANGLES, 0, 3);
 
@@ -2233,12 +2233,12 @@ static void RB_RenderSSAO()
 	GL_BindToTMU(tr.quarterImage[0], TB_COLORMAP);
 	VectorSet4(viewInfo, zmax / zmin, zmax, 1.0f, 0.0f);
 	GLSL_SetUniformVec4(&tr.depthBlurShader[0], UNIFORM_VIEWINFO, viewInfo);
-	qglDrawArrays(GL_TRIANGLES, 0, 3);*/
+	qglDrawArrays(GL_TRIANGLES, 0, 3);
 
 	GLSL_BindProgram(&tr.depthBlurShader[0]);
 
 	FBO_Bind(tr.screenSsaoFbo);
-	GL_BindToTMU(tr.quarterImage[0], TB_COLORMAP);
+	GL_BindToTMU(tr.quarterImage[1], TB_COLORMAP);
 	GL_BindToTMU(tr.hdrDepthImage, TB_LIGHTMAP);
 	VectorSet4(viewInfo, zmax / zmin, zmax, 0.0f, 1.0f);
 	GLSL_SetUniformVec4(&tr.depthBlurShader[0], UNIFORM_VIEWINFO, viewInfo);
