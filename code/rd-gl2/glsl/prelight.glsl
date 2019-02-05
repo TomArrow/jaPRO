@@ -220,9 +220,13 @@ vec3 CalcSpecular(
 {
 	float distrib = spec_D(NH,roughness);
 	float vis = spec_G(NL, NE, roughness);
-	vec3 fresnel = spec_F(EH,specular);
 	float denominator = max((4.0 * max(NE,0.0) * max(NL,0.0)),0.001);
-	return (distrib * fresnel * vis) / denominator;
+	#if defined(SSR_RESOLVE) || defined(SSR)
+		return vec3(distrib * vis) / denominator;
+	#else
+		vec3 fresnel = spec_F(EH,specular);
+		return (distrib * fresnel * vis) / denominator;
+	#endif
 }
 
 #if defined(POINT_LIGHT)
@@ -519,7 +523,7 @@ vec4 traceSSRRay(in float roughness, in vec3 wsNormal, in vec3 viewPos, in vec2 
 	vec3 reflection;
 	vec3 V = var_ViewDir;
 
-	for (int i = 0; i < 32; i++) 
+	for (int i = 0; i < 16; i++) 
 	{
 		sample = mod(sample + 3.0, 32.0);
 		vec2 Xi = halton[int(sample)];
@@ -536,7 +540,7 @@ vec4 traceSSRRay(in float roughness, in vec3 wsNormal, in vec3 viewPos, in vec2 
 
 	float tracedDepth;
 	float minRayStep = 0.05;
-	vec3 screenCoord = RayCast(reflection.xyz * max(minRayStep, -viewPos.z * 0.1), hitPos, tracedDepth).xyz;
+	vec3 screenCoord = RayCast(reflection.xyz * max(minRayStep, -viewPos.z * 0.05), hitPos, tracedDepth).xyz;
 
 	#ifndef TWO_RAYS_PER_PIXEL
 	if (length(screenCoord) == 0.0)
@@ -548,7 +552,7 @@ vec4 traceSSRRay(in float roughness, in vec3 wsNormal, in vec3 viewPos, in vec2 
 
 		reflection = reflect(V, H.xyz);
 		reflection = normalize(mat3(u_ModelViewProjectionMatrix) * reflection);
-		screenCoord = RayCast(reflection.xyz * max(minRayStep, -viewPos.z * 0.1), hitPos, tracedDepth).xyz;
+		screenCoord = RayCast(reflection.xyz * max(minRayStep, -viewPos.z * 0.05), hitPos, tracedDepth).xyz;
 	}
 	#endif
 
@@ -556,7 +560,7 @@ vec4 traceSSRRay(in float roughness, in vec3 wsNormal, in vec3 viewPos, in vec2 
 	float NH  = max(1e-8, dot(wsNormal, H.xyz));
 	float pdf = (spec_D(NH,roughness) * NH) / (4.0 * EH);
 
-	vec2 dCoords = smoothstep(0.4, 0.498, abs(vec2(0.5, 0.5) - screenCoord.xy));
+	vec2 dCoords = smoothstep(0.4, 0.5, abs(vec2(0.5, 0.5) - screenCoord.xy));
 	float screenEdgefactor = clamp(1.0 - (dCoords.x + dCoords.y), 0.0, 1.0);
 	screenCoord.z *= screenEdgefactor;
 	screenCoord.z *= clamp(-reflection.z * 4.0, 0.0, 1.0);
@@ -576,7 +580,7 @@ vec4 resolveSSRRay(	in sampler2D packedTexture,
 					in vec3 viewNormal, 
 					in vec3 specular, 
 					in float roughness, 
-					inout vec4 weightSum)
+					inout float weightSum)
 {
 	const vec2 bufferScale = 2.0 / r_FBufScale;
 
@@ -594,7 +598,7 @@ vec4 resolveSSRRay(	in sampler2D packedTexture,
 	float NE = max(1e-8, dot(viewNormal, E));
 	float NL = max(1e-8, dot(viewNormal, L));
 
-	vec4 weight = vec4(CalcSpecular(specular, NH, NL, NE, EH, roughness) / packedHitPos.z, 1.0);
+	float weight = (CalcSpecular(specular, NH, NL, NE, EH, roughness).r / packedHitPos.z) * packedHitPos.a;
 
 	float coneTangent = mix(0.0, roughness * (1.0 - brdfBias), NE * sqrt(roughness));
 	coneTangent *= mix(clamp (NE * 2.0, 0.0, 1.0), 1.0, sqrt(roughness));
@@ -660,13 +664,9 @@ void main()
 
 	specularAndGloss.rgb *= specularAndGloss.rgb;
 
-	#if defined(SSR) || defined(SSR_RESOLVE)
-	//roughness = sqrt(roughness);
-	#endif
-
 	//vec3 N = normalize(DecodeNormal(normal.rg));
 	vec3 N = normalize(normal.rgb);
-	vec3 E = normalize(-var_ViewDir);
+	vec3 E = normalize(var_ViewDir);
 	
 	vec4 diffuseOut = vec4(0.0, 0.0, 0.0, 1.0);
 	vec4 specularOut = vec4(0.0, 0.0, 0.0, 0.0);
@@ -677,7 +677,7 @@ void main()
 		diffuseOut = traceSSRRay( roughness, N, position, gl_FragCoord.xy * u_ViewInfo.xy, u_ViewInfo.w);
 
 		#if defined(TWO_RAYS_PER_PIXEL)
-			specularOut = traceSSRRay( roughness, N, position, gl_FragCoord.xy * u_ViewInfo.xy, u_ViewInfo.w + 13.7);
+			specularOut = traceSSRRay( roughness, N, position, gl_FragCoord.xy * u_ViewInfo.xy, u_ViewInfo.w + 16.0);
 		#endif
 	}
 	else
@@ -694,14 +694,17 @@ void main()
 		vec2(1.0, -1.0),
 		vec2(1.0, 1.0)
 	);
-			
-	mat2 rotationMat = mat2(u_ViewInfo.w, 
-							u_ViewInfo.z, 
-							-u_ViewInfo.z, 
-							u_ViewInfo.w);
-	vec4 weightSum = vec4(0.0);
 
-	windowCoord = ivec2((windowCoord * .5) ); 
+	float random1 = Noise(gl_FragCoord.xy, u_ViewInfo.z);
+	float random2 = Noise(gl_FragCoord.xy, u_ViewInfo.w);
+			
+	mat2 rotationMat = mat2(random1, 
+							random2, 
+							-random2, 
+							random1);
+	float weightSum = 0.0;
+
+	windowCoord = ivec2((gl_FragCoord.xy + 0.5) * 0.5); 
 
 	int samples = roughness > 0.1 ? 4 : 1;
 
@@ -713,7 +716,7 @@ void main()
 
 	for( int i = 0; i < samples; i++)
 	{
-		vec2 offsetUV = offset[i];
+		vec2 offsetUV = offset[i] * (roughness * 3.0 + 1.0);
 		offsetUV *= rotationMat;
 		ivec2 neighborUV = ivec2(windowCoord + offsetUV);
 
@@ -726,7 +729,6 @@ void main()
 
 	diffuseOut /= weightSum;
 	diffuseOut.rgb = sqrt(diffuseOut.rgb);
-	//diffuseOut.a = weightSum.a / (rays * samples);
 	
 #elif defined(TEMPORAL_FILTER)
 /*
@@ -770,7 +772,7 @@ SOFTWARE.
 		ray *= 0.5;
 	#endif
 
-	vec2 velocity = texelFetch(u_ShadowMap, ivec2(ray / r_FBufScale), 0).xy;
+	vec2 velocity = texelFetch(u_ShadowMap, ivec2(ray / r_FBufScale), 0).xy * vec2(1.0, -1.0);
 	uv -= ivec2(velocity);
 
 	vec4 previous = texelFetch(u_ScreenDepthMap, uv, 0);
@@ -802,12 +804,10 @@ SOFTWARE.
 	vec4 currentMin = min(ctl, min(ctc, min(ctr, min(cml, min(cmc, min(cmr, min(cbl, min(cbc, cbr))))))));
 	vec4 currentMax = max(ctl, max(ctc, max(ctr, max(cml, max(cmc, max(cmr, max(cbl, max(cbc, cbr))))))));
 	vec4 center = (currentMin + currentMax) * 0.5;
-	//currentMin = (currentMin - center) * 3.0 + center;
-	//currentMax = (currentMax - center) * 3.0 + center;
 	
 	previous = clip_aabb(currentMin.xyz, currentMax.xyz, clamp(center, currentMin, currentMax), previous);
 
-	float velocityWeight = clamp(1.0 - (length(velocity / r_FBufScale) * 0.01), 0.05, 0.985);
+	float velocityWeight = clamp(1.0 - (length(velocity / r_FBufScale) * 0.02), 0.05, 0.985);
 
 	float lum0 = luma(current.rgb);
     float lum1 = luma(previous.rgb);
@@ -821,10 +821,9 @@ SOFTWARE.
 
 	specularOut		= mix(current, previous, temp);
 	diffuseOut.rgb	= sqrt(specularOut.rgb * (specularAndGloss.rgb * EnvBRDF.x + EnvBRDF.y));
-	diffuseOut.a	= specularOut.a * specularOut.a * normal.a;
-
+	diffuseOut.a	= specularOut.a;
 	specularOut.rgb = sqrt(specularOut.rgb);
-	
+
 #elif defined(POINT_LIGHT)
 	vec4 lightVec		= vec4(var_Position.xyz - position + (N*0.01), var_Position.w);
 	vec3 L				= lightVec.xyz;

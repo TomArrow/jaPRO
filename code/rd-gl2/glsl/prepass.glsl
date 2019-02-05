@@ -571,16 +571,8 @@ void main()
 	specular *= u_SpecularScale;
 	out_Glow	= specular;
 
-	vec3 R = reflect(viewDir, N);
-	float horiz = 1.0;
-	// from http://marmosetco.tumblr.com/post/81245981087
-	#if defined(HORIZON_FADE)
-		horiz = clamp( 1.0 + HORIZON_FADE * dot(-R,fs_Normal.xyz), 0.0, 1.0 );
-		horiz *= horiz;
-	#endif
-
 	//out_Color	= vec4(EncodeNormal(N), offsetDir.xy * 0.5 + 0.5);
-	out_Color	= vec4(N, horiz);
+	out_Color	= vec4(N, 1.0);
 
 	#if !defined(USE_CUBEMAP_TRANSFORMS)
 		vec2 a = (var_CurrentPosition.xy / var_CurrentPosition.w) * 0.5 + 0.5;

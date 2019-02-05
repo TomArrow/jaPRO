@@ -2558,7 +2558,6 @@ void RB_RenderAllRealTimeLightTypes()
 		
 
 		// ssr resolve
-		//GL_State(GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA | GLS_DEPTHTEST_DISABLE);
 		GL_State(GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA | GLS_DEPTHTEST_DISABLE);
 		FBO_Bind(tr.preLightFbo[PRELIGHT_DIFFUSE_FBO]);
 		GL_BindToTMU(tr.prevRenderImage, 0);
@@ -2568,6 +2567,11 @@ void RB_RenderAllRealTimeLightTypes()
 		index = PRELIGHT_SSR_RESOLVE;
 		sp = &tr.prelightShader[index];
 		GLSL_BindProgram(sp);
+
+		GLSL_SetUniformVec3(sp, UNIFORM_VIEWFORWARD, viewBasis[0]);
+		GLSL_SetUniformVec3(sp, UNIFORM_VIEWLEFT, viewBasis[1]);
+		GLSL_SetUniformVec3(sp, UNIFORM_VIEWUP, viewBasis[2]);
+		GLSL_SetUniformVec3(sp, UNIFORM_VIEWORIGIN, backEnd.viewParms.ori.origin);
 
 		VectorSet4(viewInfo, 1.f / (float)tr.renderImage->width, 1.f / (float)tr.renderImage->height, sin(Q_flrand(0.f, 360.f)), cos(Q_flrand(0.f, 360.f)));
 		GLSL_SetUniformVec4(sp, UNIFORM_VIEWINFO, viewInfo);
@@ -2581,8 +2585,6 @@ void RB_RenderAllRealTimeLightTypes()
 
 		// temporal filter
 		FBO_Bind(tr.preLightFbo[PRELIGHT_TEMP_FBO]);
-		//GL_State(GLS_SRCBLEND_ONE | GLS_DSTBLEND_SRC_ALPHA | GLS_DEPTHTEST_DISABLE);
-		//GL_State(GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA | GLS_DEPTHTEST_DISABLE);
 		GL_BindToTMU(tr.diffuseLightingImage, 0);
 		GL_BindToTMU(tr.tempFilterBufferImage, 1);
 
@@ -2592,6 +2594,11 @@ void RB_RenderAllRealTimeLightTypes()
 		index = PRELIGHT_TEMPORAL_FILTER;
 		sp = &tr.prelightShader[index];
 		GLSL_BindProgram(sp);
+
+		GLSL_SetUniformVec3(sp, UNIFORM_VIEWFORWARD, viewBasis[0]);
+		GLSL_SetUniformVec3(sp, UNIFORM_VIEWLEFT, viewBasis[1]);
+		GLSL_SetUniformVec3(sp, UNIFORM_VIEWUP, viewBasis[2]);
+		GLSL_SetUniformVec3(sp, UNIFORM_VIEWORIGIN, backEnd.viewParms.ori.origin);
 
 		if (tr.envBrdfImage != NULL)
 			GL_BindToTMU(tr.envBrdfImage, 7);
