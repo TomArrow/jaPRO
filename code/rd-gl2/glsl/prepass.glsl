@@ -567,10 +567,9 @@ void main()
 	vec4 specular = vec4 (1.0);
 	if (u_EnableTextures.z > 0.0)
 		specular = texture(u_SpecularMap, texCoords);
-		
 	specular *= u_SpecularScale;
-	out_Glow	= specular;
 
+	out_Glow	= specular;
 	//out_Color	= vec4(EncodeNormal(N), offsetDir.xy * 0.5 + 0.5);
 	out_Color	= vec4(N, 1.0);
 
