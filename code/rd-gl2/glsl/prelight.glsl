@@ -469,7 +469,7 @@ vec3 BinarySearch(in vec3 dir, inout vec3 hitCoord)
 		else
 			hitCoord -= dir;
     }
-	return vec3(hitCoord.xy, abs(dDepth - 1.0) < 0.00015 ? 1.0 : 0.35);
+	return vec3(hitCoord.xy, abs(dDepth - 1.0) < 0.00005 ? 1.0 : 0.10);
 }
 
 vec3 RayCast(in vec3 dir, inout vec3 hitCoord)
@@ -485,7 +485,7 @@ vec3 RayCast(in vec3 dir, inout vec3 hitCoord)
 		
         dir *= 1.02;
     }
-    return vec3(hitCoord.xy, 0.35);
+    return vec3(hitCoord.xy, 0.10);
 }
 
 vec3 ImportanceSampleGGX(vec2 Xi, float Roughness, vec3 N)
@@ -516,14 +516,14 @@ vec4 traceSSRRay(in float roughness, in vec3 wsNormal, in vec3 V, in vec3 viewPo
 	vec3 reflection;
 	bool NdotR, VdotR;
 
-	for (int i = 0; i < 5; i++) 
+	for (int i = 0; i < 12; i++) 
 	{
 		sample = mod(sample + 12.0, 32.0);
 		vec2 Xi = halton[int(sample)];
 		Xi.y = mix(Xi.y, 0.0, brdfBias);
 
-		H = ImportanceSampleGGX(Xi, roughness, wsNormal);
-		reflection = reflect(V, H);
+		reflection = reflect(V, wsNormal);
+		reflection = ImportanceSampleGGX(Xi, roughness, reflection);
 		
 		NdotR = dot(wsNormal, reflection) > 0.0;
 		VdotR = dot(V, reflection) > 0.0;
@@ -535,6 +535,7 @@ vec4 traceSSRRay(in float roughness, in vec3 wsNormal, in vec3 V, in vec3 viewPo
 	if (!NdotR || !VdotR)
 		return vec4(0.0);
 
+	H	  = normalize(-reflection - V);
 	float EH  = max(1e-8, dot(V, H));
 	float NH  = max(1e-8, dot(wsNormal, H));
 	float pdf = (spec_D(NH,roughness) * NH) / (4.0 * EH);
@@ -670,12 +671,12 @@ void main()
 	scspPos.xyz = scspPos.xyz * 0.5 + 0.5;
 	scspPos.z = 1.0 / linearDepth(scspPos.z, u_ViewInfo.x, u_ViewInfo.y);
 
-	float noise = Noise(scspPos.xy, u_ViewInfo.w) * 32.0;
+	float noise = Noise(scspPos.xy, u_ViewInfo.z) * 32.0;
 
 	diffuseOut = traceSSRRay( roughness, N, E, vsPosition, scspPos.xyz, noise);
 
 	#if defined(TWO_RAYS_PER_PIXEL)
-		specularOut = traceSSRRay( roughness, N, E, vsPosition, scspPos.xyz, noise + 16.0);
+		specularOut = traceSSRRay( roughness, N, E, vsPosition, scspPos.xyz, noise + u_ViewInfo.w);
 	#endif
 
 #elif defined(SSR_RESOLVE)
