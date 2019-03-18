@@ -3306,9 +3306,7 @@ static void UI_FreeCustomSaber( customSaberInfo_t *saber )
 
 void UI_FreeAllCustomSabers( void )
 {
-	int i;
-	
-	for (i = 0; i < uiInfo.customSabersCount; i++)
+	for (int i = 0; i < uiInfo.customSabersCount; i++)
 	{
 		UI_FreeCustomSaber(&uiInfo.customSabers[i]);
 	}
@@ -3477,9 +3475,7 @@ static void UI_FreeSpecies( playerSpeciesInfo_t *species )
 
 void UI_FreeAllSpecies( void )
 {
-	int i;
-
-	for (i = 0; i < uiInfo.playerSpeciesCount; i++)
+	for (int i = 0; i < uiInfo.playerSpeciesCount; i++)
 	{
 		UI_FreeSpecies(&uiInfo.playerSpecies[i]);
 	}
