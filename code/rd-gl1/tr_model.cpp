@@ -562,7 +562,7 @@ Ghoul2 Insert End
 	}
 
 	if ( strlen( name ) >= MAX_QPATH ) {
-		ri.Printf( PRINT_DEVELOPER, "Model name exceeds MAX_QPATH\n" );
+		ri.Printf( PRINT_DEVELOPER, "Model name exceeds MAX_QPATH %s\n", name);
 		return 0;
 	}
 

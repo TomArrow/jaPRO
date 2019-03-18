@@ -112,7 +112,7 @@ static void ClearGlobalShader(void)
 		VectorSet4(stages[i].normalScale, 0.0f, 0.0f, 0.0f, 0.0f);
 		stages[i].specularScale[0] =
 		stages[i].specularScale[1] =
-		stages[i].specularScale[2] = sRGBtoRGB(r_baseSpecular->value);
+		stages[i].specularScale[2] = RGBtosRGB(r_baseSpecular->value);
 		stages[i].specularScale[3] = r_baseGloss->value;
 
 	}
@@ -3963,6 +3963,14 @@ static shader_t *FinishShader( void ) {
 			}
 		}
 
+		//
+		// mark env mapped stage as unactive when r_environmentMapping == 0 
+		//
+		if (!r_environmentMapping->integer &&
+			pStage->bundle[0].tcGen == TCGEN_ENVIRONMENT_MAPPED)
+		{
+			pStage->active = qfalse;
+		}
 		//
 		// determine sort order and fog color adjustment
 		//

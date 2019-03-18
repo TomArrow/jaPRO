@@ -469,7 +469,7 @@ vec3 BinarySearch(in vec3 dir, inout vec3 hitCoord)
 		else
 			hitCoord -= dir;
     }
-	return vec3(hitCoord.xy, abs(dDepth - 1.0) < 0.00005 ? 1.0 : 0.10);
+	return vec3(hitCoord.xy, abs(dDepth - 1.0) < 0.00015 ? 1.0 : 0.35);
 }
 
 vec3 RayCast(in vec3 dir, inout vec3 hitCoord)
@@ -485,7 +485,7 @@ vec3 RayCast(in vec3 dir, inout vec3 hitCoord)
 		
         dir *= 1.02;
     }
-    return vec3(hitCoord.xy, 0.10);
+    return vec3(hitCoord.xy, 0.35);
 }
 
 vec3 ImportanceSampleGGX(vec2 Xi, float Roughness, vec3 N)
@@ -522,8 +522,8 @@ vec4 traceSSRRay(in float roughness, in vec3 wsNormal, in vec3 V, in vec3 viewPo
 		vec2 Xi = halton[int(sample)];
 		Xi.y = mix(Xi.y, 0.0, brdfBias);
 
-		reflection = reflect(V, wsNormal);
-		reflection = ImportanceSampleGGX(Xi, roughness, reflection);
+		H = ImportanceSampleGGX(Xi, roughness, wsNormal);
+		reflection = reflect(V, H);
 		
 		NdotR = dot(wsNormal, reflection) > 0.0;
 		VdotR = dot(V, reflection) > 0.0;
@@ -535,7 +535,6 @@ vec4 traceSSRRay(in float roughness, in vec3 wsNormal, in vec3 V, in vec3 viewPo
 	if (!NdotR || !VdotR)
 		return vec4(0.0);
 
-	H	  = normalize(-reflection - V);
 	float EH  = max(1e-8, dot(V, H));
 	float NH  = max(1e-8, dot(wsNormal, H));
 	float pdf = (spec_D(NH,roughness) * NH) / (4.0 * EH);
@@ -597,7 +596,7 @@ vec4 resolveSSRRay(	in sampler2D packedTexture,
 	float coneTangent = mix(0.0, roughness * (1.0 - brdfBias), NE * sqrt(roughness));
 	coneTangent *= mix(clamp (NE * 2.0, 0.0, 1.0), 1.0, sqrt(roughness));
 
-	float intersectionCircleRadius = coneTangent * distance(packedHitPos.xy * bufferScale, coordinate);
+	float intersectionCircleRadius = coneTangent * distance(hitViewPos, viewPos);
 	float mip = clamp(log2( intersectionCircleRadius ), 0.0, 4.0);
 
 	vec2 velocity		= texture(velocityTexture, packedHitPos.xy).rg;
@@ -659,7 +658,7 @@ void main()
 
 	//vec3 N = normalize(DecodeNormal(normal.rg));
 	vec3 N = normalize(normal.rgb);
-	vec3 E = normalize(var_ViewDir);
+	vec3 E = normalize(-var_ViewDir);
 	
 	vec4 diffuseOut = vec4(0.0, 0.0, 0.0, 1.0);
 	vec4 specularOut = vec4(0.0, 0.0, 0.0, 0.0);
@@ -673,10 +672,10 @@ void main()
 
 	float noise = Noise(scspPos.xy, u_ViewInfo.z) * 32.0;
 
-	diffuseOut = traceSSRRay( roughness, N, E, vsPosition, scspPos.xyz, noise);
+	diffuseOut = traceSSRRay( roughness, N, -E, vsPosition, scspPos.xyz, noise);
 
 	#if defined(TWO_RAYS_PER_PIXEL)
-		specularOut = traceSSRRay( roughness, N, E, vsPosition, scspPos.xyz, noise + u_ViewInfo.w);
+		specularOut = traceSSRRay( roughness, N, -E, vsPosition, scspPos.xyz, noise + u_ViewInfo.w);
 	#endif
 
 #elif defined(SSR_RESOLVE)
@@ -799,8 +798,18 @@ SOFTWARE.
 	vec4 currentMax = max(ctl, max(ctc, max(ctr, max(cml, max(cmc, max(cmr, max(cbl, max(cbc, cbr))))))));
 	vec4 average = (ctl+ctc+ctr+cml+cmc+cmr+cbl+cbc+cbr) / 9.0;
 	
-	previous = clip_aabb(currentMin.xyz, currentMax.xyz, clamp(average, currentMin, currentMax), previous);
-
+	if (length(velocity) > 0.1)
+	{
+		
+		previous = clip_aabb(currentMin.xyz, currentMax.xyz, clamp(average, currentMin, currentMax), previous);
+	}
+	else
+	{
+		//vec4 center = (currentMin + currentMax) * 0.5;
+		currentMin = (currentMin - average) * 2.0 + average;
+		currentMax = (currentMax - average) * 2.0 + average;
+		previous = clamp(previous, currentMin, currentMax);
+	}
 	float velocityWeight = clamp(1.0 - (length(velocity.xy) * 0.02), 0.3, 0.985);
 
 	float lum0 = luma(current.rgb);

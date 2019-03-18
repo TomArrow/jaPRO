@@ -3585,6 +3585,8 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 
 	// first up, go load in the animation file we need that has the skeletal animation info for this model
 	mdxm->animIndex = RE_RegisterModel(va ("%s.gla",mdxm->animName));
+
+#ifndef JK2_MODE
 	if (!strcmp(mdxm->animName,"models/players/_humanoid/_humanoid"))
 	{	//if we're loading the humanoid, look for a cinematic gla for this map
 		const char*mapname = sv_mapname->string;
@@ -3598,7 +3600,6 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 		}
 	}
 
-#ifndef JK2_MODE
 	bool isAnOldModelFile = false;
 	if (mdxm->numBones == 72 && strstr(mdxm->animName,"_humanoid") )
 	{
