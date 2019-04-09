@@ -2577,7 +2577,8 @@ void RB_RenderAllRealTimeLightTypes()
 
 	if (!((tr.buildingSphericalHarmonics) ||
 		(tr.renderCubeFbo != NULL && backEnd.viewParms.targetFbo == tr.renderCubeFbo)) &&
-		r_ssr->integer)
+		r_ssr->integer &&
+		!backEnd.viewParms.isPortal)
 	{
 		GL_BindToTMU(tr.prevRenderDepthImage, 6);
 		GL_BindToTMU(tr.prevRenderImage, 0);
