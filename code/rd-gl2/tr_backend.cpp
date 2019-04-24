@@ -2546,9 +2546,7 @@ void RB_RenderAllRealTimeLightTypes()
 	FBO_Bind(tr.preLightFbo[PRELIGHT_DIFFUSE_SPECULAR_FBO]);
 	qglClearColor(0.f, 0.f, 0.f, 0.0f);
 	qglClear(GL_COLOR_BUFFER_BIT);
-	FBO_Bind(tr.preLightFbo[PRELIGHT_PRE_SSR_FBO]);
-	qglClear(GL_COLOR_BUFFER_BIT);
-
+	
 	// only compute lighting for non sky pixels
 	qglEnable(GL_STENCIL_TEST);
 	qglStencilFunc(GL_EQUAL, 1, 0xff);
@@ -2584,6 +2582,7 @@ void RB_RenderAllRealTimeLightTypes()
 		GL_BindToTMU(tr.prevRenderImage, 0);
 
 		FBO_Bind(tr.preLightFbo[PRELIGHT_PRE_SSR_FBO]);
+		qglClear(GL_COLOR_BUFFER_BIT);
 
 		tess.useInternalVBO = qfalse;
 		R_BindVBO(tr.screenQuad.vbo);
@@ -2628,6 +2627,7 @@ void RB_RenderAllRealTimeLightTypes()
 		// ssr resolve
 		GL_State(GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA | GLS_DEPTHTEST_DISABLE);
 		FBO_Bind(tr.preLightFbo[PRELIGHT_RESOLVE_FBO]);
+
 		GL_BindToTMU(tr.prevRenderImage, 0);
 		GL_BindToTMU(tr.renderDepthImage, 1);
 		GL_BindToTMU(tr.preSSRImage[0], 4);
@@ -2654,10 +2654,9 @@ void RB_RenderAllRealTimeLightTypes()
 		qglDrawArrays(GL_TRIANGLES, 0, 3);
 
 		// temporal filter
-
 		bool oddFrame = tr.frameCount % 2 == 1;
-
 		FBO_Bind(tr.preLightFbo[oddFrame ? PRELIGHT_TEMP_ODD_FBO : PRELIGHT_TEMP_EVEN_FBO]);
+		
 		GL_BindToTMU(tr.diffuseLightingImage, 0);
 		GL_BindToTMU(oddFrame ? tr.tempFilterEvenBufferImage : tr.tempFilterOddBufferImage, 1);
 
@@ -2678,6 +2677,7 @@ void RB_RenderAllRealTimeLightTypes()
 			GL_BindToTMU(tr.envBrdfImage, 7);
 
 		qglDrawArrays(GL_TRIANGLES, 0, 3);
+
 		FBO_Bind(tr.preLightFbo[PRELIGHT_DIFFUSE_FBO]);
 		qglClear(GL_COLOR_BUFFER_BIT);
 

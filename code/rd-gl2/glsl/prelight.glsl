@@ -554,7 +554,7 @@ vec4 traceSSRRay(in float roughness, in vec3 wsNormal, in vec3 V, in vec3 viewPo
 	vec2 dCoords = smoothstep(0.4, 0.5, abs(vec2(0.5, 0.5) - screenCoord.xy));
 	float screenEdgefactor = clamp(1.0 - (dCoords.x + dCoords.y), 0.0, 1.0);
 	screenCoord.z *= screenEdgefactor;
-	screenCoord.z *= clamp(-reflection.z * 4.0, 0.0, 1.0);
+	screenCoord.z *= clamp(-reflection.z, 0.0, 1.0);
 
 	return vec4(screenCoord.xy, pdf, clamp(screenCoord.z, 0.0, 1.0));
 }
@@ -680,6 +680,10 @@ void main()
 	#endif
 
 #elif defined(SSR_RESOLVE)
+	windowCoord = ivec2((gl_FragCoord.xy + 0.5) * 0.5); 
+	int samples = roughness > 0.1 ? 4 : 1;
+	float weightSum = 0.0;
+
 	vec3 viewNormal = normalize(mat3(u_NormalMatrix) * N);
 	vec3 viewPos = position;
 	diffuseOut.a = 0.0;
@@ -698,21 +702,10 @@ void main()
 							random2, 
 							-random2, 
 							random1);
-	float weightSum = 0.0;
-
-	windowCoord = ivec2((gl_FragCoord.xy + 0.5) * 0.5); 
-
-	int samples = roughness > 0.1 ? 4 : 1;
-
-	#if defined(TWO_RAYS_PER_PIXEL)
-		const int rays = 2;
-	#else
-		const int rays = 1;
-	#endif
-
+	
 	for( int i = 0; i < samples; i++)
 	{
-		vec2 offsetUV = offset[i] * (roughness * 2.0 + 1.0);
+		vec2 offsetUV = offset[i] * (roughness * 3.0 + 1.0);
 		offsetUV *= rotationMat;
 		ivec2 neighborUV = ivec2(windowCoord + offsetUV);
 
@@ -762,19 +755,24 @@ SOFTWARE.
 	vec4 current = texelFetch(u_ScreenImageMap, uv, 0);
 	current.rgb *= current.rgb;
 
-	vec2 velocity = texelFetch(u_ShadowMap, uv, 0).xy / r_FBufScale;
+	vec2 velocity1 = texelFetch(u_ShadowMap, uv, 0).xy / r_FBufScale;
 
-	//TODO: properly reprojecting
-	uv -= ivec2(velocity.xy);
+	vec2 uvTraced1 = texture(u_ScreenOffsetMap, uv * r_FBufScale).xy;
+	vec2 velocity2 = texture(u_ShadowMap, uvTraced1).xy / r_FBufScale;
+
+	#if defined(TWO_RAYS_PER_PIXEL)
+	vec2 uvTraced2 = texture(u_ScreenOffsetMap2, uv * r_FBufScale).xy;
+	velocity2 = (velocity2 + (textureLod(u_ShadowMap, uvTraced2, 0.0).xy / r_FBufScale)) * 0.5;
+	#endif
+
+	vec2 minVelocity = length(velocity1) < length(velocity2) ? velocity1 : velocity2;
+	uv -= ivec2(minVelocity.xy);
 
 	vec4 previous = texelFetch(u_ScreenDepthMap, uv, 0);
-
-	out_Velocity = previous;
-
 	previous.rgb *= previous.rgb;
 
-	ivec2 du = ivec2(1.0,	0.0);
-	ivec2 dv = ivec2(0.0,	1.0);
+	const ivec2 du = ivec2(1.0,	0.0);
+	const ivec2 dv = ivec2(0.0,	1.0);
 
 	vec4 ctl = texelFetch(u_ScreenImageMap,		uv.xy - dv - du	, 0);
 	vec4 ctc = texelFetch(u_ScreenImageMap,		uv.xy - dv		, 0);
@@ -799,20 +797,10 @@ SOFTWARE.
 	vec4 currentMin = min(ctl, min(ctc, min(ctr, min(cml, min(cmc, min(cmr, min(cbl, min(cbc, cbr))))))));
 	vec4 currentMax = max(ctl, max(ctc, max(ctr, max(cml, max(cmc, max(cmr, max(cbl, max(cbc, cbr))))))));
 	vec4 average = (ctl+ctc+ctr+cml+cmc+cmr+cbl+cbc+cbr) / 9.0;
-	
-	if (length(velocity) > 0.1)
-	{
 		
-		previous = clip_aabb(currentMin.xyz, currentMax.xyz, clamp(average, currentMin, currentMax), previous);
-	}
-	else
-	{
-		//vec4 center = (currentMin + currentMax) * 0.5;
-		currentMin = (currentMin - average) * 2.0 + average;
-		currentMax = (currentMax - average) * 2.0 + average;
-		previous = clamp(previous, currentMin, currentMax);
-	}
-	float velocityWeight = clamp(1.0 - (length(velocity.xy) * 0.02), 0.3, 0.985);
+	previous = clip_aabb(currentMin.xyz, currentMax.xyz, clamp(average, currentMin, currentMax), previous);
+
+	float velocityWeight = clamp(1.0 - length(minVelocity.xy), 0.015, 0.985);
 
 	float lum0 = luma(current.rgb);
     float lum1 = luma(previous.rgb);
@@ -820,7 +808,7 @@ SOFTWARE.
     float unbiased_diff = abs(lum0 - lum1) / max(lum0, max(lum1, 0.2));
     float unbiased_weight = 1.0 - unbiased_diff;
     float unbiased_weight_sqr = unbiased_weight * unbiased_weight;
-	float lumaWeight = mix(0.05, 0.985, unbiased_weight_sqr);
+	float lumaWeight = mix(0.4, 0.985, unbiased_weight_sqr);
 
 	float temp = max(velocityWeight, lumaWeight);
 
