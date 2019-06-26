@@ -1350,7 +1350,7 @@ void R_Register(void)
 	r_toneMap = ri.Cvar_Get("r_toneMap", "1", CVAR_ARCHIVE | CVAR_LATCH);
 	ri.Cvar_CheckRange(r_toneMap, 0, 3, qfalse);
 	r_forceToneMap = ri.Cvar_Get("r_forceToneMap", "0", CVAR_CHEAT);
-	r_forceToneMapMin = ri.Cvar_Get("r_forceToneMapMin", "-6.0", CVAR_CHEAT);
+	r_forceToneMapMin = ri.Cvar_Get("r_forceToneMapMin", "-8.0", CVAR_CHEAT);
 	r_forceToneMapAvg = ri.Cvar_Get("r_forceToneMapAvg", "0.0", CVAR_CHEAT);
 	r_forceToneMapMax = ri.Cvar_Get("r_forceToneMapMax", "2.0", CVAR_CHEAT);
 	r_autoExposure = ri.Cvar_Get("r_autoExposure", "1", CVAR_ARCHIVE);
