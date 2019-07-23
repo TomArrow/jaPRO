@@ -615,9 +615,7 @@ static void GLSL_BindShaderInterface(shaderProgram_t *program)
 
 	static const char *shaderOutputNames[] = {
 		"out_Color",  // Color output
-		"out_Glow",  // Glow output 
-		"out_Velocity", // Velocity output
-		//"out_Specular" // Specular Gloss output
+		"out_Glow",  // Glow output
 	};
 
 	const uint32_t attribs = program->attribs;

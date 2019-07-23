@@ -2648,7 +2648,6 @@ void RB_RenderAllRealTimeLightTypes()
 		GL_BindToTMU(tr.renderDepthImage, 1);
 		GL_BindToTMU(tr.preSSRImage[0], 4);
 		GL_BindToTMU(tr.preSSRImage[1], 5);
-		GL_BindToTMU(tr.velocityImage, 6);
 
 		index = PRELIGHT_SSR_RESOLVE;
 		sp = &tr.prelightShader[index];
@@ -2678,7 +2677,7 @@ void RB_RenderAllRealTimeLightTypes()
 
 		GL_BindToTMU(tr.preSSRImage[0], 4);
 		GL_BindToTMU(tr.preSSRImage[1], 5);
-		GL_BindToTMU(tr.velocityImage, 6);
+		GL_BindToTMU(tr.hdrDepthImage, 6);
 
 		index = PRELIGHT_TEMPORAL_FILTER;
 		sp = &tr.prelightShader[index];
@@ -2688,6 +2687,14 @@ void RB_RenderAllRealTimeLightTypes()
 		GLSL_SetUniformVec3(sp, UNIFORM_VIEWLEFT, viewBasis[1]);
 		GLSL_SetUniformVec3(sp, UNIFORM_VIEWUP, viewBasis[2]);
 		GLSL_SetUniformVec3(sp, UNIFORM_VIEWORIGIN, backEnd.viewParms.ori.origin);
+
+		matrix_t viewProjectionMatrix;
+		Matrix16Multiply(backEnd.viewParms.projectionMatrix, backEnd.viewParms.world.modelViewMatrix, viewProjectionMatrix);
+		matrix_t invViewProjectionMatrix;
+		Matrix16Inverse(viewProjectionMatrix, invViewProjectionMatrix);
+
+		GLSL_SetUniformMatrix4x4(sp, UNIFORM_INVVIEWPROJECTIONMATRIX, invViewProjectionMatrix);
+		GLSL_SetUniformMatrix4x4(sp, UNIFORM_PREVVIEWPROJECTIONMATRIX, tr.preViewProjectionMatrix);
 
 		if (tr.envBrdfImage != NULL)
 			GL_BindToTMU(tr.envBrdfImage, 7);
@@ -3159,9 +3166,6 @@ void RB_StoreFrameData() {
 	//store viewProjectionMatrix for reprojecting
 	Matrix16Multiply(backEnd.viewParms.projectionMatrix, backEnd.ori.modelViewMatrix, tr.preViewProjectionMatrix);
 
-	//store renderDepth for reprojecting
-	//FBO_BlitFromTexture(tr.renderDepthImage, NULL, NULL, tr.prevDepthFbo, NULL, NULL, NULL, 0);
-
 	// build blured image buffer for ssr
 	int width = tr.renderImage->width;
 	int height = tr.renderImage->height;
@@ -3351,8 +3355,6 @@ const void *RB_PostProcess(const void *data)
 		FBO_BlitFromTexture(tr.preSSRImage[1], NULL, NULL, NULL, dstBox, NULL, NULL, 0);
 		VectorSet4(dstBox, 256, glConfig.vidHeight - 256, 256, 256);
 		FBO_BlitFromTexture(tr.prevRenderImage, NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-		VectorSet4(dstBox, 256, glConfig.vidHeight - 512, 256, 256);
-		FBO_BlitFromTexture(tr.velocityImage, NULL, NULL, NULL, dstBox, NULL, NULL, 0);
 		VectorSet4(dstBox, 512, glConfig.vidHeight - 256, 256, 256);
 		FBO_BlitFromTexture(tr.specBufferImage, NULL, NULL, NULL, dstBox, NULL, NULL, 0);
 		VectorSet4(dstBox, 768, glConfig.vidHeight - 256, 256, 256);

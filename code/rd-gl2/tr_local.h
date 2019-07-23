@@ -2415,7 +2415,6 @@ typedef struct trGlobals_s {
 	image_t					*renderDepthImage;
 	image_t					*renderDepthMSAAImage;
 	image_t					*prevRenderDepthImage;
-	image_t					*velocityImage;
 	image_t					*pshadowMaps[MAX_DRAWN_PSHADOWS];
 	image_t					*textureScratchImage[2];
 	image_t                 *quarterImage[2];

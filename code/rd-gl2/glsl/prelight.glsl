@@ -83,6 +83,7 @@ uniform mat4 u_ModelMatrix;
 uniform mat4 u_ModelViewProjectionMatrix;
 uniform mat4 u_NormalMatrix;
 uniform mat4 u_InvViewProjectionMatrix;
+uniform mat4 u_PrevViewProjectionMatrix;
 
 #if defined(POINT_LIGHT)
 uniform sampler3D u_LightGridDirectionMap;
@@ -642,17 +643,17 @@ float luma(vec3 color)
 #if defined(SSR_RESOLVE)
 vec4 resolveSSRRay(	in sampler2D packedTexture, 
 					in ivec2 coordinate,
-					in sampler2D velocityTexture, 
 					in vec3 viewPos, 
 					in vec3 viewNormal, 
 					in float roughness, 
-					inout float weightSum)
+					inout float weightSum,
+					inout float traceDepth)
 {
 	const vec2 bufferScale = 2.0 / r_FBufInvScale;
 	vec4 diffuseSample	= vec4(0.0);
 	vec4 packedHitPos = texelFetch(packedTexture, coordinate, 0);
 	
-	float depth = textureLod(u_ScreenDepthMap, packedHitPos.xy , 1.0).r;
+	float depth = textureLod(u_ScreenDepthMap, packedHitPos.xy, 0.0).r;
 	vec3 hitViewPos = WorldPosFromDepth(depth, packedHitPos.xy);
 
 	vec3 L  = normalize(hitViewPos - viewPos); 
@@ -670,16 +671,16 @@ vec4 resolveSSRRay(	in sampler2D packedTexture,
 
 	float intersectionCircleRadius = coneTangent * distance(hitViewPos, viewPos);
 	float mip = clamp(log2( intersectionCircleRadius ), 0.0, 4.0);
-	
-	vec2 velocity		= texture(velocityTexture, packedHitPos.xy).rg;
-	diffuseSample		= textureLod(u_ScreenImageMap, packedHitPos.xy - velocity, mip);
 
-	diffuseSample.rgb *= diffuseSample.rgb;
-	diffuseSample.a = packedHitPos.a;
+	diffuseSample		= textureLod(u_ScreenImageMap, packedHitPos.xy, mip);
+	diffuseSample.rgb  *= diffuseSample.rgb;
+	diffuseSample.a		= packedHitPos.a;
 
 	diffuseSample.rgb /= 1.0 + luma(diffuseSample.rgb);
 	diffuseSample *= weight;
 	weightSum += weight;
+
+	traceDepth += depth*weight;
 
 	return diffuseSample;
 }
@@ -713,7 +714,7 @@ void main()
 
 #if defined(SSR)
 	vec2 coord = windowCoord + 0.5;
-	coord /= vec2(textureSize(u_ShadowMap, 0));
+	coord *= 2.0 * r_FBufInvScale;
 	float depth = texture(u_ShadowMap, coord).r;
 
 	if (depth < (u_ViewInfo.y - 0.1))
@@ -775,22 +776,26 @@ void main()
 		vec2(0.0, -1.0)
 	);
 
+	float traceDepth = 0.0;
+	
 	for( int i = 0; i < samples; i++)
 	{
 		int index = int(mod(i + u_ViewInfo.z, 12.0));
 		ivec2 offsetUV = ivec2(offset[index] * (roughness * 2.0 + 1.0));
-		diffuseOut += resolveSSRRay(u_ScreenOffsetMap, windowCoord + offsetUV, u_ShadowMap, viewPos, viewNormal, roughness, weightSum);
+		diffuseOut += resolveSSRRay(u_ScreenOffsetMap, windowCoord + offsetUV, viewPos, viewNormal, roughness, weightSum, traceDepth);
 
 		#if defined(TWO_RAYS_PER_PIXEL)
 			index = int(mod(i + 6 + u_ViewInfo.z, 12.0));
 			offsetUV = ivec2(offset[index] * (roughness * 3.0 + 1.0));
-			diffuseOut += resolveSSRRay(u_ScreenOffsetMap2, windowCoord + offsetUV, u_ShadowMap, viewPos, viewNormal, roughness, weightSum);
+			diffuseOut += resolveSSRRay(u_ScreenOffsetMap2, windowCoord + offsetUV, viewPos, viewNormal, roughness, weightSum, traceDepth);
 		#endif
 	}
 
 	diffuseOut /= weightSum;
 	diffuseOut.rgb /= 1.0 - luma(diffuseOut.rgb);
 	diffuseOut *= diffuseOut.a;
+
+	specularOut.r = min(traceDepth / weightSum, textureLod(u_ScreenDepthMap, gl_FragCoord.xy * r_FBufInvScale, 0.0).r);
 
 #elif defined(TEMPORAL_FILTER)
 /*
@@ -823,19 +828,25 @@ SOFTWARE.
 	vec3 EnvBRDF = texture(u_EnvBrdfMap, vec2(roughness, NE)).rgb;
 
 	vec2 tc = gl_FragCoord.xy / r_FBufScale;
+	float traceDepth = texture(u_ShadowMap, tc).r;
+	position = WorldPosFromDepth(traceDepth, tc);
+	
+	vec4 correctedPos = (u_PrevViewProjectionMatrix * vec4(position, 1.0));
+	vec2 correctedTc = (correctedPos.xy / correctedPos.w) * 0.5 + 0.5;
+	vec2 minVelocity = tc - correctedTc;
 
 	const ivec2 du = ivec2(1.0, 0.0);
 	const ivec2 dv = ivec2(0.0,	1.0);
 
-	vec4 ctl = textureOffset(u_ScreenImageMap, tc.xy, - dv - du);
-	vec4 ctc = textureOffset(u_ScreenImageMap, tc.xy, - dv);
-	vec4 ctr = textureOffset(u_ScreenImageMap, tc.xy, - dv + du);
-	vec4 cml = textureOffset(u_ScreenImageMap, tc.xy, - du);
-	vec4 cmc = texture		(u_ScreenImageMap, tc.xy);
-	vec4 cmr = textureOffset(u_ScreenImageMap, tc.xy, + du);
-	vec4 cbl = textureOffset(u_ScreenImageMap, tc.xy, + dv - du);
-	vec4 cbc = textureOffset(u_ScreenImageMap, tc.xy, + dv);
-	vec4 cbr = textureOffset(u_ScreenImageMap, tc.xy, + dv + du);
+	vec4 ctl = textureOffset(u_ScreenImageMap, correctedTc.xy, - dv - du);
+	vec4 ctc = textureOffset(u_ScreenImageMap, correctedTc.xy, - dv);
+	vec4 ctr = textureOffset(u_ScreenImageMap, correctedTc.xy, - dv + du);
+	vec4 cml = textureOffset(u_ScreenImageMap, correctedTc.xy, - du);
+	vec4 cmc = texture		(u_ScreenImageMap, correctedTc.xy);
+	vec4 cmr = textureOffset(u_ScreenImageMap, correctedTc.xy, + du);
+	vec4 cbl = textureOffset(u_ScreenImageMap, correctedTc.xy, + dv - du);
+	vec4 cbc = textureOffset(u_ScreenImageMap, correctedTc.xy, + dv);
+	vec4 cbr = textureOffset(u_ScreenImageMap, correctedTc.xy, + dv + du);
 
 	vec4 currentMin = min(ctl, min(ctc, min(ctr, min(cml, min(cmc, min(cmr, min(cbl, min(cbc, cbr))))))));
 	vec4 currentMax = max(ctl, max(ctc, max(ctr, max(cml, max(cmc, max(cmr, max(cbl, max(cbc, cbr))))))));
@@ -844,20 +855,10 @@ SOFTWARE.
 	currentMin = (currentMin - center) * 6.0 + center;
 	currentMax = (currentMax + center) * 6.0 - center;
 
-	vec2 uvTraced = texture(u_ScreenOffsetMap, tc).xy;
-	vec2 minVelocity = texture(u_ShadowMap, uvTraced).xy;
-
-	#if defined(TWO_RAYS_PER_PIXEL)
-	uvTraced = texture(u_ScreenOffsetMap2, tc).xy;
-	minVelocity = (minVelocity + texture(u_ShadowMap, uvTraced).xy) * 0.5;
-	#endif
-
-	tc -= minVelocity.xy;
-
-	vec4 previous = texture(u_ScreenDepthMap, tc);
+	vec4 previous = texture(u_ScreenDepthMap, correctedTc);
 
 	previous = clip_aabb(currentMin.xyz, currentMax.xyz, clamp(cmc, currentMin, currentMax), previous);
-	float temp = clamp(1.0 - (length(minVelocity * r_FBufScale) * 0.16), min(0.2 + (roughness * 1.7), 0.98), 0.98);
+	float temp = clamp(1.0 - (length(minVelocity * r_FBufScale) * 0.17), min(0.1 + (roughness * 2.0), 0.8), 0.98);
 
 	specularOut		= mix(cmc, previous, temp);
 	diffuseOut.rgb	= sqrt(specularOut.rgb * (specularAndGloss.rgb * EnvBRDF.x + EnvBRDF.y));

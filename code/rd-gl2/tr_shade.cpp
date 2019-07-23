@@ -1659,9 +1659,6 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		uniformDataWriter.SetUniformVec3(UNIFORM_VIEWORIGIN, backEnd.viewParms.ori.origin);
 		uniformDataWriter.SetUniformVec3(UNIFORM_LOCALVIEWORIGIN, backEnd.ori.viewOrigin);
 
-		if (backEnd.renderPass == PRE_PASS)
-			uniformDataWriter.SetUniformMatrix4x4(UNIFORM_PREVVIEWPROJECTIONMATRIX, tr.preViewProjectionMatrix);
-
 		if (glState.skeletalAnimation)
 		{
 			uniformDataWriter.SetUniformMatrix4x3(UNIFORM_BONE_MATRICES, &glState.boneMatrices[0][0], glState.numBones);
