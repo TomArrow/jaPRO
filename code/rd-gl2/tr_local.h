@@ -1296,6 +1296,7 @@ typedef enum
 	UNIFORM_LEVELSMAP,
 	UNIFORM_CUBEMAP,
 	UNIFORM_ENVBRDFMAP,
+	UNIFORM_RANDOMMAP,
 
 	UNIFORM_SCREENIMAGEMAP,
 	UNIFORM_SCREENDEPTHMAP,
@@ -2390,6 +2391,7 @@ typedef struct trGlobals_s {
 	const byte				*externalVisData;	// from RE_SetWorldVisData, shared with CM_Load
 
 	image_t					*defaultImage;
+	image_t					*randomImage;
 	image_t					*scratchImage[32];
 	image_t					*fogImage;
 	image_t					*dlightImage;	// inverse-quare highlight for projective adding
@@ -2415,6 +2417,7 @@ typedef struct trGlobals_s {
 	image_t					*renderDepthImage;
 	image_t					*renderDepthMSAAImage;
 	image_t					*prevRenderDepthImage;
+	image_t					*velocityImage;
 	image_t					*pshadowMaps[MAX_DRAWN_PSHADOWS];
 	image_t					*textureScratchImage[2];
 	image_t                 *quarterImage[2];

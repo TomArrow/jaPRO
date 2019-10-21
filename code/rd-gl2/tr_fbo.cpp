@@ -468,6 +468,8 @@ void FBO_Init(void)
 
 		FBO_CreateBuffer(tr.preBuffersFbo, hdrFormat, 0, multisample); // out_Color
 		FBO_CreateBuffer(tr.preBuffersFbo, GL_RGBA8, 1, multisample); // out_Glow
+		if (r_ssr->integer)
+			FBO_CreateBuffer(tr.preBuffersFbo, hdrFormat, 2, multisample);	// out_Velocity
 
 		qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D_MULTISAMPLE, tr.renderDepthMSAAImage->texnum, 0);
 		//FBO_CreateBuffer(tr.preBuffersFbo, GL_DEPTH24_STENCIL8, 0, multisample);
@@ -482,6 +484,9 @@ void FBO_Init(void)
 		FBO_AttachTextureImage(tr.normalBufferImage, 0);	// out_Color
 		FBO_AttachTextureImage(tr.specBufferImage, 1);		// out_Glow
 
+		if (r_ssr->integer)
+			FBO_AttachTextureImage(tr.velocityImage, 2);	// out_Velocity
+
 		FBO_AttachTexturePackedDepthStencil(tr.renderDepthImage->texnum);
 
 		FBO_SetupDrawBuffers();
@@ -495,6 +500,9 @@ void FBO_Init(void)
 
 		FBO_AttachTextureImage(tr.normalBufferImage, 0);	// out_Color
 		FBO_AttachTextureImage(tr.specBufferImage, 1);		// out_Glow
+
+		if (r_ssr->integer)
+			FBO_AttachTextureImage(tr.velocityImage, 2);	// out_Velocity
 
 		FBO_AttachTexturePackedDepthStencil(tr.renderDepthImage->texnum);
 
@@ -532,7 +540,6 @@ void FBO_Init(void)
 				if (i == PRELIGHT_RESOLVE_FBO)
 				{
 					FBO_AttachTextureImage(tr.resolveImage, 0); //out_Color
-					FBO_AttachTextureImage(tr.hdrDepthImage, 1); //out_Glow
 				}
 				if (i == PRELIGHT_TEMP_ODD_FBO)
 				{

@@ -38,6 +38,7 @@ uniform float u_Time;
 #endif
 
 uniform mat4 u_ModelViewProjectionMatrix;
+uniform mat4 u_PrevViewProjectionMatrix;
 uniform mat4 u_ModelMatrix;
 uniform mat4 u_NormalMatrix;
 
@@ -54,6 +55,8 @@ out vec3 var_Position;
 out vec4 var_Normal;
 out vec4 var_Tangent;
 out vec4 var_Bitangent;
+out vec4 var_CurrentPosition;
+out vec4 var_OldPosition;
 #endif
 
 #if defined(USE_DEFORM_VERTEXES)
@@ -279,6 +282,10 @@ void main()
 	gl_Position = u_ModelViewProjectionMatrix * vec4(position, 1.0);
 
 	#if !defined(USE_CUBEMAP_TRANSFORMS)
+	#if defined(USE_G_BUFFERS)
+	var_CurrentPosition = gl_Position;
+	var_OldPosition = (u_PrevViewProjectionMatrix * u_ModelMatrix) * vec4(position, 1.0);
+	#endif
 	position  = mat3(u_ModelMatrix) * position;
 	#endif
 
@@ -383,10 +390,13 @@ in vec4   fs_Bitangent;
 in vec4   var_Normal;
 in vec4   var_Tangent;
 in vec4   var_Bitangent;
+in vec4   var_OldPosition;
+in vec4   var_CurrentPosition;
 #endif
 
 out vec4 out_Color;
 out vec4 out_Glow;
+out vec2 out_Velocity;
 
 #if defined(USE_PARALLAXMAP)
 float SampleDepth(sampler2D normalMap, vec2 t)
@@ -542,5 +552,11 @@ void main()
 	out_Glow	= specular;
 	//out_Color	= vec4(EncodeNormal(N), offsetDir.xy * 0.5 + 0.5);
 	out_Color	= vec4(N, specular.a);
+
+	#if !defined(USE_CUBEMAP_TRANSFORMS)
+		vec2 a = var_CurrentPosition.xy / var_CurrentPosition.w;
+		vec2 b = var_OldPosition.xy / var_OldPosition.w;
+		out_Velocity = (a - b) * 0.5;
+	#endif
 #endif
 }
