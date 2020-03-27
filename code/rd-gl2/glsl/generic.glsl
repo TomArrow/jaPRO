@@ -20,9 +20,7 @@ in vec2 attr_TexCoord1;
 uniform vec4 u_DiffuseTexMatrix;
 uniform vec4 u_DiffuseTexOffTurb;
 
-#if defined(USE_TCGEN) || defined(USE_RGBAGEN)
 uniform vec3 u_LocalViewOrigin;
-#endif
 
 #if defined(USE_TCGEN)
 uniform int u_TCGen0;
@@ -45,14 +43,14 @@ uniform vec4 u_VertColor;
 uniform vec3 u_ViewForward;
 uniform float u_FXVolumetricBase;
 
-#if defined(USE_RGBAGEN)
+
 uniform int u_ColorGen;
 uniform int u_AlphaGen;
 uniform vec3 u_AmbientLight;
 uniform vec3 u_DirectedLight;
 uniform vec3 u_ModelLightDir;
 uniform float u_PortalRange;
-#endif
+uniform vec4 u_Disintegration; // origin, threshhold
 
 #if defined(USE_VERTEX_ANIMATION)
 uniform float u_VertexLerp;
@@ -118,6 +116,13 @@ vec3 DeformPosition(const vec3 pos, const vec3 normal, const vec2 st)
 			return pos + normal * scale * bulgeHeight;
 		}
 
+		case DEFORM_BULGE_UNIFORM:
+		{
+			float bulgeHeight = u_DeformParams[1]; // amplitude
+
+			return pos + normal * bulgeHeight;
+		}
+
 		case DEFORM_WAVE:
 		{
 			float base = u_DeformParams[0];
@@ -167,6 +172,21 @@ vec3 DeformPosition(const vec3 pos, const vec3 normal, const vec2 st)
 			vec3 lightPos = lightDir * d;
 
 			return pos - (lightPos * (dot( pos, ground ) + groundDist));
+		}
+
+		case DEFORM_DISINTEGRATION:
+		{
+			vec3 delta = u_Disintegration.xyz - pos;
+			float distance = dot(delta, delta);
+			if ( distance < u_Disintegration.w )
+			{
+				return normal * vec3(2.0, 2.0, 0.5) + pos;
+			}
+			else if ( distance < u_Disintegration.w + 50 )
+			{
+				return normal * vec3(1.0, 1.0, 0.0) + pos;
+			}
+			return pos - normal * 0.01;
 		}
 	}
 }
@@ -248,7 +268,6 @@ vec2 ModTexCoords(vec2 st, vec3 position, vec4 texMatrix, vec4 offTurb)
 }
 #endif
 
-#if defined(USE_RGBAGEN)
 vec4 CalcColor(vec3 position, vec3 normal)
 {
 	vec4 color = u_VertColor * attr_Color + u_BaseColor;
@@ -258,6 +277,38 @@ vec4 CalcColor(vec3 position, vec3 normal)
 		float incoming = clamp(dot(normal, u_ModelLightDir), 0.0, 1.0);
 
 		color.rgb = clamp(u_DirectedLight * incoming + u_AmbientLight, 0.0, 1.0);
+	}
+	else if (u_ColorGen == CGEN_DISINTEGRATION_1)
+	{
+		vec3 delta = u_Disintegration.xyz - position;
+		float distance = dot(delta, delta);
+		if (distance < u_Disintegration.w)
+		{
+			color *= 0.0;
+		}
+		else if (distance < u_Disintegration.w + 60.0)
+		{
+			color *= vec4(0.0, 0.0, 0.0, 1.0);
+		}
+		else if (distance < u_Disintegration.w + 150.0)
+		{
+			color *= vec4(0.435295, 0.435295, 0.435295, 1.0);
+		}
+		else if (distance < u_Disintegration.w + 180.0)
+		{
+			color *= vec4(0.6862745, 0.6862745, 0.6862745, 1.0);
+		}
+		return color;
+	}
+	else if (u_ColorGen == CGEN_DISINTEGRATION_2)
+	{
+		vec3 delta = u_Disintegration.xyz - position;
+		float distance = dot(delta, delta);
+		if (distance < u_Disintegration.w)
+		{
+			color *= 0.0;
+		}
+		return color;
 	}
 	
 	vec3 viewer = u_LocalViewOrigin - position;
@@ -278,7 +329,6 @@ vec4 CalcColor(vec3 position, vec3 normal)
 	
 	return color;
 }
-#endif
 
 void main()
 {
@@ -330,11 +380,7 @@ void main()
 	}
 	else
 	{
-#if defined(USE_RGBAGEN)
-		var_Color = CalcColor(position, normal);
-#else
-		var_Color = u_VertColor * attr_Color + u_BaseColor;
-#endif
+	var_Color = CalcColor(position, normal);
 	}
 
 #if defined(USE_FOG)
@@ -403,7 +449,7 @@ float CalcFog(in vec3 viewOrigin, in vec3 position, in vec4 fogPlane, in float d
 void main()
 {
 	vec4 color  = texture(u_DiffuseMap, var_DiffuseTex);
-
+	color.a *= var_Color.a;
 if (u_AlphaTestFunction == ATEST_CMP_GE){
 	if (color.a < u_AlphaTestValue)
 		discard;
@@ -422,7 +468,7 @@ else if (u_AlphaTestFunction == ATEST_CMP_GT){
 	color *= vec4(1.0) - u_FogColorMask * fog;
 #endif
 
-	out_Color = color * var_Color;
+	out_Color = vec4(color.rgb * var_Color.rgb, color.a);
 
 #if defined(USE_GLOW_BUFFER)
 	out_Glow = out_Color;

@@ -59,7 +59,7 @@ typedef unsigned int glIndex_t;
 
 #define MAX_CALC_PSHADOWS 64
 #define MAX_DRAWN_PSHADOWS 32 // do not increase past 32, because bit flags are used on surfaces
-#define PSHADOW_MAP_SIZE 512
+#define PSHADOW_MAP_SIZE 1024
 
 #define GAMMA		2.2f		// base gamma value
 #define INV_GAMMA	1.0f/2.2f	// inverse gamma value
@@ -326,8 +326,6 @@ enum
 	ATTR_INDEX_TANGENT,
 	ATTR_INDEX_NORMAL,
 	ATTR_INDEX_COLOR,
-	ATTR_INDEX_PAINTCOLOR,
-	ATTR_INDEX_LIGHTDIRECTION,
 	ATTR_INDEX_BONE_INDEXES,
 	ATTR_INDEX_BONE_WEIGHTS,
 
@@ -437,6 +435,7 @@ typedef struct VBO_s
 	uint32_t		offsets[ATTR_INDEX_MAX];
 	uint32_t		strides[ATTR_INDEX_MAX];
 	uint32_t		sizes[ATTR_INDEX_MAX];
+	uint32_t		animation_offsets[ATTR_INDEX_MAX];
 } VBO_t;
 
 typedef struct IBO_s
@@ -450,7 +449,7 @@ typedef struct IBO_s
 typedef enum {
 	SS_BAD,
 	SS_PORTAL,			// mirrors, portals, viewscreens
-	SS_ENVIRONMENT,		// sky box
+	
 	SS_OPAQUE,			// opaque
 
 	SS_DECAL,			// scorch marks, etc.
@@ -477,7 +476,8 @@ typedef enum {
 	SS_STENCIL_SHADOW,
 	SS_ALMOST_NEAREST,	// gun smoke puffs
 
-	SS_NEAREST			// blood blobs
+	SS_NEAREST,			// blood blobs
+	SS_ENVIRONMENT,		// sky box
 } shaderSort_t;
 
 
@@ -503,6 +503,7 @@ typedef enum {
 	DEFORM_WAVE,
 	DEFORM_NORMALS,
 	DEFORM_BULGE,
+	DEFORM_BULGE_UNIFORM,
 	DEFORM_MOVE,
 	DEFORM_PROJECTION_SHADOW,
 	DEFORM_AUTOSPRITE,
@@ -514,7 +515,8 @@ typedef enum {
 	DEFORM_TEXT4,
 	DEFORM_TEXT5,
 	DEFORM_TEXT6,
-	DEFORM_TEXT7
+	DEFORM_TEXT7,
+	DEFORM_DISINTEGRATION
 } deform_t;
 
 // deformVertexes types that can be handled by the GPU
@@ -567,6 +569,8 @@ typedef enum {
 	CGEN_FOG,				// standard fog
 	CGEN_CONST,				// fixed color
 	CGEN_LIGHTMAPSTYLE,		// lightmap style
+	CGEN_DISINTEGRATION_1,
+	CGEN_DISINTEGRATION_2
 } colorGen_t;
 
 typedef enum {
@@ -1078,15 +1082,13 @@ enum
 	ATTR_TANGENT		= 0x0040,
 	ATTR_NORMAL			= 0x0080,
 	ATTR_COLOR			= 0x0100,
-	ATTR_PAINTCOLOR		= 0x0200,
-	ATTR_LIGHTDIRECTION = 0x0400,
-	ATTR_BONE_INDEXES	= 0x0800,
-	ATTR_BONE_WEIGHTS	= 0x1000,
+	ATTR_BONE_INDEXES	= 0x0200,
+	ATTR_BONE_WEIGHTS	= 0x0400,
 
 	// for .md3 interpolation
-	ATTR_POSITION2		= 0x2000,
-	ATTR_TANGENT2		= 0x4000,
-	ATTR_NORMAL2		= 0x8000,
+	ATTR_POSITION2		= 0x0800,
+	ATTR_TANGENT2		= 0x1000,
+	ATTR_NORMAL2		= 0x2000,
 
 	ATTR_DEFAULT		= ATTR_POSITION,
 	ATTR_BITS			= ATTR_POSITION |
@@ -1098,8 +1100,6 @@ enum
 							ATTR_TANGENT |
 							ATTR_NORMAL |
 							ATTR_COLOR |
-							ATTR_PAINTCOLOR |
-							ATTR_LIGHTDIRECTION |
 							ATTR_BONE_INDEXES |
 							ATTR_BONE_WEIGHTS |
 							ATTR_POSITION2 |
@@ -1356,7 +1356,7 @@ typedef enum
 	UNIFORM_LIGHTTRANSFORMS,
 	UNIFORM_LIGHTCOLORS,
 	UNIFORM_CUBEMAPTRANSFORMS,
-	UNIFORM_NUMCUBEMAPS ,
+	UNIFORM_NUMCUBEMAPS,
 
 	UNIFORM_PORTALRANGE,
 
@@ -1378,6 +1378,7 @@ typedef enum
 	UNIFORM_VERTEXLERP,
 	UNIFORM_NORMALSCALE,
 	UNIFORM_SPECULARSCALE,
+	UNIFORM_DISINTEGRATION,
 
 	UNIFORM_VIEWINFO, // znear, zfar, width/2, height/2
 	UNIFORM_VIEWORIGIN,
@@ -1530,7 +1531,7 @@ typedef struct {
 	vec3_t		pvsOrigin;			// may be different than or.origin for portals
 	qboolean	isPortal;			// true if this view is through a portal
 	qboolean	isMirror;			// the portal is a mirror, invert the face culling
-	int flags;
+	int			flags;
 	int			frameSceneNum;		// copied from tr.frameSceneNum
 	int			frameCount;			// copied from tr.frameCount
 	cplane_t	portalPlane;		// clip anything behind this if mirroring
@@ -1621,7 +1622,6 @@ typedef struct drawSurf_s {
 	uint32_t dlightBits;
 	surfaceType_t *surface; // any of surface*_t
 	int fogIndex;
-	int currentDistanceBucket;
 } drawSurf_t;
 
 #define	MAX_FACE_POINTS		64
@@ -2516,6 +2516,7 @@ typedef struct trGlobals_s {
 	shaderProgram_t refractionShader[REFRACTION_COUNT];
 	shaderProgram_t shadowmapShader;
 	shaderProgram_t pshadowShader;
+	shaderProgram_t volumeShadowShader;
 	shaderProgram_t down4xShader;
 	shaderProgram_t bokehShader;
 	shaderProgram_t tonemapShader;
@@ -2845,7 +2846,6 @@ struct shaderCommands_s
 	float			shaderTime;
 	int				fogNum;
 	int				cubemapIndex;
-	int				currentDistanceBucket;
 
 	int				dlightBits;	// or together of all vertexDlightBits
 	int				pshadowBits;
@@ -2939,7 +2939,7 @@ SHADOWS
 ============================================================
 */
 
-void RB_ShadowTessEnd( void );
+void RB_ShadowTessEnd( shaderCommands_t *input, const VertexArraysProperties *vertexArrays );
 void RB_ShadowFinish( void );
 void RB_ProjectionShadowDeform( void );
 

@@ -399,9 +399,6 @@ void CalculateVertexArraysProperties(uint32_t attributes, VertexArraysProperties
 
 		if (attributes & ATTR_COLOR)
 			AddVertexArray(properties, ATTR_INDEX_COLOR, sizeof(tess.vertexColors[0]), 0, properties->vertexDataSize, tess.vertexColors);
-
-		if (attributes & ATTR_LIGHTDIRECTION)
-			AddVertexArray(properties, ATTR_INDEX_LIGHTDIRECTION, sizeof(tess.lightdir[0]), 0, properties->vertexDataSize, tess.lightdir);
 	}
 	else
 	{
@@ -411,7 +408,6 @@ void CalculateVertexArraysProperties(uint32_t attributes, VertexArraysProperties
 		AddVertexArray(properties, ATTR_INDEX_NORMAL, sizeof(tess.normal[0]), 0, properties->vertexDataSize, tess.normal);
 		AddVertexArray(properties, ATTR_INDEX_TANGENT, sizeof(tess.tangent[0]), 0, properties->vertexDataSize, tess.tangent);
 		AddVertexArray(properties, ATTR_INDEX_COLOR, sizeof(tess.vertexColors[0]), 0, properties->vertexDataSize, tess.vertexColors);
-		AddVertexArray(properties, ATTR_INDEX_LIGHTDIRECTION, sizeof(tess.lightdir[0]), 0, properties->vertexDataSize, tess.lightdir);
 	}
 
 	for ( int i = 0; i < properties->numVertexArrays; i++ )
@@ -427,6 +423,22 @@ void CalculateVertexArraysFromVBO(uint32_t attributes, const VBO_t *vbo, VertexA
 	{
 		if ( attributes & j )
 			AddVertexArray(properties, i, vbo->sizes[i], vbo->strides[i], vbo->offsets[i], NULL);
+	}
+
+	if (glState.vertexAnimation == qtrue)
+	{
+		if (attributes & ATTR_POSITION)
+			properties->offsets[ATTR_INDEX_POSITION] += vbo->animation_offsets[ATTR_INDEX_POSITION] * glState.vertexAttribsNewFrame;
+		if (attributes & ATTR_POSITION2)
+			properties->offsets[ATTR_INDEX_POSITION2] += vbo->animation_offsets[ATTR_INDEX_POSITION] * glState.vertexAttribsOldFrame;
+		if (attributes & ATTR_NORMAL)
+			properties->offsets[ATTR_INDEX_NORMAL] += vbo->animation_offsets[ATTR_INDEX_NORMAL] * glState.vertexAttribsNewFrame;
+		if (attributes & ATTR_NORMAL2)
+			properties->offsets[ATTR_INDEX_NORMAL2] += vbo->animation_offsets[ATTR_INDEX_NORMAL] * glState.vertexAttribsOldFrame;
+		if (attributes & ATTR_TANGENT)
+			properties->offsets[ATTR_INDEX_TANGENT] += vbo->animation_offsets[ATTR_INDEX_TANGENT] * glState.vertexAttribsNewFrame;
+		if (attributes & ATTR_TANGENT2)
+			properties->offsets[ATTR_INDEX_TANGENT2] += vbo->animation_offsets[ATTR_INDEX_TANGENT] * glState.vertexAttribsOldFrame;
 	}
 }
 

@@ -648,14 +648,14 @@ void main()
 
 #if defined(SSR)
 	vec2 coord = windowCoord + 0.5;
-	coord *= 2.0 * r_FBufInvScale;
+	coord *= 2.0 / r_FBufScale;
 	float depth = texture(u_ShadowMap, coord).r;
 
 	if (depth < (u_ViewInfo.y - 0.1))
 	{
 	vec3 vsPosition = WorldPosFromDepth(depthSample(depth, u_ViewInfo.x, u_ViewInfo.y), coord);
 #else
-	vec2 coord = gl_FragCoord.xy * r_FBufInvScale;
+	vec2 coord = gl_FragCoord.xy / r_FBufScale;
 	float depth = texture(u_ScreenDepthMap, coord).r;
 	vec3 position = WorldPosFromDepth(depth, coord);
 #endif
@@ -798,7 +798,7 @@ SOFTWARE.
 
 	specularOut		= mix(cmc, previous, temp);
 	diffuseOut.rgb	= sqrt(specularOut.rgb * (specularAndGloss.rgb * EnvBRDF.x + EnvBRDF.y));
-	diffuseOut.a	= 1.0 - specularOut.a;
+	diffuseOut.a	= 1.0 - previous.a;
 
 #elif defined(POINT_LIGHT)
 	vec4 lightVec		= vec4(var_Position.xyz - position + (N*0.01), var_Position.w);

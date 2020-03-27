@@ -454,14 +454,6 @@ static void RB_SurfaceVertsAndIndexes( int numVerts, srfVert_t *verts, int numIn
 			VectorCopy4(dv->vertexColors[0], color);
 	}
 
-	if ( tess.shader->vertexAttribs & ATTR_LIGHTDIRECTION )
-	{
-		dv = verts;
-		lightdir = &tess.lightdir[ tess.numVertexes ];
-		for ( i = 0 ; i < numVerts ; i++, dv++, lightdir++ )
-			*lightdir = R_VboPackNormal(dv->lightdir);
-	}
-
 #if 0  // nothing even uses vertex dlightbits
 	for ( i = 0 ; i < numVerts ; i++ ) {
 		tess.vertexDlightBits[ tess.numVertexes + i ] = dlightBits;
@@ -1872,7 +1864,6 @@ static void RB_SurfaceBSPGrid( srfBspSurface_t *srf ) {
 		texCoords = tess.texCoords[numVertexes][0];
 		lightCoords = tess.texCoords[numVertexes][1];
 		color = tess.vertexColors[numVertexes];
-		lightdir = &tess.lightdir[numVertexes];
 		//vDlightBits = &tess.vertexDlightBits[numVertexes];
 
 		for ( i = 0 ; i < rows ; i++ ) {
@@ -1912,13 +1903,6 @@ static void RB_SurfaceBSPGrid( srfBspSurface_t *srf ) {
 					VectorCopy4(dv->vertexColors[0], color);
 					color += 4;
 				}
-
-				if ( tess.shader->vertexAttribs & ATTR_LIGHTDIRECTION )
-				{
-					*lightdir++ = R_VboPackNormal(dv->lightdir);
-				}
-
-				//*vDlightBits++ = dlightBits;
 			}
 		}
 
@@ -2102,26 +2086,6 @@ void RB_SurfaceVBOMDVMesh(srfVBOMDVMesh_t * surface)
 
 	refEnt = &backEnd.currentEntity->e;
 
-	if (refEnt->oldframe || refEnt->frame)
-	{
-		if (refEnt->oldframe == refEnt->frame)
-		{
-			glState.vertexAttribsInterpolation = 0;
-		}
-		else
-		{
-			glState.vertexAttribsInterpolation = refEnt->backlerp;
-		}
-
-		glState.vertexAttribsOldFrame = refEnt->oldframe;
-		glState.vertexAttribsNewFrame = refEnt->frame;
-		glState.vertexAnimation = qtrue;
-
-		//FIXME: Use GPU deforming instead of CPU one
-		RB_SurfaceMesh(surface->mdvSurface);
-		return;
-	}
-
 	RB_BeginSurface(tess.shader, tess.fogNum, tess.cubemapIndex);
 
 	R_BindVBO(surface->vbo);
@@ -2137,6 +2101,22 @@ void RB_SurfaceVBOMDVMesh(srfVBOMDVMesh_t * surface)
 
 	//mdvModel = surface->mdvModel;
 	//mdvSurface = surface->mdvSurface;
+
+	if (refEnt->oldframe || refEnt->frame)
+	{
+		if (refEnt->oldframe == refEnt->frame)
+		{
+			glState.vertexAttribsInterpolation = 0;
+		}
+		else
+		{
+			glState.vertexAttribsInterpolation = refEnt->backlerp;
+		}
+
+		glState.vertexAttribsOldFrame = refEnt->oldframe;
+		glState.vertexAttribsNewFrame = refEnt->frame;
+		glState.vertexAnimation = qtrue;
+	}
 
 	RB_EndSurface();
 
