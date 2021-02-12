@@ -806,19 +806,12 @@ void main()
 		out_Color.rgb += ambientColor * diffuse.rgb;
 
 	ivec2 windowCoordinate = ivec2(gl_FragCoord.xy);
-	
 	vec3 diffuseBufferColor = texelFetch(u_ScreenDiffuseMap, windowCoordinate, 0).rgb;
 	diffuseBufferColor *= diffuseBufferColor;
-	#if defined(USE_LIGHT_VECTOR)
-	diffuseBufferColor *= isLightgrid;
-	#endif
 	out_Color.rgb += diffuse.rgb * diffuseBufferColor;
 
 	vec4 specBufferColor = texelFetch(u_ScreenSpecularMap, windowCoordinate, 0);
 	specBufferColor.rgb *= specBufferColor.rgb;
-	#if defined(USE_LIGHT_VECTOR)
-	specBufferColor *= isLightgrid;
-	#endif
 	out_Color.rgb += specBufferColor.rgb;
 
   #if defined(USE_CUBEMAP)

@@ -449,7 +449,7 @@ typedef struct IBO_s
 typedef enum {
 	SS_BAD,
 	SS_PORTAL,			// mirrors, portals, viewscreens
-	
+	SS_ENVIRONMENT,		// sky box
 	SS_OPAQUE,			// opaque
 
 	SS_DECAL,			// scorch marks, etc.
@@ -476,8 +476,7 @@ typedef enum {
 	SS_STENCIL_SHADOW,
 	SS_ALMOST_NEAREST,	// gun smoke puffs
 
-	SS_NEAREST,			// blood blobs
-	SS_ENVIRONMENT,		// sky box
+	SS_NEAREST			// blood blobs
 } shaderSort_t;
 
 
@@ -801,6 +800,7 @@ enum AlphaTestCmp
 
 // any change in the LIGHTMAP_* defines here MUST be reflected in
 // R_FindShader() in tr_bsp.c
+#define LIGHTMAP_EXTERNAL	-5
 #define LIGHTMAP_2D         -4	// shader is for 2D rendering
 #define LIGHTMAP_BY_VERTEX  -3	// pre-lit triangle models
 #define LIGHTMAP_WHITEIMAGE -2
@@ -2387,6 +2387,7 @@ typedef struct trGlobals_s {
 	vec2_t                  autoExposureMinMax;
 	vec3_t                  toneMinAvgMaxLevel;
 	world_t					*world;
+	char					worldName[MAX_QPATH];
 
 	const byte				*externalVisData;	// from RE_SetWorldVisData, shared with CM_Load
 

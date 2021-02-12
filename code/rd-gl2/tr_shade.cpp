@@ -1019,8 +1019,7 @@ static void ForwardDlight( const shaderCommands_t *input,  VertexArraysPropertie
 
 		if (pStage->bundle[TB_DIFFUSEMAP].image[0])
 			samplerBindingsWriter.AddAnimatedImage( &pStage->bundle[TB_DIFFUSEMAP], TB_DIFFUSEMAP);
-		else
-			samplerBindingsWriter.AddStaticImage(tr.whiteImage, TB_DIFFUSEMAP);
+
 		// bind textures that are sampled and used in the glsl shader, and
 		// bind whiteImage to textures that are sampled but zeroed in the glsl shader
 		//
@@ -1933,7 +1932,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 						samplerBindingsWriter.AddStaticImage(tr.whiteImage, TB_SPECULARMAP);
 					}
 
-					if ( renderSolid ) {
+					if ( renderSolid && pStage->rgbGen != CGEN_LIGHTMAPSTYLE) {
 						samplerBindingsWriter.AddStaticImage(tr.diffuseLightingImage, TB_DIFFUSELIGHTBUFFER);
 						samplerBindingsWriter.AddStaticImage(tr.specularLightingImage, TB_SPECLIGHTBUFFER);
 					}

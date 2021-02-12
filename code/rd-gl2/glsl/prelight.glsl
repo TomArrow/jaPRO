@@ -561,7 +561,7 @@ vec4 traceSSRRay(in float roughness, in vec3 wsNormal, in vec3 E, in vec3 viewPo
 	screenCoord.z *= screenEdgefactor;
 	screenCoord.z *= clamp(fade, 0.0, 1.0);
 
-	float pdf = H.w / (4.0 * dot(E,H.xyz)) + 0.0001;
+	float pdf = H.w / (4.0 * dot(E,H.xyz) / dot(wsNormal, H.xyz)) + 0.0001;
 	// return intersection, pdf and hitScore
 	return vec4(screenCoord.xy, 1.0 / pdf, clamp(screenCoord.z, 0.0, 1.0));
 }
@@ -606,8 +606,8 @@ vec4 resolveSSRRay(	in sampler2D packedTexture,
 	float intersectionCircleRadius = coneTangent * distance(hitViewPos, viewPos) * brdfBias;
 	float mip = clamp(log2( intersectionCircleRadius ), 0.0, 4.0);
 	
-	vec2 velocity		= texture(velocityTexture, packedHitPos.xy).rg;
-	diffuseSample		= textureLod(u_ScreenImageMap, packedHitPos.xy - velocity, mip);
+	vec2 velocity = texture(velocityTexture, packedHitPos.xy).rg;
+	diffuseSample = textureLod(u_ScreenImageMap, packedHitPos.xy - velocity, mip);
 
 	diffuseSample.rgb *= diffuseSample.rgb;
 	diffuseSample.a = packedHitPos.a;
@@ -648,14 +648,14 @@ void main()
 
 #if defined(SSR)
 	vec2 coord = windowCoord + 0.5;
-	coord *= 2.0 / r_FBufScale;
+	coord *= 2.0 * r_FBufInvScale;
 	float depth = texture(u_ShadowMap, coord).r;
 
 	if (depth < (u_ViewInfo.y - 0.1))
 	{
 	vec3 vsPosition = WorldPosFromDepth(depthSample(depth, u_ViewInfo.x, u_ViewInfo.y), coord);
 #else
-	vec2 coord = gl_FragCoord.xy / r_FBufScale;
+	vec2 coord = gl_FragCoord.xy * r_FBufInvScale;
 	float depth = texture(u_ScreenDepthMap, coord).r;
 	vec3 position = WorldPosFromDepth(depth, coord);
 #endif
@@ -794,11 +794,11 @@ SOFTWARE.
 	vec4 previous = texture(u_ScreenDepthMap, tc);
 
 	previous = clip_aabb(currentMin.xyz, currentMax.xyz, clamp(cmc, currentMin, currentMax), previous);
-	float temp = clamp(1.0 - (length(minVelocity * r_FBufScale) * 0.1), min(0.2 + (roughness * 1.7), 0.94), 0.94);
+	float temp = clamp(1.0 - (length(minVelocity * r_FBufScale) * 0.1), min(0.2 + (roughness * 1.7), 0.875), 0.875);
 
 	specularOut		= mix(cmc, previous, temp);
 	diffuseOut.rgb	= sqrt(specularOut.rgb * (specularAndGloss.rgb * EnvBRDF.x + EnvBRDF.y));
-	diffuseOut.a	= 1.0 - previous.a;
+	diffuseOut.a	= 1.0 - specularOut.a;
 
 #elif defined(POINT_LIGHT)
 	vec4 lightVec		= vec4(var_Position.xyz - position + (N*0.01), var_Position.w);
