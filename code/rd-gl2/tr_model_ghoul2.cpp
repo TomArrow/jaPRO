@@ -866,13 +866,7 @@ static int G2_GetBonePoolIndex(const mdxaHeader_t *pMDXAHeader, int iFrame, int 
 	const int iOffsetToIndex = (iFrame * pMDXAHeader->numBones * 3) + (iBone * 3);
 	mdxaIndex_t *pIndex = (mdxaIndex_t *)((byte*)pMDXAHeader + pMDXAHeader->ofsFrames + iOffsetToIndex);
 
-#ifdef Q3_BIG_ENDIAN
-	int tmp = pIndex->iIndex & 0xFFFFFF00;
-	LL(tmp);
-	return tmp;
-#else
-	return pIndex->iIndex & 0x00FFFFFF;
-#endif
+	return (pIndex->iIndex[2] << 16) + (pIndex->iIndex[1] << 8) + (pIndex->iIndex[0]);
 }
 
 

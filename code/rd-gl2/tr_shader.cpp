@@ -2471,7 +2471,7 @@ infoParm_t	infoParms[] = {
 	{ "nonopaque",		~CONTENTS_OPAQUE,					SURF_NONE,			CONTENTS_NONE },		// special hack to clear opaque flag
 	{ "lava",			~CONTENTS_SOLID,					SURF_NONE,			CONTENTS_LAVA },		// very damaging
 	{ "slime",			~CONTENTS_SOLID,					SURF_NONE,			CONTENTS_SLIME },		// mildly damaging
-#ifndef JK2_MODE
+#ifdef DF2_MODE
 	{ "batteryacid",	~CONTENTS_SOLID,					SURF_NONE,			CONTENTS_BATTERYACID },	// mildly damaging
 #endif
 	{ "water",			~CONTENTS_SOLID,					SURF_NONE,			CONTENTS_WATER },		// 

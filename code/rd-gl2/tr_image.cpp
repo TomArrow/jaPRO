@@ -1989,6 +1989,10 @@ static void RawImage_UploadTexture(byte *data, int x, int y, int width, int heig
 		dataFormat = GL_RG;
 		dataType = GL_HALF_FLOAT;
 		break;
+	case GL_RGB16F:
+		dataFormat = GL_RGB;
+		dataType = GL_HALF_FLOAT;
+		break;
 	case GL_RGBA16F:
 		dataFormat = GL_RGBA;
 		dataType = GL_HALF_FLOAT;
@@ -2544,7 +2548,7 @@ image_t *R_CreateImageMultiSampledDepth(const char *name, int width, int height,
 	long hash;
 
 	if (strlen(name) >= MAX_QPATH) {
-		ri.Error(ERR_DROP, "R_CreateImage3D: \"%s\" is too long", name);
+		ri.Error(ERR_DROP, "R_CreateImageMultiSampledDepth: \"%s\" is too long", name);
 	}
 
 	image = (image_t *)R_Hunk_Alloc(sizeof(image_t), qtrue);
@@ -3323,6 +3327,17 @@ static void R_CreateRandomSampler(void) {
 	tr.randomImage = R_CreateImage("*randomMap", (byte *)data, RANDOM_SIZE * RANDOM_SAMPLES, RANDOM_SIZE, 0, IMGTYPE_COLORALPHA, IMGFLAG_NONE, GL_RG16F);
 }
 
+static void R_CreateDefaultLightingImages(void) {
+	
+	const byte ambient[3] = { 76, 32, 3};
+	const byte direct[3] = { 128, 128, 128};
+	const byte vec[3] = { 255, 128, 0};
+
+	tr.defaultAmbientLight = R_CreateImage3D("*defualtAmbient", (byte *)ambient, 1, 1, 1, GL_RGB8);
+	tr.defaultDirectLight = R_CreateImage3D("*defaultDirectLight", (byte *)direct, 1, 1, 1, GL_RGB8);
+	tr.defaultLightVec = R_CreateImage3D("*defaultLightVec", (byte *)vec, 1, 1, 1, GL_RGB8);
+}
+
 /*
 ==================
 R_CreateBuiltinImages
@@ -3349,6 +3364,7 @@ void R_CreateBuiltinImages(void) {
 	}
 
 	R_CreateDefaultImage();
+	R_CreateDefaultLightingImages();
 	R_CreateRandomSampler();
 
 	// we use a solid white image instead of disabling texturing

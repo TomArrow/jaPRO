@@ -148,7 +148,7 @@ typedef struct
 	// I'm defining this '<' operator so this struct can be used as an STL <map> key...
 	//
 	#ifdef __cplusplus
-	bool operator < (const mdxaCompQuatBone_t& _X) const {return (memcmp(Comp,_X.Comp,sizeof(Comp))<0);}
+	bool operator < (const mdxaCompQuatBone_t& X) const {return (memcmp(Comp,X.Comp,sizeof(Comp))<0);}
 	#endif
 }
 #ifndef __cplusplus
@@ -432,10 +432,11 @@ typedef struct {
 	//
 	// (iFrameNum * mdxaHeader_t->numBones * 3) + (iBoneNum * 3)
 	//
-	//  then read the int at that location and AND it with 0x00FFFFFF. I use the struct below simply for easy searches
+	// Then convert the three byte int at that location.
+	// This struct is used for easy searches.
 	typedef struct
 	{
-		int iIndex;	// this struct for pointing purposes, need to and with 0x00FFFFFF to be meaningful
+		byte    iIndex[3];
 	} mdxaIndex_t;
 	//
 	// (note that there's then an alignement-pad here to get the next struct back onto 32-bit alignement)
