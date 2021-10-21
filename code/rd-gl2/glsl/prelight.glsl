@@ -407,7 +407,7 @@ float Noise(vec2 U, float x) {
 
 #if defined(SSR)
 
-const vec3 BinarySearch(in vec3 dir, in vec3 hitCoord)
+vec3 BinarySearch(in vec3 dir, in vec3 hitCoord)
 {
 	float dDepth = 0.0;
     for(int i = 0; i < 14; i++)
@@ -425,7 +425,7 @@ const vec3 BinarySearch(in vec3 dir, in vec3 hitCoord)
 	return vec3(hitCoord.xy, hitScore);
 }
 
-const vec3 RayCast(in vec3 dir, in vec3 hitCoord)
+vec3 RayCast(in vec3 dir, in vec3 hitCoord)
 {
 	vec4 dDepth = vec4(0.0);
 	vec3 samplingPoints[4];
@@ -475,7 +475,7 @@ vec4 ImportanceSampleGGX(vec2 Xi, float Roughness, vec3 N)
 	float CosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a2 - 1.0) * Xi.y));
 	float SinTheta = sqrt( 1.0 - CosTheta * CosTheta );
 
-	vec3 H;
+	vec3 H = vec3(0.0);
 	H.x = SinTheta * cos( Phi );
 	H.y = SinTheta * sin( Phi );
 	H.z = CosTheta;
@@ -494,9 +494,10 @@ vec4 ImportanceSampleGGX(vec2 Xi, float Roughness, vec3 N)
 vec4 traceSSRRay(in float roughness, in vec3 wsNormal, in vec3 E, in vec3 viewPos, in vec3 scspPos, in int sample)
 {
 	float fade = 0.0;
-	vec4 H;
-	vec3 reflection;
-	bool NdotR, VdotR;
+	vec4 H = vec4(0.0);
+	vec3 reflection = vec3(0.0);
+	bool NdotR = false;
+	bool VdotR = false;
 
 	for (int i = 0; i < 3; i++) 
 	{
