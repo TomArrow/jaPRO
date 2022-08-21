@@ -730,7 +730,7 @@ void *QDECL Sys_LoadGameDll( const char *name, void *(QDECL **moduleAPI)(int, ..
 	char	*fn;
 	char	filename[MAX_QPATH];
 
-	Com_sprintf( filename, sizeof( filename ), "%s"ARCH_STRING DLL_EXT, name );
+	Com_sprintf( filename, sizeof( filename ), "%s" ARCH_STRING DLL_EXT, name );
 
 	if (!Sys_UnpackDLL(filename))
 	{
