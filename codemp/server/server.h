@@ -129,8 +129,18 @@ typedef struct {
 	fileHandle_t	demofile;
 	qboolean	isBot;
 	int			botReliableAcknowledge; // for bots, need to maintain a separate reliableAcknowledge to record server messages into the demo file
+	struct  { 
+		// this is basically the equivalent of the demowaiting and minDeltaFrame values above, except it's for the demo pre-record feature and will be done every sv_demoPreRecordKeyframeDistance milliseconds.
+		qboolean keyframeWaiting;
+		int minDeltaFrame;
+
+		int lastKeyframeTime; // When was the last keyframe (gamestate followed by non-delta frames) saved? If more than sv_demoPreRecordKeyframeDistance, we make a new keyframe.
+	} preRecord;
 } demoInfo_t;
 
+
+
+typedef std::vector<bufferedMessageContainer_t>::iterator demoPreRecordBufferIt;
 
 typedef struct client_s {
 	clientState_t	state;
@@ -273,6 +283,11 @@ extern	cvar_t	*sv_autoDemoBots;
 extern	cvar_t	*sv_autoDemoMaxMaps;
 extern	cvar_t	*sv_legacyFixes;
 extern	cvar_t	*sv_banFile;
+
+
+extern	cvar_t	*sv_demoPreRecord;
+extern	cvar_t	*sv_demoPreRecordKeyframeDistance;
+
 
 extern	serverBan_t serverBans[SERVER_MAXBANS];
 extern	int serverBansCount;

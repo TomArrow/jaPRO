@@ -70,6 +70,9 @@ cvar_t	*sv_autoDemoMaxMaps;
 cvar_t	*sv_legacyFixes;
 cvar_t	*sv_banFile;
 
+cvar_t	*sv_demoPreRecord; // If not 0, how many milliseconds of past packets should be stored so demos can be retroactively recorded for that duration?
+cvar_t	*sv_demoPreRecordKeyframeDistance; // A demo can only start with a gamestate and full non-delta snapshot. How often should we save such a gamestate message? The shorter the distance, the more precisely the pre-record duration will be kept.
+
 serverBan_t serverBans[SERVER_MAXBANS];
 int serverBansCount = 0;
 

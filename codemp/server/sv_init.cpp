@@ -1010,6 +1010,9 @@ void SV_Init (void) {
 
 	sv_banFile = Cvar_Get( "sv_banFile", "serverbans.dat", CVAR_ARCHIVE, "File to use to store bans and exceptions" );
 
+	sv_demoPreRecord = Cvar_Get("sv_demoPreRecord", "15000", CVAR_ARCHIVE, "If not 0, how many milliseconds of past packets should be stored so demos can be retroactively recorded for that duration?");
+	sv_demoPreRecordKeyframeDistance = Cvar_Get("sv_demoPreRecordKeyframeDistance", "5000", CVAR_ARCHIVE, "A demo can only start with a gamestate and full non-delta snapshot. How often should we save such a gamestate message? The shorter the distance, the more precisely the pre-record duration will be kept, but also the higher the RAM usage and regularity of non-delta frames being sent to the clients.");
+
 	// initialize bot cvars so they are listed and can be set before loading the botlib
 	SV_BotInitCvars();
 
