@@ -360,7 +360,6 @@ uniform mat4 u_ModelViewProjectionMatrix;
 uniform vec3 u_ViewOrigin;
 in vec4   var_TexCoords[];
 in vec3	  var_Position[];
-in float  var_Alpha[];
 
 #if defined(USE_G_BUFFERS)
 in vec4   var_Normal[];
@@ -374,8 +373,6 @@ out vec4   fs_Bitangent;
 
 out vec4   fs_TexCoords;
 out vec3   fs_Position;
-out float  fs_Alpha;
-out int	   gl_Layer;
 
 void main()
 {
@@ -387,7 +384,6 @@ void main()
 			gl_Position = cubeMatrices[face] * u_ModelMatrix * vec4(var_Position[i], 1.0);
 			fs_TexCoords = var_TexCoords[i];
 			fs_Position = var_Position[i];
-			fs_Alpha = var_Alpha[i];
 
 			#if defined(USE_G_BUFFERS)
 			fs_Normal = var_Normal[i];
@@ -419,13 +415,11 @@ uniform vec4      u_SpecularScale;
 #if defined(USE_CUBEMAP_TRANSFORMS)
 in vec4   fs_TexCoords;
 in vec3	  fs_Position;
-in float  fs_Alpha;
 #else
 in vec4   var_TexCoords;
 in vec3	  var_Position;
-in float  var_Alpha;
 #endif
-
+in float  var_Alpha;
 
 #if defined(USE_G_BUFFERS)
 
@@ -540,7 +534,6 @@ void main()
 #if !defined(USE_CUBEMAP_TRANSFORMS)
 	vec3 fs_Position = var_Position;
 	vec4 fs_TexCoords = var_TexCoords;
-	float  fs_Alpha = var_Alpha;
 #endif
 
 #if !defined(USE_G_BUFFERS)
@@ -576,7 +569,7 @@ void main()
   #endif
 #endif
 	vec4 diffuse = texture(u_DiffuseMap, texCoords);
-	diffuse.a *= fs_Alpha;
+	diffuse.a *= var_Alpha;
 	if (u_AlphaTestFunction == ATEST_CMP_GE){
 		if (diffuse.a < u_AlphaTestValue)
 			discard;
