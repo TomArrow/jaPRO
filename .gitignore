@@ -143,6 +143,7 @@ Desktop.ini
 *.egg-info
 dist
 build
+build_srv
 eggs
 parts
 bin
