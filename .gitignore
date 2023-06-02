@@ -145,6 +145,7 @@ Desktop.ini
 *.egg-info
 dist
 build
+build_srv
 build64
 eggs
 parts
