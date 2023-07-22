@@ -1766,6 +1766,10 @@ void SV_RecordDemo( client_t *cl, char *demoName ) {
 	int			len;
 	std::stringstream ssMeta; // JSON metadata
 
+	if (com_developer->integer > 1) {
+		Com_Printf("Starting demo recording ... ");
+	}
+
 	if ( cl->demo.demorecording ) {
 		Com_Printf( "Already recording.\n" );
 		return;
@@ -1794,8 +1798,12 @@ void SV_RecordDemo( client_t *cl, char *demoName ) {
 	cl->demo.isBot = (cl->netchan.remoteAddress.type == NA_BOT) ? qtrue : qfalse;
 	cl->demo.botReliableAcknowledge = cl->reliableSent;
 
+	
 	// Save metadata message if desired
 	if (sv_demoWriteMeta->integer) {
+		if (com_developer->integer >1 ) {
+			Com_Printf("Preparing demo metadata ... ");
+		}
 		int i;
 		ssMeta << "{";
 		ssMeta << "\"wr\":\"EternalJK_Server\""; // Writer (keyword used by other tools too to identify origin of demo)
@@ -1831,6 +1839,9 @@ void SV_RecordDemo( client_t *cl, char *demoName ) {
 	// in which case we also don't have to worry about demowaiting since the pre-record
 	// already takes care of that
 	if (sv_demoPreRecord->integer) {
+		if (com_developer->integer >1 ) {
+			Com_Printf("Checking demo pre-record queue ... ");
+		}
 		// Pre-recording is enabled. Let's check for the oldest available keyframe.
 		demoPreRecordBufferIt firstOldKeyframe;
 		qboolean firstOldKeyframeFound = qfalse;
@@ -1842,6 +1853,9 @@ void SV_RecordDemo( client_t *cl, char *demoName ) {
 			}
 		}
 		if (firstOldKeyframeFound) {
+			if (com_developer->integer >1) {
+				Com_Printf("Dumping pre-recorded demo messages ... ");
+			}
 			int index = 0;
 			// Dump this keyframe (gamestate message) and all following non-keyframes into the demo.
 			for (demoPreRecordBufferIt it = firstOldKeyframe; it != demoPreRecordBuffer[cl - svs.clients].end(); it++,index++) {
@@ -1862,10 +1876,21 @@ void SV_RecordDemo( client_t *cl, char *demoName ) {
 						ssMeta << ",\"prso\":" << (sv.time-it->time); // Pre-recording start offset. Offset from start of demo to when the command to start recording was called
 
 						ssMeta << "}"; // End JSON object
+						if (com_developer->integer > 1) {
+							Com_Printf("Writing demo metadata (pre-record) ... ");
+						}
 						SV_WriteEmptyMessageWithMetadata(it->lastClientCommand, cl->demo.demofile,ssMeta.str().c_str(),it->msgNum-1);
+						if (com_developer->integer > 1) {
+							Com_Printf("done, writing pre-record messages ... ");
+						}
+					}if (com_developer->integer > 1) {
+						Com_Printf("%d ", it->msgNum);
 					}
 					SV_WriteDemoMessage(cl,&preRecordMsg,0,it->msgNum);
 				}
+			}
+			if (com_developer->integer > 1) {
+				Com_Printf("done.\n");
 			}
 			return; // No need to go through the whole normal demo procedure with demowaiting etc.
 		}
@@ -1879,7 +1904,13 @@ void SV_RecordDemo( client_t *cl, char *demoName ) {
 
 	// NOTE, MRE: all server->client messages now acknowledge
 	int tmp = cl->reliableSent;
+	if (com_developer->integer > 1) {
+		Com_Printf("Creating gamestate (no pre-record) ... ");
+	}
 	SV_CreateClientGameStateMessage( cl, &msg );
+	if (com_developer->integer > 1) {
+		Com_Printf("done ...");
+	}
 	cl->reliableSent = tmp;
 
 	// finished writing the client packet
@@ -1889,7 +1920,13 @@ void SV_RecordDemo( client_t *cl, char *demoName ) {
 		// Write metadata first
 		ssMeta << ",\"ost\":" << (int64_t)std::time(nullptr); // Original start time. When was demo recording started?
 		ssMeta << "}"; // End JSON object
+		if (com_developer->integer > 1) {
+			Com_Printf("Writing demo metadata (default) ... ");
+		}
 		SV_WriteEmptyMessageWithMetadata(cl->lastClientCommand, cl->demo.demofile, ssMeta.str().c_str(), cl->netchan.outgoingSequence - 2);
+		if (com_developer->integer > 1) {
+			Com_Printf("done, writing gamestate ... ");
+		}
 	}
 
 	// write it to the demo file
@@ -1900,6 +1937,9 @@ void SV_RecordDemo( client_t *cl, char *demoName ) {
 	FS_Write( &len, 4, cl->demo.demofile );
 	FS_Write( msg.data, msg.cursize, cl->demo.demofile );
 
+	if (com_developer->integer > 1) {
+		Com_Printf("done.\n");
+	}
 	// the rest of the demo file will be copied from net messages
 }
 
