@@ -1624,6 +1624,10 @@ void SV_StopRecordDemo( client_t *cl ) {
 		return;
 	}
 
+	if (com_developer->integer > 1) {
+		Com_Printf("Stopping demo recording ... ");
+	}
+
 	// finish up
 	len = -1;
 	FS_Write (&len, 4, cl->demo.demofile);
