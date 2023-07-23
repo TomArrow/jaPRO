@@ -1858,6 +1858,9 @@ void SV_RecordDemo( client_t *cl, char *demoName ) {
 		// Pre-recording is enabled. Let's check for the oldest available keyframe.
 		demoPreRecordBufferIt firstOldKeyframe;
 		qboolean firstOldKeyframeFound = qfalse;
+		if (com_developer->integer > 1) {
+			Com_Printf("Demo pre-record queue size is %d, number of first message in queue is %d ... ", demoPreRecordBuffer[cl - svs.clients].begin(), demoPreRecordBuffer[cl - svs.clients].begin()->msgNum);
+		}
 		for (demoPreRecordBufferIt it = demoPreRecordBuffer[cl - svs.clients].begin(); it != demoPreRecordBuffer[cl - svs.clients].end(); it++) {
 			if (it->isKeyframe && it->time < sv.time) {
 				firstOldKeyframe = it;
