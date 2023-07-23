@@ -1114,7 +1114,13 @@ int Com_EventLoop( void ) {
 		case SE_AIO_FCLOSE:
 			{
 				extern void	FS_FCloseAio( int handle );
+				if (com_developer->integer > 1) {
+					Com_Printf("Async file close cleanup event is being handled ... ");
+				}
 				FS_FCloseAio( ev.evValue );
+				if (com_developer->integer > 1) {
+					Com_Printf("done\n");
+				}
 				break;
 			}
 		}

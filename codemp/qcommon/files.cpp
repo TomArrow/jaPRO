@@ -1066,9 +1066,21 @@ void FS_FCloseAio( int handle ) {
 	if ( f < 1 || f >= MAX_FILE_HANDLES ) {
 		Com_Error( ERR_FATAL, "FCloseAio called with invalid handle %d\n", f );
 	}
+	if (com_developer->integer > 1) {
+		Com_Printf("waiting for async write thread to join ... ");
+	}
 	fsh[f].writerThread->join();
+	if (com_developer->integer > 1) {
+		Com_Printf("done, deleting writer thread ... ");
+	}
 	delete fsh[f].writerThread;
+	if (com_developer->integer > 1) {
+		Com_Printf("done, setting writer thread to nullptr ... ");
+	}
 	fsh[f].writerThread = nullptr;
+	if (com_developer->integer > 1) {
+		Com_Printf("done, resetting file handle data ... ");
+	}
 	FS_ResetFileHandleData( &fsh[f] );
 }
 
@@ -1106,10 +1118,16 @@ void FS_FCloseFile( fileHandle_t f ) {
 	// we didn't find it as a pak, so close it as a unique file
 	if (fsh[f].handleFiles.file.o) {
 		if ( fsh[f].handleAsync ) {
+			if (com_developer->integer > 1) {
+				Com_Printf("Acquiring lock for file to be closed and setting closed flag ... ");
+			}
 			// queue the file to be closed after all pending operations are completed.
 			{
 				std::lock_guard<std::mutex> l( fsh[f].writeLock );
 				fsh[f].closed = qtrue;
+			}
+			if (com_developer->integer > 1) {
+				Com_Printf("done. notifying condition variable of change ... ");
 			}
 			fsh[f].cv.notify_one();
 			return;
@@ -1122,9 +1140,21 @@ void FS_FCloseFile( fileHandle_t f ) {
 
 extern void Com_PushEvent( sysEvent_t *event );
 void FS_AsyncWriterThread( fileHandle_t h ) {
+	if (com_developer->integer > 1) {
+		Com_Printf("Async writer thread started ...");
+	}
 	fileHandleData_t *f = &fsh[h];
+	if (com_developer->integer > 1) {
+		Com_Printf("(async) Creating path ...");
+	}
 	if ( !FS_CreatePath( f->ospath ) ) {
+		if (com_developer->integer > 1) {
+			Com_Printf("(async) Opening file ...");
+		}
 		f->handleFiles.file.o = fopen( f->ospath, "wb" );
+	}
+	if (com_developer->integer > 1) {
+		Com_Printf("File opened for async writing.\n");
 	}
 	if ( f->handleFiles.file.o == nullptr ) {
 		Com_Printf( "Warning: failed to open file %s\n", f->name );
@@ -1138,6 +1168,9 @@ void FS_AsyncWriterThread( fileHandle_t h ) {
 				f->cv.wait( l );
 			}
 			if ( f->closed && f->writes.empty() ) {
+				if (com_developer->integer > 1) {
+					Com_Printf("Async writer thread: end of write detected, ending ...");
+				}
 				break;
 			}
 			write = std::move(f->writes.front());
@@ -1145,7 +1178,13 @@ void FS_AsyncWriterThread( fileHandle_t h ) {
 		}
 		fwrite( &write[0], 1, write.size(), f->handleFiles.file.o );
 	}
+	if (com_developer->integer > 1) {
+		Com_Printf("Closing asnyc write handle ...");
+	}
 	fclose( f->handleFiles.file.o );
+	if (com_developer->integer > 1) {
+		Com_Printf("Done, queueing async file close cleanup event.\n");
+	}
 	sysEvent_t event;
 	Com_Memset( &event, 0, sizeof( event ) );
 	event.evType = SE_AIO_FCLOSE;
@@ -1154,7 +1193,13 @@ void FS_AsyncWriterThread( fileHandle_t h ) {
 }
 
 fileHandle_t FS_FOpenFileWriteAsync( const char *filename, qboolean safe ) {
+	if (com_developer->integer > 1) {
+		Com_Printf("Opening file for async writing ... ");
+	}
 	fileHandle_t f = FS_HandleForFile();
+	if (com_developer->integer > 1) {
+		Com_Printf("Handle acquired, building path ... ");
+	}
 	Q_strncpyz(fsh[f].ospath, FS_BuildOSPath( fs_homepath->string, fs_gamedir, filename ), MAX_OSPATH );
 
 	if ( fs_debug->integer ) {
@@ -1162,9 +1207,15 @@ fileHandle_t FS_FOpenFileWriteAsync( const char *filename, qboolean safe ) {
 	}
 
 	Q_strncpyz( fsh[f].name, filename, sizeof( fsh[f].name ) );
-	fsh[f].handleAsync = qtrue;
+	fsh[f].handleAsync = qtrue; 
+	if (com_developer->integer > 1) {
+		Com_Printf("Spawning writer thread ... ");
+	}
 	// spawn writer thread
-	fsh[f].writerThread = new std::thread( FS_AsyncWriterThread, f );
+	fsh[f].writerThread = new std::thread( FS_AsyncWriterThread, f ); 
+	if (com_developer->integer > 1) {
+		Com_Printf("Writer thread spawned.\n");
+	}
 	return f;
 }
 
