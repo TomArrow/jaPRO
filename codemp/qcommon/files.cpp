@@ -1167,16 +1167,34 @@ void FS_AsyncWriterThread( fileHandle_t h ) {
 			while ( f->writes.empty() && !f->closed ) {
 				f->cv.wait( l );
 			}
+			if (com_developer->integer > 1) {
+				Com_Printf("d ");
+			}
 			if ( f->closed && f->writes.empty() ) {
 				if (com_developer->integer > 1) {
 					Com_Printf("Async writer thread: end of write detected, ending ...");
 				}
 				break;
 			}
-			write = std::move(f->writes.front());
-			f->writes.pop_front();
+			if (com_developer->integer > 1) {
+				Com_Printf("e ");
+			}
+			write = std::move(f->writes.front()); 
+			if (com_developer->integer > 1) {
+				Com_Printf("f ");
+			}
+			f->writes.pop_front(); 
+			if (com_developer->integer > 1) {
+				Com_Printf("g ");
+			}
 		}
-		fwrite( &write[0], 1, write.size(), f->handleFiles.file.o );
+		if (com_developer->integer > 1) {
+			Com_Printf("h ");
+		}
+		fwrite( &write[0], 1, write.size(), f->handleFiles.file.o ); 
+		if (com_developer->integer > 1) {
+			Com_Printf("i ");
+		}
 	}
 	if (com_developer->integer > 1) {
 		Com_Printf("Closing asnyc write handle ...");

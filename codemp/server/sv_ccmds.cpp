@@ -1543,13 +1543,22 @@ void SV_WriteDemoMessage ( client_t *cl, msg_t *msg, int headerBytes, int messag
 
 	// write the packet sequence
 	len = messageNum;
-	swlen = LittleLong( len );
+	swlen = LittleLong( len ); 
+	if (com_developer->integer > 1) {
+		Com_Printf("a ");
+	}
 	FS_Write( &swlen, 4, cl->demo.demofile );
 
 	// skip the packet sequencing information
 	len = msg->cursize - headerBytes;
 	swlen = LittleLong( len );
-	FS_Write( &swlen, 4, cl->demo.demofile );
+	if (com_developer->integer > 1) {
+		Com_Printf("b ");
+	}
+	FS_Write( &swlen, 4, cl->demo.demofile ); 
+	if (com_developer->integer > 1) {
+		Com_Printf("c ");
+	}
 	FS_Write( msg->data + headerBytes, len, cl->demo.demofile );
 }
 
@@ -1887,10 +1896,14 @@ void SV_RecordDemo( client_t *cl, char *demoName ) {
 						if (com_developer->integer > 1) {
 							Com_Printf("done, writing pre-record messages ... ");
 						}
-					}if (com_developer->integer > 1) {
-						Com_Printf("%d ", it->msgNum);
+					}
+					if (com_developer->integer > 1) {
+						Com_Printf("%d", it->msgNum);
 					}
 					SV_WriteDemoMessage(cl,&preRecordMsg,0,it->msgNum);
+					if (com_developer->integer > 1) {
+						Com_Printf("w ");
+					}
 				}
 			}
 			if (com_developer->integer > 1) {
