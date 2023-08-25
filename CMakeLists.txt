@@ -226,8 +226,10 @@ elseif (("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU") OR ("${CMAKE_C_COMPILER_ID}" M
 	set(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 	set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 	
-	add_compile_options(-fsanitize=address -fsanitize=undefined)
-	add_link_options(-fsanitize=address -fsanitize=undefined)
+	#add_compile_options(-fsanitize=address -fsanitize=undefined)
+	#add_link_options(-fsanitize=address -fsanitize=undefined)
+	add_compile_options(-fsanitize=thread)
+	add_link_options(-fsanitize=thread)
 
 	# additional flags for debug configuration
 	set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -ggdb")
