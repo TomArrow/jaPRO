@@ -898,6 +898,13 @@ typedef struct score_s {
 	int				team;
 } score_t;
 
+typedef struct {
+	int				lastMovementDirChange;
+	int				lastMovementDir;
+	int				lastSeen;
+	int				lastNotSeen;
+	
+} afkInfo_t;
 
 // each WP_* weapon enum has an associated weaponInfo_t
 // that contains media references necessary to present the
@@ -2312,6 +2319,7 @@ typedef struct cgs_s {
 	clientInfo_t	clientinfo[MAX_CLIENTS];
 
 	score_t			lastValidScoreboardEntry[MAX_CLIENTS];
+	afkInfo_t		afkInfo[MAX_CLIENTS];
 
 	float cursorX;
 	float cursorY;

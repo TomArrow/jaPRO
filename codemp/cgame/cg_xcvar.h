@@ -435,6 +435,9 @@ XCVAR_DEF( cg_killfeedColors,                   "0",                	NULL,      
 XCVAR_DEF( cg_killfeedReverse,                  "0",                	NULL,                       CVAR_ARCHIVE )
 XCVAR_DEF( cg_autoFollow,						"0",                NULL,                       CVAR_ARCHIVE )
 XCVAR_DEF( cg_autoScoreboardFetchInterval,		"20",                NULL,                       CVAR_ARCHIVE )
+XCVAR_DEF( cg_autoFollowUnfollowAFKDelay,		"300",                NULL,                       CVAR_ARCHIVE )
+XCVAR_DEF( cg_autoFollowUnfollowAFKReDelay,		"10",                NULL,                       CVAR_ARCHIVE )
+XCVAR_DEF( cg_autoFollowUnfollowAFKSwitchBackDelay,		"600",        NULL,                       CVAR_ARCHIVE )
 
 //Snaphud
 XCVAR_DEF(cg_snapHud, 							"0", 					NULL, 						CVAR_ARCHIVE )
