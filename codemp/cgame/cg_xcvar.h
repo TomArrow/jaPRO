@@ -433,6 +433,8 @@ XCVAR_DEF( cg_killfeedIconSize,                 "12",               	NULL,      
 XCVAR_DEF( cg_killfeedTextSize,                 "0.8",              	NULL,                      CVAR_ARCHIVE )
 XCVAR_DEF( cg_killfeedColors,                   "0",                	NULL,                       CVAR_ARCHIVE )
 XCVAR_DEF( cg_killfeedReverse,                  "0",                	NULL,                       CVAR_ARCHIVE )
+XCVAR_DEF( cg_autoFollow,						"0",                NULL,                       CVAR_ARCHIVE )
+XCVAR_DEF( cg_autoScoreboardFetchInterval,		"20",                NULL,                       CVAR_ARCHIVE )
 
 //Snaphud
 XCVAR_DEF(cg_snapHud, 							"0", 					NULL, 						CVAR_ARCHIVE )
