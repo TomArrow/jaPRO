@@ -1089,6 +1089,11 @@ struct dynTable_s
 	dynColumnInfo_t *columnInfo;
 };
 
+typedef enum autoFollowState_s {
+	AUTOFOLLOW_RED,
+	AUTOFOLLOW_BLUE
+} autoFollowState_t;
+
 typedef struct cg_s {
 	int			clientFrame;		// incremented each frame
 
@@ -1188,6 +1193,7 @@ typedef struct cg_s {
 	int				teamScores[2];
 	score_t			scores[MAX_CLIENTS];
 	qboolean		showScores;
+	int				lastScoresReceived;
 	qboolean		scoreBoardShowing;
 	int				scoreFadeTime;
 	char			killerName[MAX_NETNAME];
@@ -1435,6 +1441,10 @@ Ghoul2 Insert End
 		fileHandle_t	file;
 		qboolean		started;
 	} log;
+
+	int					lastAutoFollowSent;
+	autoFollowState_t	autoFollowState;
+	int					lastAutoFollowStateChange;
 
 } cg_t;
 
@@ -2250,6 +2260,8 @@ typedef struct cgs_s {
 	vec3_t			inlineModelMidpoints[MAX_MODELS];
 
 	clientInfo_t	clientinfo[MAX_CLIENTS];
+
+	score_t			lastValidScoreboardEntry[MAX_CLIENTS];
 
 	float cursorX;
 	float cursorY;

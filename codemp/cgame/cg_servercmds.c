@@ -89,8 +89,11 @@ static void CG_ParseScores( void ) {
 		cgs.clientinfo[ cg.scores[i].client ].powerups = powerups;
 
 		cg.scores[i].team = cgs.clientinfo[cg.scores[i].client].team;
+
+		cgs.lastValidScoreboardEntry[cg.scores[i].client] = cg.scores[i];
 	}
 	CG_SetScoreSelection( NULL );
+	cg.lastScoresReceived = cg.time;
 }
 
 /*
