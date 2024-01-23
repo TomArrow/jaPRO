@@ -421,6 +421,9 @@ XCVAR_DEF( cg_killfeedTextSize,                 "0.8",               NULL,      
 XCVAR_DEF( cg_killfeedColors,                   "0",                NULL,                       CVAR_ARCHIVE )
 XCVAR_DEF( cg_autoFollow,						"0",                NULL,                       CVAR_ARCHIVE )
 XCVAR_DEF( cg_autoScoreboardFetchInterval,		"20",                NULL,                       CVAR_ARCHIVE )
+XCVAR_DEF( cg_autoFollowUnfollowAFKDelay,		"300",                NULL,                       CVAR_ARCHIVE )
+XCVAR_DEF( cg_autoFollowUnfollowAFKReDelay,		"10",                NULL,                       CVAR_ARCHIVE )
+XCVAR_DEF( cg_autoFollowUnfollowAFKSwitchBackDelay,		"600",        NULL,                       CVAR_ARCHIVE )
 
 
 #undef XCVAR_DEF

@@ -2713,10 +2713,13 @@ qboolean CG_CullPointAndRadius( const vec3_t pt, float radius ) {
 static void CG_AutoFollow() {
 	int i;
 	vec3_t deltaVector;
-	qboolean timePassedSinceFlagStateChange;
+	qboolean timePassedSinceFlagStateChange; 
+	qboolean currentClientAfk;
+	qboolean thisClientAfk;
 
-	if (cg.demoPlayback || cgs.clientinfo[cg.clientNum].team != TEAM_SPECTATOR) return;
+	if (cg.demoPlayback || cgs.clientinfo[cg.clientNum].team != TEAM_SPECTATOR || !cg.snap) return;
 
+	currentClientAfk = ((cgs.afkInfo[cg.snap->ps.clientNum].lastMovementDirChange + cg_autoFollowUnfollowAFKDelay.integer * 1000) < cg.time) && ((cgs.afkInfo[cg.snap->ps.clientNum].lastNotSeen + cg_autoFollowUnfollowAFKReDelay.integer * 1000) < cg.time);
 
 	//timePassedSinceFlagStateChange = (cg.time - cgs.anyFlagLastChange) > 2000;
 
@@ -2810,15 +2813,27 @@ static void CG_AutoFollow() {
 		}
 
 		if (followNum != -1 && cg.predictedPlayerState.clientNum != followNum) {
-			trap_SendClientCommand(va("follow %d", followNum));
+			trap->SendClientCommand(va("follow %d", followNum));
 			cg.lastAutoFollowSent = cg.time;
 		}
 	}
-	else*/ if (cg_autoFollow.integer > 1 || cg.predictedPlayerState.persistant[PERS_TEAM] == TEAM_SPECTATOR) {
+	else*/ if (cg_autoFollow.integer > 1 || cg.predictedPlayerState.persistant[PERS_TEAM] == TEAM_SPECTATOR || (currentClientAfk && cg_autoFollowUnfollowAFKDelay.integer)) {
 		// FFA or cg_autoFollow 1. Just follow someone.
 		int highestScore = -9999999;
 		int highestScoreClient = -1;
 		for (i = 0; i < MAX_CLIENTS; i++) {
+			if (cg_autoFollowUnfollowAFKDelay.integer) {
+				if (currentClientAfk && i == cg.snap->ps.clientNum) continue;
+				thisClientAfk = ((cgs.afkInfo[i].lastMovementDirChange + cg_autoFollowUnfollowAFKDelay.integer * 1000) < cg.time)
+					&& (
+						(cgs.afkInfo[i].lastSeen < cgs.afkInfo[i].lastNotSeen
+							&& (cgs.afkInfo[i].lastSeen + cg_autoFollowUnfollowAFKSwitchBackDelay.integer * 1000) > cg.time)
+						||
+						(cgs.afkInfo[i].lastSeen > cgs.afkInfo[i].lastNotSeen &&
+							((cgs.afkInfo[i].lastSeen - cgs.afkInfo[i].lastNotSeen) > (cg_autoFollowUnfollowAFKReDelay.integer * 1000)))
+						);
+				if (thisClientAfk) continue;
+			}
 			if (cgs.clientinfo[i].infoValid && cgs.clientinfo[i].team != TEAM_SPECTATOR) {
 				if (cgs.lastValidScoreboardEntry[i].score > highestScore) {
 					highestScore = cgs.lastValidScoreboardEntry[i].score;
@@ -3250,7 +3265,7 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 	// Fetch scoreboard regularly even if we are not viewing it.
 	if (cg_autoScoreboardFetchInterval.integer && !cg.demoPlayback && (cg.lastScoresReceived > cg.time || (cg.time - cg.lastScoresReceived) > (cg_autoScoreboardFetchInterval.integer * 1000)) && cg.scoresRequestTime + 2000 < cg.time) { //don't clear the scoreboard when watching a demo
 		cg.scoresRequestTime = cg.time;
-		trap_SendClientCommand("score");
+		trap->SendClientCommand("score");
 	}
 
 	if (cg_autoFollow.integer) {
