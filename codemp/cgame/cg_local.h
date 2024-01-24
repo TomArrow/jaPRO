@@ -1453,6 +1453,7 @@ Ghoul2 Insert End
 	autoFollowState_t	autoFollowState;
 	int					lastAutoFollowStateChange;
 	int					lastTimeFollowing;
+	int					lastTimeFollowingNonBot;
 
 } cg_t;
 

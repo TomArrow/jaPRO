@@ -2716,10 +2716,13 @@ static void CG_AutoFollow() {
 	qboolean timePassedSinceFlagStateChange; 
 	qboolean currentClientAfk;
 	qboolean thisClientAfk;
+	qboolean currentClientIsBot;
 
 	if (cg.demoPlayback || cgs.clientinfo[cg.clientNum].team != TEAM_SPECTATOR || !cg.snap) return;
 
 	currentClientAfk = ((cgs.afkInfo[cg.snap->ps.clientNum].lastMovementDirChange + cg_autoFollowUnfollowAFKDelay.integer * 1000) < cg.time) && ((cgs.afkInfo[cg.snap->ps.clientNum].lastNotSeen + cg_autoFollowUnfollowAFKReDelay.integer * 1000) < cg.time);
+
+	currentClientIsBot = cgs.clientinfo[cg.snap->ps.clientNum].botSkill != -1;
 
 	//timePassedSinceFlagStateChange = (cg.time - cgs.anyFlagLastChange) > 2000;
 
@@ -2729,9 +2732,14 @@ static void CG_AutoFollow() {
 	// Detect if we haven't followed anyone for 10 seconds.
 	if (cg.predictedPlayerState.persistant[PERS_TEAM] != TEAM_SPECTATOR || cg.lastTimeFollowing > cg.time) {
 		cg.lastTimeFollowing = cg.time;
+		if (!currentClientIsBot) {
+			cg.lastTimeFollowingNonBot = cg.time;
+		}
 	}
-	if (cg.lastTimeFollowing + 10000 < cg.time && cg.lastAutoFollowSent > cg.lastTimeFollowing) {
-		// Seems we are failing to follow anybody. Press attack.
+	if ((cg.lastTimeFollowing + 10000 < cg.time && cg.lastAutoFollowSent > cg.lastTimeFollowing)
+		|| (cg.lastTimeFollowingNonBot + 10000 < cg.time && cg.lastAutoFollowSent > cg.lastTimeFollowingNonBot)
+		) {
+		// Seems we are failing to follow anybody (who isn't a bot). Press attack.
 		trap->SendConsoleCommand("+attack;wait 5;-attack");
 		cg.lastAutoFollowSent = cg.time;
 		return;
@@ -2829,11 +2837,14 @@ static void CG_AutoFollow() {
 			cg.lastAutoFollowSent = cg.time;
 		}
 	}
-	else*/ if (cg_autoFollow.integer > 1 || cg.predictedPlayerState.persistant[PERS_TEAM] == TEAM_SPECTATOR || (currentClientAfk && cg_autoFollowUnfollowAFKDelay.integer)) {
+	else*/ if (cg_autoFollow.integer > 1 || cg.predictedPlayerState.persistant[PERS_TEAM] == TEAM_SPECTATOR || (currentClientAfk && cg_autoFollowUnfollowAFKDelay.integer) || currentClientIsBot) {
 		// FFA or cg_autoFollow 1. Just follow someone.
 		int highestScore = -9999999;
 		int highestScoreClient = -1;
 		for (i = 0; i < MAX_CLIENTS; i++) {
+			if (cgs.clientinfo[i].botSkill != -1) {
+				continue; // Don't bother following bots.
+			}
 			if (cg_autoFollowUnfollowAFKDelay.integer) {
 				if (currentClientAfk && i == cg.snap->ps.clientNum) continue;
 				thisClientAfk = ((cgs.afkInfo[i].lastMovementDirChange + cg_autoFollowUnfollowAFKDelay.integer * 1000) < cg.time)
