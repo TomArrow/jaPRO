@@ -2720,6 +2720,16 @@ static void CG_AutoFollow() {
 
 	if (cg.demoPlayback || cgs.clientinfo[cg.clientNum].team != TEAM_SPECTATOR || !cg.snap) return;
 
+	// For safety, even tho I feel like it shouldn't happen but I guess maybe sometimes it does?
+	/*if (cg.nextSnap) {
+		for (i = 0; i < MAX_CLIENTS; i++) {
+			if (cgs.afkInfo[i].lastMovementDirChange > cg.nextSnap->serverTime || cgs.afkInfo[i].lastNotSeen > cg.nextSnap->serverTime || cgs.afkInfo[i].lastSeen > cg.nextSnap->serverTime) {
+				memset(cgs.afkInfo, 0, sizeof(cgs.afkInfo));
+				break;
+			}
+		}
+	}*/
+
 	currentClientAfk = ((cgs.afkInfo[cg.snap->ps.clientNum].lastMovementDirChange + cg_autoFollowUnfollowAFKDelay.integer * 1000) < cg.time) && ((cgs.afkInfo[cg.snap->ps.clientNum].lastNotSeen + cg_autoFollowUnfollowAFKReDelay.integer * 1000) < cg.time);
 
 	currentClientIsBot = cgs.clientinfo[cg.snap->ps.clientNum].botSkill != -1;
@@ -2845,19 +2855,19 @@ static void CG_AutoFollow() {
 			if (cgs.clientinfo[i].botSkill != -1) {
 				continue; // Don't bother following bots.
 			}
-			if (cg_autoFollowUnfollowAFKDelay.integer) {
-				if (currentClientAfk && i == cg.snap->ps.clientNum) continue;
-				thisClientAfk = ((cgs.afkInfo[i].lastMovementDirChange + cg_autoFollowUnfollowAFKDelay.integer * 1000) < cg.time)
-					&& (
-						(cgs.afkInfo[i].lastSeen < cgs.afkInfo[i].lastNotSeen
-							&& (cgs.afkInfo[i].lastSeen + cg_autoFollowUnfollowAFKSwitchBackDelay.integer * 1000) > cg.time)
-						||
-						(cgs.afkInfo[i].lastSeen > cgs.afkInfo[i].lastNotSeen &&
-							((cgs.afkInfo[i].lastSeen - cgs.afkInfo[i].lastNotSeen) > (cg_autoFollowUnfollowAFKReDelay.integer * 1000)))
-						);
-				if (thisClientAfk) continue;
-			}
 			if (cgs.clientinfo[i].infoValid && cgs.clientinfo[i].team != TEAM_SPECTATOR) {
+				if (cg_autoFollowUnfollowAFKDelay.integer) {
+					if (currentClientAfk && i == cg.snap->ps.clientNum) continue;
+					thisClientAfk = ((cgs.afkInfo[i].lastMovementDirChange + cg_autoFollowUnfollowAFKDelay.integer * 1000) < cg.time)
+						&& (
+							(cgs.afkInfo[i].lastSeen < cgs.afkInfo[i].lastNotSeen
+								&& (cgs.afkInfo[i].lastSeen + cg_autoFollowUnfollowAFKSwitchBackDelay.integer * 1000) > cg.time)
+							||
+							(cgs.afkInfo[i].lastSeen > cgs.afkInfo[i].lastNotSeen &&
+								((cgs.afkInfo[i].lastSeen - cgs.afkInfo[i].lastNotSeen) > (cg_autoFollowUnfollowAFKReDelay.integer * 1000)))
+							);
+					if (thisClientAfk) continue;
+				}
 				if (cgs.lastValidScoreboardEntry[i].score > highestScore) {
 					highestScore = cgs.lastValidScoreboardEntry[i].score;
 					highestScoreClient = i;
