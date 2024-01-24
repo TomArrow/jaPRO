@@ -791,7 +791,7 @@ window_t WIN_Init( const windowDesc_t *windowDesc, glconfig_t *glConfig )
 	Cmd_AddCommand("minimize", GLimp_Minimize);
 
 	r_sdlDriver			= Cvar_Get( "r_sdlDriver",			"",			CVAR_ARCHIVE_ND|CVAR_LATCH );
-	r_allowScreenSaver	= Cvar_Get( "r_allowScreenSaver",	"0",		CVAR_ARCHIVE_ND|CVAR_LATCH );
+	r_allowScreenSaver	= Cvar_Get( "r_allowScreenSaver",	"1",		CVAR_ARCHIVE_ND|CVAR_LATCH );
 	r_allowSoftwareGL	= Cvar_Get( "r_allowSoftwareGL",	"0",		CVAR_ARCHIVE_ND|CVAR_LATCH );
 
 	// Window cvars
@@ -815,6 +815,7 @@ window_t WIN_Init( const windowDesc_t *windowDesc, glconfig_t *glConfig )
 	r_ignorehwgamma		= Cvar_Get( "r_ignorehwgamma",		"0",		CVAR_ARCHIVE_ND|CVAR_LATCH );
 	r_ext_multisample	= Cvar_Get( "r_ext_multisample",	"0",		CVAR_ARCHIVE_ND|CVAR_LATCH );
 	r_ext_multisample_default_fb = Cvar_Get("r_ext_multisample_default_fb", "1", CVAR_ROM);
+
 	Cvar_Get( "r_availableModes", "", CVAR_ROM );
 
 	// Create the window and set up the context
