@@ -138,11 +138,6 @@ qboolean ShaderHashTableExists( void )
 	return qfalse;
 }
 
-void R_ClearShaderHashTable( void )
-{
-	memset(hashTable, 0, sizeof(hashTable));
-}
-
 void KillTheShaderHashTable( void )
 {
 	memset(shaderTextHashTable, 0, sizeof(shaderTextHashTable));
@@ -3664,6 +3659,7 @@ pass, trying to guess which is the correct one to best aproximate
 what it is supposed to look like.
 =================
 */
+/*
 static void VertexLightingCollapse( void )
 {
 	int				stage;
@@ -3757,7 +3753,7 @@ static void VertexLightingCollapse( void )
 
 		Com_Memset(pStage, 0, sizeof(*pStage));
 	}
-}
+} */
 
 static qboolean EqualACgen( const shaderStage_t *st1, const shaderStage_t *st2 )
 {
@@ -3835,10 +3831,10 @@ static qboolean EqualTCgen( int bundle, const shaderStage_t *st1, const shaderSt
 	}
 
 	if (b1->tcGen == TCGEN_VECTOR) {
-		if (memcmp(b1->tcGenVectors, b2->tcGenVectors, sizeof(b1->tcGenVectors)) != 0) {
+		if (memcmp(b1->tcGenVectors, b2->tcGenVectors, sizeof(*b1->tcGenVectors) * 2) != 0) {
 			return qfalse;
 		}
-	}
+    }
 
 	//if ( b1->tcGen == TCGEN_ENVIRONMENT_MAPPED_FP ) {
 	//	if ( b1->isScreenMap != b2->isScreenMap ) {
@@ -4519,7 +4515,7 @@ shader_t *FinishShader( void )
 			}
 
 			// this will be a copy of the vk_pipeline[0] but with faceculling disabled
-			pStage->vk_2d_pipeline = NULL;
+			pStage->vk_2d_pipeline = 0;
 		
 
 #ifdef USE_FOG_COLLAPSE

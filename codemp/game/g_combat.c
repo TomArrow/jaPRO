@@ -712,6 +712,7 @@ void TossClientItems( gentity_t *self ) {
 LookAtKiller
 ==================
 */
+/*
 void LookAtKiller( gentity_t *self, gentity_t *inflictor, gentity_t *attacker ) {
 	vec3_t		dir;
 
@@ -726,6 +727,7 @@ void LookAtKiller( gentity_t *self, gentity_t *inflictor, gentity_t *attacker ) 
 
 	self->client->ps.stats[STAT_DEAD_YAW] = vectoyaw ( dir );
 }
+*/
 
 /*
 ==================
@@ -5074,7 +5076,7 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 
 	knockback = damage;
 
-	if (g_tribesMode.integer)
+	if (g_tribesMode.integer && client && !client->sess.raceMode)
 		knockback *= 0.2f;
 
 	if ( knockback > 200 ) {
@@ -5089,10 +5091,10 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 
 	//Higher self knockback for tribes, discjump disc jump
 	if (attacker && attacker->client && attacker->client->sess.movementStyle == MV_TRIBES) {
-		if (targ == attacker)
-			knockback *= 1.2f;
+		//if (targ == attacker)
+			knockback *= 1.5f;
 		if (mod == MOD_THERMAL || mod == MOD_THERMAL_SPLASH) {
-			knockback *= 3.5f; //guess this just does nothing
+			knockback *= 3.75f; //guess this just does nothing
 		}
 	}
 
@@ -5104,11 +5106,13 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 		mass = 200;
 		if ((g_tweakWeapons.integer & WT_TRIBES)) {
 			if (targ->client->pers.tribesClass == 1)
-				mass = 180;
+				mass = 175;
 			else if (targ->client->pers.tribesClass == 3)
 				mass = 240;
 			if (targ->client->ps.fd.forcePowersActive & (1 << FP_PROTECT))
 				mass *= 1.75f; //Superheavy, but also a nerf to discjumping in protect
+			else if ((g_tweakWeapons.integer & WT_TRIBES) && (targ->client->ps.fd.forcePowersActive & (1 << FP_ABSORB)))
+				mass *= 2.25f; //Superheavy, but also a nerf to discjumping in protect
 		}
 
 		if (mod == MOD_SABER)
@@ -6370,7 +6374,7 @@ qboolean G_RadiusDamage ( vec3_t origin, gentity_t *attacker, float damage, floa
 				VectorNormalize(dir);
 				if (g_tribesMode.integer)
 					points *= 0.2f;
-				VectorScale(dir, g_knockback.value * (float)points/150.0f, kvel);
+				VectorScale(dir, g_knockback.value * (float)points/120.0f, kvel);
 				ent->s.pos.trType = TR_GRAVITY;
 				ent->s.pos.trTime = level.time;
 				VectorCopy(ent->r.currentOrigin, ent->s.pos.trBase);

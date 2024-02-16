@@ -52,6 +52,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #if defined (_DEBUG)
 #if defined (_WIN32)
 #define USE_VK_VALIDATION
+#define USE_DEBUG_REPORT
+//#define USE_DEBUG_UTILS
 #endif
 #endif
 
@@ -84,7 +86,18 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // depth + msaa + msaa-resolve + screenmap.msaa + screenmap.resolve + screenmap.depth + (bloom_extract + blur pairs + dglow_extract + blur pairs) + dglow-msaa
 #define MAX_ATTACHMENTS_IN_POOL			( 6 + ( ( 1 + VK_NUM_BLUR_PASSES * 2 ) * 2 ) + 1  ) 
 
-#define VK_SAMPLER_LAYOUT_BEGIN			2
+#define VK_DESC_STORAGE					0
+#define VK_DESC_UNIFORM					1
+#define VK_DESC_TEXTURE0				2
+#define VK_DESC_TEXTURE1				3
+#define VK_DESC_TEXTURE2				4
+#define VK_DESC_FOG_COLLAPSE			5
+#define VK_DESC_COUNT					6
+
+#define VK_DESC_TEXTURE_BASE			VK_DESC_TEXTURE0
+#define VK_DESC_FOG_ONLY				VK_DESC_TEXTURE1
+#define VK_DESC_FOG_DLIGHT				VK_DESC_TEXTURE1
+
 //#define MIN_IMAGE_ALIGN				( 128 * 1024 )
 
 #define VERTEX_BUFFER_SIZE				( 4 * 1024 * 1024 )
@@ -292,8 +305,14 @@ extern PFN_vkGetPhysicalDeviceSurfaceFormatsKHR		    qvkGetPhysicalDeviceSurface
 extern PFN_vkGetPhysicalDeviceSurfacePresentModesKHR	qvkGetPhysicalDeviceSurfacePresentModesKHR;
 extern PFN_vkGetPhysicalDeviceSurfaceSupportKHR		    qvkGetPhysicalDeviceSurfaceSupportKHR;
 #ifdef USE_VK_VALIDATION
-extern PFN_vkCreateDebugReportCallbackEXT				qvkCreateDebugReportCallbackEXT;
-extern PFN_vkDestroyDebugReportCallbackEXT				qvkDestroyDebugReportCallbackEXT;
+	#ifdef USE_DEBUG_REPORT
+		extern PFN_vkCreateDebugReportCallbackEXT				qvkCreateDebugReportCallbackEXT;
+		extern PFN_vkDestroyDebugReportCallbackEXT				qvkDestroyDebugReportCallbackEXT;
+	#endif
+	#ifdef USE_DEBUG_UTILS
+		extern PFN_vkCreateDebugUtilsMessengerEXT				qvkCreateDebugUtilsMessengerEXT;
+		extern PFN_vkDestroyDebugUtilsMessengerEXT				qvkDestroyDebugUtilsMessengerEXT;
+	#endif
 #endif
 extern PFN_vkAllocateCommandBuffers					    qvkAllocateCommandBuffers;
 extern PFN_vkAllocateDescriptorSets					    qvkAllocateDescriptorSets;
@@ -491,6 +510,8 @@ typedef struct {
 struct ImageChunk_t {
 	VkDeviceMemory memory;
 	uint32_t used;
+	uint32_t size;
+	uint32_t items;
 };
 
 struct Image_Upload_Data  {
@@ -556,7 +577,7 @@ typedef struct vk_tess_s {
 
 	struct {
 		uint32_t		start, end;
-		VkDescriptorSet	current[7];	// 0:storage, 1:uniform, 2:color0, 3:color1, 4:color2, 5:fog
+		VkDescriptorSet	current[6];	// 0:storage, 1:uniform, 2:color0, 3:color1, 4:color2, 5:fog
 		uint32_t		offset[2];	// 0:storage, 1:uniform
 	} descriptor_set;
 	
@@ -583,7 +604,12 @@ typedef struct {
 	char			instance_extensions_string[MAX_STRING_CHARS];
 
 #ifdef USE_VK_VALIDATION
-	VkDebugReportCallbackEXT debug_callback;
+	#ifdef USE_DEBUG_REPORT
+		VkDebugReportCallbackEXT debug_callback;
+	#endif
+	#ifdef USE_DEBUG_UTILS
+		VkDebugUtilsMessengerEXT debug_utils_messenger;
+	#endif
 #endif
 
 	uint32_t		queue_family_index;
@@ -925,6 +951,7 @@ void		vk_create_swapchain( VkPhysicalDevice physical_device, VkDevice device,
 // frame
 void		vk_begin_frame( void );
 void		vk_end_frame( void );
+void		vk_present_frame( void );
 void		vk_create_framebuffers( void );
 void		vk_destroy_framebuffers( void );
 void		vk_create_sync_primitives( void );
@@ -949,11 +976,9 @@ VkCommandBuffer vk_begin_command_buffer( void );
 void		vk_end_command_buffer( VkCommandBuffer command_buffer );
 void		vk_create_command_pool( void );
 void		vk_create_command_buffer( void );
-void		vk_record_image_layout_transition( VkCommandBuffer command_buffer, VkImage image, 
-	VkImageAspectFlags image_aspect_flags, VkAccessFlags src_access_flags, 
-	VkImageLayout old_layout, VkAccessFlags dst_access_flags, VkImageLayout new_layout,
-	uint32_t src_family_index, uint32_t dst_family_index, 
-	VkPipelineStageFlags src_stage_mask, VkPipelineStageFlags dst_stage_mask );
+void vk_record_image_layout_transition( VkCommandBuffer cmdBuf, VkImage image, 
+	VkImageAspectFlags image_aspect_flags, 
+	VkImageLayout old_layout, VkImageLayout new_layout );
 
 // memory
 uint32_t	vk_find_memory_type( uint32_t memory_type_bits, VkMemoryPropertyFlags properties );
@@ -999,13 +1024,10 @@ void		vk_get_pipeline_def( uint32_t pipeline, Vk_Pipeline_Def *def );
 uint32_t	vk_append_uniform( void *uniform, size_t size, uint32_t min_offset );
 
 // image process
-void		GetScaledDimension( const unsigned int width, const unsigned int height, 
-	unsigned int * const outW, unsigned int * const outH, int isPicMip );
 void		R_SetColorMappings( void );
 void		R_LightScaleTexture( byte *in, int inwidth, int inheight, qboolean only_gamma );
 void		ResampleTexture( unsigned *in, int inwidth, int inheight, unsigned *out, int outwidth, int outheight );
 void		R_BlendOverTexture( unsigned char *data, const uint32_t pixelCount, const uint32_t l );
-void		R_MipMapNormal( byte *out, byte *in, int width, int height, const qboolean swizzle );
 void		R_MipMap( byte *out, byte *in, int width, int height );
 void		R_MipMap2( unsigned* const out, unsigned* const in, int inWidth, int inHeight );
 
@@ -1054,5 +1076,12 @@ void		vk_set_object_name( uint64_t obj, const char *objName, VkDebugReportObject
 }
 
 void		vk_debug( const char *msg, ... );
-void		vk_create_debug_callback( void );
 void		R_DebugGraphics( void );
+
+#ifdef USE_VK_VALIDATION
+	void	vk_create_debug_callback( void );
+
+#ifdef USE_DEBUG_UTILS
+	void	vk_create_debug_utils( VkDebugUtilsMessengerCreateInfoEXT &desc );
+#endif
+#endif

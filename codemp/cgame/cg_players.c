@@ -6347,8 +6347,10 @@ void CG_DoSaber( vec3_t origin, vec3_t dir, float length, float lengthMax, float
 
 	saberRadius = (radiusStart + Q_flrand(-1.0f, 1.0f) * radiusRange)*radiusmult;
 
-	VectorScale( rgb, 255.0f, rgb );
 	if (cg_saberIgnitionFlare.integer && length <= (lengthMax * 0.25f)) {
+		vec3_t flareRGB;
+		VectorCopy(rgb, flareRGB);
+		VectorScale( flareRGB, 255.0f, flareRGB );
 		CG_AddSaberIgnitionFlareEffect(origin, saberRadius, rgb, rfx, cgs.media.saberIgnitionFlare, 1.5f, 0.25f);
 	}
 
@@ -7977,7 +7979,7 @@ CheckTrail:
 		// SFX Saber trail
 		saberTrail->duration = 0;
 
-		if (!saberTrail->base || !saberTrail->tip || !saberTrail->dualbase || !saberTrail->dualtip || !saberTrail->lastTime || !saberTrail->inAction) {
+		if (!saberTrail->lastTime || !saberTrail->inAction) {
 			VectorCopy(org_, saberTrail->base);
 			VectorMA(end, -1.5f, axis_[0], saberTrail->tip);
 			VectorCopy(saberTrail->base, saberTrail->dualbase);
@@ -10098,7 +10100,7 @@ void CG_CheckThirdPersonAlpha( centity_t *cent, refEntity_t *legs )
 //[Kameleon] - Nerevar's Santa Hat feature. call somewhere in cg_players@void CG_Player
 void CG_DrawCosmeticOnPlayer(centity_t* cent, int time, qhandle_t* gameModels, qhandle_t hatModel, refEntity_t parent, int position)
 {
-    int newBolt;
+    int newBolt = 0;
     mdxaBone_t matrix;
     vec3_t boltOrg, bAngles;
     refEntity_t re;
@@ -10184,7 +10186,7 @@ void CG_DrawCosmeticOnPlayer(centity_t* cent, int time, qhandle_t* gameModels, q
 
 static void CG_DrawCosmeticOnPlayer2(centity_t* cent, int time, qhandle_t* gameModels, cosmeticItem_t *cosmetic, refEntity_t parent, int position)
 {
-	int newBolt;
+	int newBolt = 0;
 	mdxaBone_t matrix;
 	vec3_t boltOrg, bAngles;
 	refEntity_t re;
@@ -11010,7 +11012,7 @@ void CG_Player( centity_t *cent ) {
 
 	team = ci->team;
 
-	if (cent->currentState.number != cg.snap->ps.clientNum && (cgs.jcinfo2 & JAPRO_CINFO2_WTTRIBES) && !(cent->currentState.eFlags & EF_DEAD)) {
+	if (cent->currentState.number != cg.snap->ps.clientNum && (cgs.jcinfo2 & JAPRO_CINFO2_WTTRIBES) && !(cent->currentState.eFlags & EF_DEAD) && (cent->currentState.bolt1 != 2)) {
 		float dist = Distance(cg.snap->ps.origin, cent->currentState.pos.trBase);
 		//float size = 4 + (dist * 0.0000006f);
 		float size = 4 + (dist * 0.008f);

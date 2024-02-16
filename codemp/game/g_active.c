@@ -3208,7 +3208,7 @@ void G_SetTauntAnim( gentity_t *ent, int taunt )
 			}
 			if (ent->client->ps.weapon == WP_SABER) //JAPRO - Serverside - Saber bow sound fix
 			{
-				if ( ent->client->ps.saberHolstered == 1 && ent->client->saber[1].model && ent->client->saber[1].model[0] )
+				if ( ent->client->ps.saberHolstered == 1 && ent->client->saber[1].model[0] )
 				{//turn off second saber
 					G_Sound( ent, CHAN_WEAPON, ent->client->saber[1].soundOff );
 				}
@@ -3398,11 +3398,9 @@ qboolean CanGrapple( gentity_t *ent ) {
 		return qfalse;
 	if (!g_allowGrapple.integer && !ent->client->sess.raceMode)
 		return qfalse;
-	if (ent->client->sess.raceMode && ent->client->sess.movementStyle != MV_JETPACK)
+	if (ent->client->sess.raceMode && ent->client->sess.movementStyle != MV_JETPACK && ent->client->sess.movementStyle != MV_TRIBES)
 		return qfalse;
 	if (ent->client->ps.duelInProgress)
-		return qfalse;
-	if (!BG_SaberInIdle(ent->client->ps.saberMove))
 		return qfalse;
 	if (BG_InRoll(&ent->client->ps, ent->client->ps.legsAnim))
 		return qfalse;
@@ -3429,6 +3427,8 @@ qboolean CanFireGrapple( gentity_t *ent ) { // Adapt for new hold-to-use jetpack
 	if (BG_InSpecialJump(ent->client->ps.legsAnim))
 		return qfalse;	
 	if (ent->client->sess.movementStyle == MV_TRIBES && ent->client->ps.fd.forcePower < 25)
+		return qfalse;
+	if (ent->client->sess.movementStyle == MV_TRIBES && (g_tweakWeapons.integer & WT_TRIBES) && (ent->client->ps.fd.forcePowersActive & (1 << FP_ABSORB)))
 		return qfalse;
 	return qtrue;
 }
@@ -4307,6 +4307,9 @@ void ClientThink_real( gentity_t *ent ) {
 			if (client->pers.tribesClass == 3) {
 				client->ps.speed *= 0.78125f;
 			}
+			if (g_tweakWeapons.integer & WT_TRIBES && (ent->client->ps.fd.forcePowersActive&(1 << FP_ABSORB))) {
+				client->ps.speed *= 1.5f;
+			}
 		} //Tribesclass = 0 else?
 
 		//Check for a siege class speed multiplier
@@ -4356,6 +4359,14 @@ void ClientThink_real( gentity_t *ent ) {
 							client->ps.gravity = 200;
 						}
 						else client->ps.gravity = 750; //Match 125fps gravity here since we are using decimal precision for Zvel now
+					}
+					else if (g_tweakWeapons.integer & WT_TRIBES) {
+						if (client->ps.stats[STAT_DEAD_YAW]) {
+							client->ps.gravity *= 0.25f;
+						}
+						if (ent->client->ps.fd.forcePowersActive&(1 << FP_ABSORB)) {
+							client->ps.gravity *= 1.5f;
+						}
 					}
 				}
 			}
@@ -4478,7 +4489,7 @@ void ClientThink_real( gentity_t *ent ) {
 							}
 						}
 					}
-					if (ent->client->pers.lastUserName && ent->client->pers.lastUserName[0] && duelAgainst->client->pers.lastUserName && duelAgainst->client->pers.lastUserName[0]) {//loda
+					if (ent->client->pers.lastUserName[0] && duelAgainst->client->pers.lastUserName[0]) {//loda
 						if (!(ent->client->sess.accountFlags & JAPRO_ACCOUNTFLAG_NODUEL) && !(duelAgainst->client->sess.accountFlags & JAPRO_ACCOUNTFLAG_NODUEL))
 							G_AddDuel(ent->client->pers.lastUserName, duelAgainst->client->pers.lastUserName, ent->client->pers.duelStartTime, dueltypes[ent->client->ps.clientNum], ent->client->ps.stats[STAT_HEALTH], ent->client->ps.stats[STAT_ARMOR]);
 					}
@@ -4735,7 +4746,7 @@ void ClientThink_real( gentity_t *ent ) {
 
 		// sanity check, deals with falling etc;
 	if ( ent->client->hook && ent->client->hook->think == Weapon_HookThink && CanGrapple(ent)) {
-			ent->client->ps.pm_flags |= PMF_GRAPPLE;
+		ent->client->ps.pm_flags |= PMF_GRAPPLE;
 	} else {
 		//Com_Printf("Unsetting grapple pmf\n");
 		ent->client->ps.pm_flags &= ~( PMF_GRAPPLE );
@@ -5258,12 +5269,16 @@ void ClientThink_real( gentity_t *ent ) {
 			ForceRage(ent);
 			break;
 		case GENCMD_FORCE_PROTECT:
+			if (g_tweakWeapons.integer & WT_TRIBES) //only allow this to be done via redirect from +button_lightning in tribes
+				break;
 			if (ent->client->genCmdDebounce[GENCMD_DELAY_PROTECT] > level.time - 300)
 				break;
 			ent->client->genCmdDebounce[GENCMD_DELAY_PROTECT] = level.time;
 			ForceProtect(ent);
 			break;
 		case GENCMD_FORCE_ABSORB:
+			if (g_tweakWeapons.integer & WT_TRIBES) //only allow this to be done via redirect from +button_lightning in tribes
+				break;
 			if (ent->client->genCmdDebounce[GENCMD_DELAY_ABSORB] > level.time - 300)
 				break;
 			ent->client->genCmdDebounce[GENCMD_DELAY_ABSORB] = level.time;
@@ -5433,7 +5448,7 @@ void ClientThink_real( gentity_t *ent ) {
 			{
 				int delay = 300;
 				if (g_tweakSaber.integer & ST_FASTCYCLE) {
-					if (!(ent->client->saber[0].singleBladeStyle || (ent->client->saber[1].model && ent->client->saber[1].model[0])))//Single
+					if (!(ent->client->saber[0].singleBladeStyle || (ent->client->saber[1].model[0])))//Single
 						delay = 100;
 				}
 				if (ent->client->genCmdDebounce[GENCMD_DELAY_SABERSWITCH] > level.time - delay) //Not sure what this should be.. on baseJK you can bypass any delay, though it seems clearly intended to be 300ms delay..

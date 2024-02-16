@@ -455,11 +455,11 @@ void G_AddDuelElo(char *winner, char *loser, int type, int duration, int winner_
 
 	if (newUserCutoff < 0)
 		newUserCutoff = 0;
-	if (provisionalCutoff < 0);
+	if (provisionalCutoff < 0)
 		provisionalCutoff = 0;
-	if (provisionalChangeBig < 0.1f);
+	if (provisionalChangeBig < 0.1f)
 		provisionalChangeBig = 0.1f;
-	if (provisionalChangeSmall < 0.1f);
+	if (provisionalChangeSmall < 0.1f)
 		provisionalChangeSmall = 0.1f;
 
 	winnerDuelCount = GetDuelCount(winner, type, end_time, db);
@@ -1029,6 +1029,7 @@ void IntegerToRaceName(int style, char *styleString, size_t styleStringSize) {
 #endif
 		case 16: Q_strncpyz(styleString, "ocpm", styleStringSize); break;
 		case 17: Q_strncpyz(styleString, "tribes", styleStringSize); break;
+		case 18: Q_strncpyz(styleString, "surf", styleStringSize); break;
 		default: Q_strncpyz(styleString, "ERROR", styleStringSize); break;
 	}
 }
@@ -1508,33 +1509,43 @@ static void G_UpdateOtherLocalRun(sqlite3 * db, int seasonNewRank_self, int seas
 
 }
 
-void TimeToString(int duration_ms, char *timeStr, size_t strSize, qboolean noMs) { 
+void TimeSecToString(int duration_ms, char *timeStr, size_t strSize) {
+	if (duration_ms > (60 * 60)) { //thanks, eternal
+		int hours, minutes, seconds;
+		hours = (int)((duration_ms / (60 * 60))); //wait wut
+		minutes = (int)((duration_ms / (60)) % 60);
+		seconds = (int)(duration_ms) % 60;
+		Com_sprintf(timeStr, strSize, "%i:%02i:%02i", hours, minutes, seconds);
+	}
+	else if (duration_ms > (60)) {
+		int minutes, seconds;
+		minutes = (int)((duration_ms / (60)) % 60);
+		seconds = (int)(duration_ms) % 60;
+		Com_sprintf(timeStr, strSize, "%i:%02i", minutes, seconds);
+	}
+	else {
+		Q_strncpyz(timeStr, va("%i", (duration_ms)), strSize);
+	}
+}
+
+void TimeToString(int duration_ms, char *timeStr, size_t strSize) { 
 	if (duration_ms > (60*60*1000)) { //thanks, eternal
 		int hours, minutes, seconds, milliseconds; 
 		hours = (int)((duration_ms / (1000*60*60))); //wait wut
 		minutes = (int)((duration_ms / (1000*60)) % 60);
 		seconds = (int)(duration_ms / 1000) % 60;
 		milliseconds = duration_ms % 1000; 
-		if (noMs)
-			Com_sprintf(timeStr, strSize, "%i:%02i:%02i", hours, minutes, seconds);
-		else
-			Com_sprintf(timeStr, strSize, "%i:%02i:%02i.%03i", hours, minutes, seconds, milliseconds);
+		Com_sprintf(timeStr, strSize, "%i:%02i:%02i.%03i", hours, minutes, seconds, milliseconds);
 	}
 	else if (duration_ms > (60*1000)) {
 		int minutes, seconds, milliseconds;
 		minutes = (int)((duration_ms / (1000*60)) % 60);
 		seconds = (int)(duration_ms / 1000) % 60;
 		milliseconds = duration_ms % 1000; 
-		if (noMs)
-			Com_sprintf(timeStr, strSize, "%i:%02i", minutes, seconds);
-		else
-			Com_sprintf(timeStr, strSize, "%i:%02i.%03i", minutes, seconds, milliseconds);
+		Com_sprintf(timeStr, strSize, "%i:%02i.%03i", minutes, seconds, milliseconds);
 	}
 	else {
-		if (noMs)
-			Q_strncpyz(timeStr, va("%.0f", ((float)duration_ms * 0.001)), strSize);
-		else
-			Q_strncpyz(timeStr, va("%.3f", ((float)duration_ms * 0.001)), strSize);
+		Q_strncpyz(timeStr, va("%.3f", ((float)duration_ms * 0.001)), strSize);
 	}
 }
 
@@ -1549,13 +1560,20 @@ void PrintRaceTime(char *username, char *playername, char *message, char *style,
 			//if (awesomenoise)
 				//PlayActualGlobalSound(awesomenoise); //Only for simple PB not WR i guess..
 			//else
-			PlayActualGlobalSound(G_SoundIndex("sound/chars/rosh_boss/misc/victory3"));
+			if (!level.wrNoise) {
+				level.wrNoise = G_SoundIndex("sound/chars/rosh_boss/misc/victory3"); //Maybe this should be done when df_trigger_finish is spawned cuz its still gonna hitch maybe on first wr of map? idk
+			}
+			PlayActualGlobalSound(level.wrNoise);
 		}
 		else if (global_newRank > 0) {//PB
 			if (awesomenoise)
 				PlayActualGlobalSound(awesomenoise);
-			else if (awesomenoise != -1)
-				PlayActualGlobalSound(G_SoundIndex("sound/chars/rosh/misc/taunt1"));
+			else if (awesomenoise != -1) {
+				if (!level.pbNoise) {
+					level.pbNoise = G_SoundIndex("sound/chars/rosh/misc/taunt1");
+				}
+				PlayActualGlobalSound(level.pbNoise);
+			}
 		}
 	}
 
@@ -1667,10 +1685,10 @@ void G_UpdateUnlocks(char *username, char *coursename, int style, int duration_m
 		unlocks = client->pers.unlocks;  	//Unlocks is existing unlocks from client. no need to update if they already have it.
 
 	for (i=0; i<MAX_COSMETIC_UNLOCKS; i++) {
-		if (!(unlocks & 1 << cosmeticUnlocks[i].bitvalue) && cosmeticUnlocks[i].style == style && !Q_stricmp(coursename, cosmeticUnlocks[i].mapname) && (!cosmeticUnlocks[i].duration || (duration_ms < cosmeticUnlocks[i].duration))) {
-			unlock = (1 << cosmeticUnlocks[i].bitvalue);
-			//Com_Printf("Unlock found %i (%i %s)\n", cosmeticUnlocks[i].bitvalue, style, coursename);
-			break;
+		if (!(unlocks & (1 << cosmeticUnlocks[i].bitvalue)) && cosmeticUnlocks[i].style == style && !Q_stricmp(coursename, cosmeticUnlocks[i].mapname) && (!cosmeticUnlocks[i].duration || (duration_ms < cosmeticUnlocks[i].duration))) {
+			unlock |= (1 << cosmeticUnlocks[i].bitvalue);
+			//Com_Printf("Unlock found [%s %i %i] %i (%i %s)\n", cosmeticUnlocks[i].mapname, cosmeticUnlocks[i].style, cosmeticUnlocks[i].duration, cosmeticUnlocks[i].bitvalue, style, coursename);
+			continue; //Ahh this should be continue, so that one course can give us multiple unlocks?
 		}
 	}
 
@@ -1791,7 +1809,7 @@ void G_AddRaceTime(char *username, char *message, int duration_ms, int style, in
 	sqlite3_stmt * stmt;
 	int s;
 	int season_oldBest, season_oldRank = 0, season_newRank = -1, global_oldBest, global_oldRank = 0, global_newRank = -1; //Changed newrank to be -1 ??
-	float addedScore;
+	float addedScore = 0.0f;
 	gclient_t	*cl;
 	const int season = G_GetSeason();
 
@@ -2068,7 +2086,7 @@ void G_AddRaceTime(char *username, char *message, int duration_ms, int style, in
 	
 	CALL_SQLITE(close(db));
 
-	TimeToString((int)(duration_ms), timeStr, sizeof(timeStr), qfalse);
+	TimeToString((int)(duration_ms), timeStr, sizeof(timeStr));
 	PrintRaceTime(username, cl->pers.netname, message, styleString, topspeed, average, timeStr, clientNum, season_newRank, seasonPB, global_newRank, qtrue, qtrue, season_oldRank, global_oldRank, addedScore, awesomenoise);
 	//DebugWriteToDB("G_AddRaceTime");
 }
@@ -2318,7 +2336,7 @@ void Cmd_ChangePassword_f( gentity_t *ent ) {
 	sqlite3 * db;
     char * sql;
     sqlite3_stmt * stmt;
-    int row = 0, s;
+    int s; //row = 0, s;
 	char username[16], enteredPassword[16], newPassword[16], password[16];
 
 	if (trap->Argc() != 4) {
@@ -2355,7 +2373,7 @@ void Cmd_ChangePassword_f( gentity_t *ent ) {
         s = sqlite3_step(stmt);
         if (s == SQLITE_ROW) {
 			Q_strncpyz(password, (char*)sqlite3_column_text(stmt, 0), sizeof(password));
-            row++;
+            //row++;
         }
         else if (s == SQLITE_DONE)
             break;
@@ -2702,8 +2720,8 @@ void Svcmd_AccountInfo_f(void)
 		sqlite3 * db;
 		char * sql;
 		sqlite3_stmt * stmt;
-		int lastlogin, created, racetime;
-		unsigned int lastip;
+		int lastlogin = 0, created = 0, racetime = 0;
+		unsigned int lastip = 0;
 		int s;
 		char timeStr[64] = { 0 }, buf[MAX_STRING_CHARS - 64] = { 0 };
 
@@ -2735,7 +2753,7 @@ void Svcmd_AccountInfo_f(void)
 		getDateTime(lastlogin, timeStr, sizeof(timeStr));
 		Q_strcat(buf, sizeof(buf), va("   ^5Last login: ^2%s\n", timeStr));
 		Q_strcat(buf, sizeof(buf), va("   ^5Last IP^3: ^2%u\n", lastip));
-		TimeToString(racetime * 1000, timeStr, sizeof(timeStr), qtrue);
+		TimeSecToString(racetime, timeStr, sizeof(timeStr));
 		Q_strcat(buf, sizeof(buf), va("   ^5Racetime: ^2%s\n", timeStr));
 
 		trap->Print("%s", buf);
@@ -2873,7 +2891,7 @@ void Svcmd_FlagAccount_f( void ) {
 
 			for (i=0;  i<level.numPlayingClients; i++) {
 				cl = &level.clients[level.sortedClients[i]];
-				if (cl->pers.userName && cl->pers.userName[0] && !Q_stricmp(cl->pers.userName, username)) {
+				if (cl->pers.userName[0] && !Q_stricmp(cl->pers.userName, username)) {
 					if (flags & (1 << index)) 
 						cl->sess.accountFlags &= ~(1 << index);
 					else
@@ -2920,7 +2938,7 @@ void Svcmd_FlagAccount_f( void ) {
 
 			for (i=0;  i<level.numPlayingClients; i++) {
 				cl = &level.clients[level.sortedClients[i]];
-				if (cl->pers.userName && cl->pers.userName[0] && !Q_stricmp(cl->pers.userName, username)) {
+				if (cl->pers.userName[0] && !Q_stricmp(cl->pers.userName, username)) {
 					cl->sess.accountFlags = bitmask;
 					break;
 				}
@@ -2941,7 +2959,7 @@ void Svcmd_ListAdmins_f(void)
 		char * sql;
 		sqlite3_stmt * stmt;
 		int s;
-		unsigned int flags;
+		//unsigned int flags;
 		char adminString[16];
 		int row = 1;
 
@@ -2955,7 +2973,7 @@ void Svcmd_ListAdmins_f(void)
 		while (1) {
 			s = sqlite3_step(stmt);
 			if (s == SQLITE_ROW) {
-				flags = sqlite3_column_int(stmt, 1);
+				//flags = sqlite3_column_int(stmt, 1);
 				Q_strncpyz(adminString, "Admin", sizeof(adminString));
 				Com_Printf(va("^5%2i^3: ^3%-18s %s^7\n", row, (char*)sqlite3_column_text(stmt, 0), adminString));
 				row++;
@@ -3440,7 +3458,7 @@ void Cmd_ACRegister_f( gentity_t *ent ) { //Temporary, until global shit is done
 }
 
 void Cmd_ACLogout_f( gentity_t *ent ) { //If logged in, print logout msg, remove login status.
-	if (ent->client->pers.userName && ent->client->pers.userName[0]) {
+	if (ent->client->pers.userName[0]) {
 		if (ent->client->sess.raceMode && !ent->client->pers.practice && ent->client->pers.stats.startTime) {
 			ent->client->pers.stats.racetime += (trap->Milliseconds() - ent->client->pers.stats.startTime)*0.001f - ent->client->afkDuration*0.001f;
 			ent->client->afkDuration = 0;
@@ -3496,7 +3514,7 @@ void Cmd_JoinTeam_f( gentity_t *ent ) {
 		sqlite3_stmt * stmt;
 		int s;//, row = 0;
 		qboolean inviteOnly = qfalse;
-		int count;
+		int count = 0;
 
 		CALL_SQLITE (open (LOCAL_DB_PATH, & db));
 
@@ -4265,7 +4283,7 @@ void Cmd_AdminTeam_f( gentity_t *ent ) {
 		return; 
 	}
 
-	if (!ent->client->pers.userName || !ent->client->pers.userName[0]) {
+	if (!ent->client->pers.userName[0]) {
 		trap->SendServerCommand(ent-g_entities, "print \"You must be logged in to use this command.\n\"");
 		return;
 	}
@@ -4601,7 +4619,7 @@ void Cmd_AccountStats_f(gentity_t *ent) { //Should i bother to cache player stat
 				if (s == SQLITE_ROW) {
 					char *tmpMsg = NULL;
 					IntegerToRaceName(sqlite3_column_int(stmt, 1), styleStr, sizeof(styleStr));
-					TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr), qfalse);
+					TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr));
 					getDateTime(sqlite3_column_int(stmt, 5), dateStr, sizeof(dateStr));
 
 					//If rank == 0, put "Season rank: season_rank".  Else put "Rank: rank"
@@ -5050,6 +5068,8 @@ int RaceNameToInteger(char *style) {
 		return 16;
 	if (!Q_stricmp(style, "tribes"))
 		return 17;
+	if (!Q_stricmp(style, "surf"))
+		return 18;
 	return -1;
 }
 
@@ -5597,7 +5617,7 @@ void Cmd_DFFind_f(gentity_t *ent) {
 			s = sqlite3_step(stmt);
 			if (s == SQLITE_ROW) {
 				char *tmpMsg = NULL;
-				TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr), qfalse);
+				TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr));
 				getDateTime(sqlite3_column_int(stmt, 4), dateStr, sizeof(dateStr));
 				if (rawtime - sqlite3_column_int(stmt, 4) < 60*60*24) { //Today
 					Com_sprintf(dateStrColored, sizeof(dateStrColored), "^2%s^7", dateStr);
@@ -5907,12 +5927,13 @@ void Cmd_DFHardest_f(gentity_t *ent) {
 
 }
 
+#if 0
 void Cmd_DFCompare_f(gentity_t *ent) {
 	int style = -1, page = -1, start = 0, input, i, season = -1;
 	char inputString[16], inputStyleString[16], myUsername[16], theirUsername[16];
 	const int args = trap->Argc();
 
-	if (!ent->client->pers.userName || !ent->client->pers.userName[0]) {
+	if (!ent->client->pers.userName[0]) {
 		trap->SendServerCommand(ent - g_entities, "print \"You must be logged in to use this command.\n\"");
 		return;
 	}
@@ -6074,6 +6095,8 @@ GROUP BY coursename, style, season
 
 
 }
+#endif
+
 void Cmd_DFRecent_f(gentity_t *ent) {
 	int style = -1, page = -1, start = 0, input, i;
 	char inputString[16], inputStyleString[16];
@@ -6162,7 +6185,7 @@ void Cmd_DFRecent_f(gentity_t *ent) {
 			s = sqlite3_step(stmt);
 			if (s == SQLITE_ROW) {
 				char *tmpMsg = NULL;
-				TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr), qfalse);
+				TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr));
 				getDateTime(sqlite3_column_int(stmt, 5), dateStr, sizeof(dateStr));
 				IntegerToRaceName(sqlite3_column_int(stmt, 2), styleStr, sizeof(styleStr));
 
@@ -6298,6 +6321,10 @@ void Cmd_DFTop10_f(gentity_t *ent) {
 
 	Q_strlwr(partialCourseName);
 	Q_CleanStr(partialCourseName);
+	Q_strstrip(partialCourseName, " ", "");
+	Q_strstrip(partialCourseName, "&", " ");
+
+	Com_Printf("Partial coursename is %s\n", partialCourseName);
 
 	if (!enteredCourseName) {
 		char info[1024] = {0};
@@ -6305,6 +6332,7 @@ void Cmd_DFTop10_f(gentity_t *ent) {
 		Q_strncpyz(fullCourseName, Info_ValueForKey( info, "mapname" ), sizeof(fullCourseName));
 		Q_strlwr(fullCourseName);
 		Q_CleanStr(fullCourseName);
+		Q_strstrip(partialCourseName, " ", "");
 	}
 
 	//Com_Printf("Style %i, page %i, season %i, map %s, fullmap %s\n", style, page, season, partialCourseName, fullCourseName);
@@ -6321,12 +6349,8 @@ void Cmd_DFTop10_f(gentity_t *ent) {
 		CALL_SQLITE (open (LOCAL_DB_PATH, & db));
 
 		if (enteredCourseName) { //Course e
-			//Com_Printf("doing sql query %s %i\n", courseName, style);
-			//sql = "SELECT DISTINCT(coursename) FROM LocalRun WHERE coursename LIKE %?%";
-			//sql = "SELECT DISTINCT(coursename) FROM LocalRun WHERE instr(coursename, ?) > 0 LIMIT 1";
-			//sql = "SELECT coursename, MAX(entries) FROM LocalRun WHERE instr(coursename, ?) > 0 LIMIT 1";
-			//sql = "SELECT DISTINCT(coursename) FROM LocalRun WHERE instr(coursename, ?) > 0 ORDER BY LENGTH(coursename) ASC, entries DESC LIMIT 1";
-			sql = "SELECT DISTINCT(coursename) FROM LocalRun WHERE instr(replace(coursename, ' ', ''), ?) > 0 ORDER BY entries DESC LIMIT 1";
+			//sql = "SELECT DISTINCT(coursename) FROM LocalRun WHERE instr(replace(coursename, ' ', ''), ?) > 0 ORDER BY entries DESC LIMIT 1";
+			sql = "SELECT DISTINCT(coursename) FROM LocalRun WHERE instr(coursename, ?) > 0 ORDER BY entries DESC LIMIT 1";
 			CALL_SQLITE (prepare_v2 (db, sql, strlen (sql) + 1, & stmt, NULL));
 			CALL_SQLITE (bind_text (stmt, 1, partialCourseName, -1, SQLITE_STATIC));
 			s = sqlite3_step(stmt);
@@ -6381,7 +6405,7 @@ void Cmd_DFTop10_f(gentity_t *ent) {
 			s = sqlite3_step(stmt);
 			if (s == SQLITE_ROW) {
 				char *tmpMsg = NULL;
-				TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr), qfalse);
+				TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr));
 				getDateTime(sqlite3_column_int(stmt, 4), dateStr, sizeof(dateStr));
 				if (rawtime - sqlite3_column_int(stmt, 4) < 60*60*24) { //Today
 					Com_sprintf(dateStrColored, sizeof(dateStrColored), "^2%s^7", dateStr);
@@ -6612,7 +6636,7 @@ void Cmd_DFTodo_f(gentity_t *ent) {
 	char styleString[16] = {0}, inputString[32], partialCourseName[40], username[16];
 	qboolean enteredCoursename = qfalse;
 
-	if (!ent->client->pers.userName || !ent->client->pers.userName[0]) {
+	if (!ent->client->pers.userName[0]) {
 		trap->SendServerCommand(ent-g_entities, "print \"You must be logged in to use this command.\n\"");
 		return;
 	}
@@ -6771,7 +6795,7 @@ void Cmd_DFTodo_f(gentity_t *ent) {
 				IntegerToRaceName(sqlite3_column_int(stmt, 1), styleStr, sizeof(styleStr));
 				if (sqlite3_column_int(stmt, 5)) {
 					Q_strncpyz(rankStr, va("%i", sqlite3_column_int(stmt, 2)), sizeof(rankStr));
-					TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr), qfalse);
+					TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr));
 					getDateTime(sqlite3_column_int(stmt, 5), dateStr, sizeof(dateStr)); 
 				}
 				else {
@@ -6848,7 +6872,7 @@ void Cmd_DFPopular_f(gentity_t *ent) {
 		return; //Arg doesnt match any expected values so error.
 	}
 
-	if (enteredUsername && (!ent->client->pers.userName || !ent->client->pers.userName[0])) {
+	if (enteredUsername && (!ent->client->pers.userName[0])) {
 		trap->SendServerCommand(ent-g_entities, "print \"You must be logged in to use this command.\n\"");
 		return;
 	}
@@ -7316,7 +7340,7 @@ void InitGameAccountStuff( void ) { //Called every mapload , move the create tab
 void G_SpawnWarpLocationsFromCfg(void) //loda fixme
 {
 	fileHandle_t f;	
-	int		fLen = 0, i, MAX_FILESIZE = 4096, MAX_NUM_WARPS = 64, args = 1, row = 0;  //use max num warps idk
+	int		fLen = 0, i, MAX_FILESIZE = 4096, MAX_NUM_WARPS = 72, args = 1, row = 0;  //use max num warps idk
 	char	filename[MAX_QPATH+4] = {0}, info[1024] = {0}, buf[4096] = {0};//eh
 	char*	pch;
 

@@ -218,7 +218,7 @@ typedef enum
 
 #if defined( _WIN32 )
 DEFINE_ENUM_FLAG_OPERATORS( imgFlags_t );
-#elif defined( __linux__ ) || defined( __APPLE__ )
+#elif defined( __linux__ ) || defined( __APPLE__ ) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 inline constexpr imgFlags_t operator | (imgFlags_t a, imgFlags_t b) throw() {
 	return imgFlags_t(((int)a) | ((int)b));
 }
@@ -661,6 +661,7 @@ extern hitMatReg_t		hitMatReg[MAX_HITMAT_ENTRIES];
 Ghoul2 Insert End
 */
 
+extern cvar_t	*r_patchStitching;
 
 // trRefdef_t holds everything that comes in refdef_t,
 // as well as the locally generated scene information
@@ -684,7 +685,6 @@ typedef struct trRefdef_s {
 
 	int					num_entities;
 	trRefEntity_t		*entities;
-	trMiniRefEntity_t	*miniEntities;
 
 	int					num_dlights;
 	struct dlight_s		*dlights;
@@ -708,10 +708,17 @@ typedef struct trRefdef_s {
 //=================================================================================
 
 // skins allow models to be retextured without modifying the model file
-typedef struct skinSurface_s {
+typedef struct {
 	char		name[MAX_QPATH];
 	shader_t	*shader;
 } skinSurface_t;
+
+typedef struct skin_s {
+	char		name[MAX_QPATH];		// game path, including extension
+	int			numSurfaces;
+	skinSurface_t	*surfaces[128];
+} skin_t;
+
 
 typedef struct fog_s {
 	int				originalBrushNumber;
@@ -1417,6 +1424,7 @@ typedef struct trGlobals_s {
 struct glconfigExt_t
 {
 	glconfig_t *glConfig;
+	qboolean 	textureFilterAnisotropicAvailable;
 	qboolean	doGammaCorrectionWithShaders;
 	qboolean	doStencilShadowsInOneDrawcall;
 	const char	*originalExtensionString;
@@ -1744,7 +1752,6 @@ shader_t	*FinishShader( void );
 void		R_InitShaders( qboolean server );
 void		R_ShaderList_f( void );
 void		R_RemapShader( const char *oldShader, const char *newShader, const char *timeOffset );
-void		R_ClearShaderHashTable( void );
 void		R_CreateDefaultShadingCmds( image_t *image );
 
 //
@@ -1901,7 +1908,6 @@ CURVE TESSELATION
 
 ============================================================
 */
-#define PATCH_STITCHING
 
 srfGridMesh_t	*R_SubdividePatchToGrid( int width, int height, drawVert_t points[MAX_PATCH_SIZE * MAX_PATCH_SIZE] );
 srfGridMesh_t	*R_GridInsertColumn( srfGridMesh_t *grid, int column, int row, vec3_t point, float loderror );
@@ -2172,7 +2178,6 @@ extern int max_polyverts;
 extern backEndData_t *backEndData;
 
 void *R_GetCommandBuffer( int bytes );
-void RB_ExecuteRenderCommands( const void *data );
 
 void R_AddDrawSurfCmd( drawSurf_t *drawSurfs, int numDrawSurfs );
 
@@ -2229,7 +2234,6 @@ void		DrawNormals( const shaderCommands_t *pInput );
 void		RB_ShowImages( image_t** const pImg, uint32_t numImages );
 
 // ...
-void		R_ClearShaderHashTable( void );
 void		R_IssueRenderCommands( qboolean runPerformanceCounters );
 void		WIN_Shutdown( void );
 
@@ -2251,7 +2255,7 @@ void		R_Add_AllocatedImage( image_t *image );
 
 void		vk_bind( image_t *image );
 void		vk_upload_image( image_t *image, byte *pic );
-void		vk_upload_image_data( image_t *image, int x, int y, int width, int height, int mipmaps, byte *pixels, int size ) ;
+void		vk_upload_image_data( image_t *image, int x, int y, int width, int height, int mipmaps, byte *pixels, int size, qboolean update ) ;
 void		vk_generate_image_upload_data( image_t *image, byte *data, Image_Upload_Data *upload_data );
 void		vk_create_image( image_t *image, int width, int height, int mip_levels );
 

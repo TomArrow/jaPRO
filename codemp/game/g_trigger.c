@@ -1257,7 +1257,7 @@ qboolean ValidRaceSettings(int restrictions, gentity_t *player)
 
 	style = player->client->sess.movementStyle;
 
-	if (style == MV_OCPM)
+	if (style == MV_OCPM || style == MV_SURF)
 		return qfalse;//temp
 
 	if (player->client->sess.accountFlags & JAPRO_ACCOUNTFLAG_NORACE)
@@ -1632,7 +1632,7 @@ void TimerStart(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO 
 
 void PrintRaceTime(char *username, char *playername, char *message, char *style, int topspeed, int average, char *timeStr, int clientNum, int season_newRank, qboolean spb, int global_newRank, qboolean loggedin, qboolean valid, int season_oldRank, int global_oldRank, float addedScore, int awesomenoise);
 void IntegerToRaceName(int style, char *styleString, size_t styleStringSize);
-void TimeToString(int duration_ms, char *timeStr, size_t strSize, qboolean noMS);
+void TimeToString(int duration_ms, char *timeStr, size_t strSize);
 void G_AddRaceTime(char *account, char *courseName, int duration_ms, int style, int topspeed, int average, int clientNum, int awesomenoise); //should this be extern?
 void TimerStop(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO Timers
 	if (!player->client)
@@ -1695,7 +1695,7 @@ void TimerStop(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO T
 			G_Sound(player, CHAN_AUTO, trigger->noise_index);
 		if (ValidRaceSettings(trigger->spawnflags, player)) {
 			valid = qtrue;
-			if (player->client->pers.userName && player->client->pers.userName[0])
+			if (player->client->pers.userName[0])
 				Q_strncpyz(c, S_COLOR_CYAN, sizeof(c));
 			else
 				Q_strncpyz(c, S_COLOR_GREEN, sizeof(c));
@@ -1762,7 +1762,7 @@ void TimerStop(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO T
 
 
 		IntegerToRaceName(player->client->ps.stats[STAT_MOVEMENTSTYLE], styleStr, sizeof(styleStr));
-		TimeToString((int)(time * 1000), timeStr, sizeof(timeStr), qfalse);
+		TimeToString((int)(time * 1000), timeStr, sizeof(timeStr));
 		Q_strncpyz(playerName, player->client->pers.netname, sizeof(playerName));
 		Q_StripColor(playerName);
 
@@ -2103,14 +2103,9 @@ void NewPush(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO Tim
 			return;
 	}
 
-	if ((trigger->spawnflags & 512)) {
-		//Bitmask that covers allowed movementstyles.  If the movementstyle is not here, don't activate the jumppad for that player.
-		if ((trigger->genericValue1 == 0 && player->client->sess.movementStyle == 0)) {
-		}
-		else if (trigger->genericValue1 && (trigger->genericValue1 & (1 << player->client->sess.movementStyle))) {
-		}
-		else return;
+	if (trigger->genericValue1 && (trigger->genericValue1 & (1 << player->client->sess.movementStyle))) {
 	}
+	else return;
 
 	if (player->client->sess.raceMode) {
 		if (trigger->spawnflags & 32 && player->client->ps.groundEntityNum == ENTITYNUM_NONE) { //Spawnflags 4 deadstops them if they are traveling in this direction... sad hack to let people retroactively fix maps without barriers
@@ -2164,11 +2159,11 @@ void NewPush(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO Tim
 		G_Sound(player, CHAN_AUTO, trigger->noise_index);
 
 	if (trigger->spawnflags & 1) {
-		if ((!g_fixSlidePhysics.integer && abs(player->client->lastVelocity[0]) > 350) || (g_fixSlidePhysics.integer && abs(player->client->lastVelocity[0]) > 90))
+		if ((!g_fixSlidePhysics.integer && fabsf(player->client->lastVelocity[0]) > 350) || (g_fixSlidePhysics.integer && fabsf(player->client->lastVelocity[0]) > 90))
 			player->client->ps.velocity[0] = player->client->lastVelocity[0] * scale;//XVel Relative Scale
 	}
 	if (trigger->spawnflags & 2) {
-		if ((!g_fixSlidePhysics.integer && abs(player->client->lastVelocity[1]) > 350) || (g_fixSlidePhysics.integer && abs(player->client->lastVelocity[1]) > 90))
+		if ((!g_fixSlidePhysics.integer && fabsf(player->client->lastVelocity[1]) > 350) || (g_fixSlidePhysics.integer && fabsf(player->client->lastVelocity[1]) > 90))
 			player->client->ps.velocity[1] = player->client->lastVelocity[1] * scale;//YVel Relative Scale
 	}
 	if (trigger->spawnflags & 4) {
@@ -2564,6 +2559,14 @@ void hurt_touch( gentity_t *self, gentity_t *other, trace_t *trace ) {
 	if ( self->flags & FL_INACTIVE )
 	{//set by target_deactivate
 		return;
+	}
+
+	if (self->spawnflags & 32)
+	{//NPCONLY
+		if (other->NPC == NULL)
+		{
+			return;
+		}
 	}
 
 	if ( !other->takedamage ) {

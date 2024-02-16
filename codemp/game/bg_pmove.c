@@ -1135,7 +1135,7 @@ void PM_ClipVelocity( vec3_t in, vec3_t normal, vec3_t out, float overbounce ) {
 		change = normal[i]*backoff;
 		out[i] = in[i] - change;
 	}
-	if ( pm->stepSlideFix && pm->ps->stats[STAT_MOVEMENTSTYLE] != MV_TRIBES)
+	if ( pm->stepSlideFix && pm->ps->stats[STAT_MOVEMENTSTYLE] != MV_TRIBES && pm->ps->stats[STAT_MOVEMENTSTYLE] != MV_SLICK)
 	{
 		if ( pm->ps->clientNum < MAX_CLIENTS//normal player
 			&& pm->ps->groundEntityNum != ENTITYNUM_NONE//on the ground
@@ -1311,7 +1311,7 @@ static void PM_Friction( void ) {
 void PM_AirAccelerate (vec3_t wishdir, float wishspeed, float accel)
 {
         int		i;
-		float	addspeed, accelspeed, currentspeed, wishspd = wishspeed, friction = 4.0f;
+		float	addspeed, accelspeed, currentspeed, wishspd = wishspeed;
 
 		if (pm->ps->pm_type == PM_DEAD)
 			return;
@@ -1489,6 +1489,49 @@ void CPM_PM_Aircontrol (pmove_t *pm, vec3_t wishdir, float wishspeed )
 
 /*
 ============
+PM_CS_AirAccelerate
+
+Gives you acceleration in-air looking a lot like CSGO.
+============
+*/
+void PM_CS_AirAccelerate(vec3_t wishdir, float wishspeed, float accel)
+{
+	int i;
+	float addspeed, accelspeed, currentspeed;
+	float wishspd;
+
+	wishspd = wishspeed;
+
+	// Cap speed
+	if (wishspd > 30.0f)
+		wishspd = 30.0f;
+
+	// Determine veer amount
+	currentspeed = DotProduct(pm->ps->velocity, wishdir);
+
+	// See how much to add
+	addspeed = wishspd - currentspeed;
+
+	// If not adding any, done.
+	if (addspeed <= 0)
+		return;
+
+	// Determine acceleration speed after acceleration
+	accelspeed = accel * wishspeed * pml.frametime * pm_friction;
+
+	// Cap it
+	if (accelspeed > addspeed)
+		accelspeed = addspeed;
+
+	// Adjust pmove vel.
+	for (i = 0; i<3; i++)
+	{
+		pm->ps->velocity[i] += accelspeed*wishdir[i];
+	}
+}
+
+/*
+============
 PM_CmdScale
 
 Returns the scale factor to apply to cmd movements
@@ -1602,7 +1645,7 @@ qboolean PM_ForceJumpingUp(void)
 
 	moveStyle = PM_GetMovePhysics();
 
-	if (moveStyle == MV_CPM || moveStyle == MV_Q3 || moveStyle == MV_WSW || moveStyle == MV_RJQ3 || moveStyle == MV_RJCPM || moveStyle == MV_JETPACK || moveStyle == MV_SLICK || moveStyle == MV_BOTCPM || moveStyle == MV_OCPM || moveStyle == MV_TRIBES)
+	if (moveStyle == MV_CPM || moveStyle == MV_Q3 || moveStyle == MV_WSW || moveStyle == MV_RJQ3 || moveStyle == MV_RJCPM || moveStyle == MV_JETPACK || moveStyle == MV_SLICK || moveStyle == MV_BOTCPM || moveStyle == MV_OCPM || moveStyle == MV_TRIBES || moveStyle == MV_SURF)
 		return qfalse;
 
 	if (!BG_CanUseFPNow(pm->gametype, pm->ps, pm->cmd.serverTime, FP_LEVITATION))
@@ -2198,6 +2241,8 @@ static qboolean PM_CheckJump( void )
 	{//in knockdown
 		return qfalse;
 	}
+
+	//Devy cs jump delay here?
 
 	if ( pm->ps->weapon == WP_SABER )
 	{
@@ -3337,7 +3382,7 @@ static qboolean PM_CheckJump( void )
 			if (added > 0) {
 				if (moveStyle == MV_QW || moveStyle == MV_PJK)
 					pm->ps->velocity[2] += (added * 0.75f); //Forcejump rampjump initial upspeed
-				else if ((moveStyle == MV_WSW))
+				else if (moveStyle == MV_WSW)
 					pm->ps->velocity[2] += (added * 0.75f);//Make rampjump weaker for wsw since no speedloss
 				else
 					pm->ps->velocity[2] += (added * 1.25f); //Make rampjump stronger for cpm/q3/slick
@@ -3361,6 +3406,9 @@ static qboolean PM_CheckJump( void )
 		else if (moveStyle == MV_TRIBES) {
 			pm->ps->velocity[2] = 275;
 			pm->ps->stats[STAT_JUMPTIME] = 401;
+		}
+		else if (moveStyle == MV_SURF) {
+			pm->ps->velocity[2] = 270;
 		}
 		else {
 			pm->ps->velocity[2] = JUMP_VELOCITY;
@@ -3715,6 +3763,14 @@ static void PM_AirMove( void ) {
 	fmove = pm->cmd.forwardmove;
 	smove = pm->cmd.rightmove;
 
+	if (moveStyle == MV_SURF) {
+		if (pm->cmd.forwardmove != 0 && pm->cmd.rightmove != 0)	{
+			pm->cmd.rightmove = 0;
+			pml.right[1] = 0;
+			pml.right[0] = 0;
+		}
+	}
+
 	cmd = pm->cmd;
 	scale = PM_CmdScale( &cmd );
 
@@ -3879,7 +3935,23 @@ static void PM_AirMove( void ) {
 
 	VectorCopy (wishvel, wishdir);
 	wishspeed = VectorNormalize(wishdir);
-	wishspeed *= scale;
+
+	if (moveStyle == MV_SURF) //suspect - Devy?
+	{
+		if (pm->cmd.forwardmove != 0 && pm->cmd.rightmove != 0)
+		{
+			pm->cmd.rightmove = 0;
+		}
+
+		if (wishspeed > 250.0f)
+		{
+			VectorScale(wishvel, 250.0f / wishspeed, wishvel);
+			wishspeed = 250.0f;
+		}
+	}
+	else {
+		wishspeed *= scale;
+	}
 
 	accelerate = pm_airaccelerate;
 
@@ -3909,7 +3981,11 @@ static void PM_AirMove( void ) {
 		PM_AirAccelerate(wishdir, wishspeed, 0.7f);//pm_qw_airaccel
 	} else if (moveStyle == MV_TRIBES) {
 		PM_AirAccelerateTribes(wishdir, wishspeed);//pm_qw_airaccel
-	} else if (moveStyle == MV_CPM || moveStyle == MV_OCPM || moveStyle == MV_PJK || moveStyle == MV_WSW || moveStyle == MV_RJCPM || moveStyle == MV_SLICK || moveStyle == MV_BOTCPM) {
+	} else if (moveStyle == MV_SURF) {
+		PM_CS_AirAccelerate(wishdir, wishspeed, 100.0f);
+	}
+	else if (moveStyle == MV_CPM || moveStyle == MV_OCPM || moveStyle == MV_PJK || moveStyle == MV_WSW || moveStyle == MV_RJCPM || moveStyle == MV_SLICK || moveStyle == MV_BOTCPM)
+	{
 		float		accel;
 		float		wishspeed2;
 
@@ -4023,82 +4099,38 @@ static void PM_DashMove(void)
 	pm->ps->stats[STAT_JUMPTIME] = 401;
 }
 
-#if 0
 static void PM_OverDriveMove(void) {
-	const int	FORCE_COST = 75;
-	const float OVERDRIVE_DURATION = 3000;
+	//Are we the overdriver?
+	//if (pm->ps->fd.forcePowersActive & (1 << FP_ABSORB)) {
+		//Dunno what to do clientside here
+	//}
 
-	if (!pm->ps->stats[STAT_WJTIME] && (pm->ps->fd.forcePower > FORCE_COST) && (pm->cmd.buttons & BUTTON_FORCE_DRAIN) && (pm->ps->fd.forceRageRecoveryTime <= level.time)) {
-		pm->ps->stats[STAT_WJTIME] = OVERDRIVE_DURATION;
-		pm->ps->fd.forcePower -= FORCE_COST;
-		if (pm->ps->fd.forcePower < 0)
-			pm->ps->fd.forcePower = 0;
-#ifdef _GAME
-		G_PlayEffect(EFFECT_LANDING_SAND, pm->ps->origin, pml.forward);//Should be spot on wall, and wallnormal, a better, predicted way to do this?
-		pm->ps->fd.forceRageRecoveryTime = level.time + 1000; // ?
-#endif
-	}
-	if (pm->ps->stats[STAT_WJTIME] > 0) {
-		pm->ps->gravity = 1600;
-		pm->ps->speed *= 2.0f;
-
-
-#if _GAME
-		//Debounce this plz
-		gentity_t *ent;
-		int numSorted = level.numConnectedClients;
+	//Check if we are being overdrive waked
+	if (pm->ps->stats[STAT_DEAD_YAW]) {
 		int i;
+		vec3_t diff;
+		float len;
+		for (i = 0; i < 32; i++) {
+			if ((pm->ps->stats[STAT_DEAD_YAW] & (1 << i))) { //Push away this guy
+				bgEntity_t *bgEnt = PM_BGEntForNum(i);
+				if (bgEnt) {
+					VectorSubtract(pm->ps->origin, bgEnt->playerState->origin, diff);
+					len = VectorNormalize(diff);
+					if (len < 32)
+						len = 32;
 
-		gentity_t *self = (gentity_t *)pm_entSelf;
-
-		G_ScreenShake(pm->ps->origin, NULL, 1.0f, 100, qfalse);
-		G_Sound(self , CHAN_AUTO, G_SoundIndex("sound/chars/rancor/swipehit.wav"));
-
-		for (i = 0; i < numSorted; i++) { //Probably more effecient to do this than trap->entitiesinbox
-		
-			ent = &g_entities[level.sortedClients[i]];
-
-			if (!ent->client)
-				continue;
-			if (!ent->inuse)
-				continue;
-			if (ent->client->sess.sessionTeam == TEAM_SPECTATOR)
-				continue;
-			if (ent->client->pers.connected == CON_CONNECTING)
-				continue;
-			if (level.sortedClients[i] == pm->ps->clientNum)
-				continue;
-
-			if (DistanceSquared(ent->client->ps.origin, pm->ps->origin) < (512 * 512)) {
-				vec3_t diff;
-				float len;
-				//If they are on the ground, Knock them off ground.
-				//Give them low grav.
-				ent->client->ps.gravity = 1; //Probably should be doing this stuff in G_Active or something.  Based on if they are in ragetime and their perk is X
-				//Is there any way to predict this.  Set the overdrivers client num as a ps flag somewhere on the client? and userint1 etc?
-				if (ent->client->ps.groundEntityNum != ENTITYNUM_NONE)
-					ent->client->ps.velocity[2] = 100;
-
-				G_Damage(ent, self, self, vec3_origin, self->r.currentOrigin, Q_irand(10, 25), DAMAGE_NO_ARMOR | DAMAGE_NO_KNOCKBACK, MOD_MELEE);
-				VectorSubtract(self->r.currentOrigin, ent->r.currentOrigin, diff);
-				len = VectorNormalize(diff);
-				VectorMA(ent->client->ps.velocity, 1000/len, diff, ent->client->ps.velocity);
+					VectorMA(pm->ps->velocity, 6000 / len, diff, pm->ps->velocity);
+					//Break or keep looking for other people using this? how does this behave with multiple overdrivers
+				}
 			}
 		}
-
-#endif
-
 	}
-	else {
-		pm->ps->gravity = 800; ///Uhhh. g_gravity ? Need to be setting this every frame if were going to be using it
-	}
-
+	pm->ps->stats[STAT_DEAD_YAW] = 0;
 }
-#endif
 
 static void PM_ThrustMove(void)
 {
-	if (!pm->ps->stats[STAT_WJTIME] && (pm->cmd.buttons & BUTTON_FORCE_LIGHTNING) && (pm->ps->fd.forceRageRecoveryTime <= pm->cmd.serverTime)) {
+	if (!pm->ps->stats[STAT_WJTIME] && (pm->cmd.buttons & BUTTON_FORCE_LIGHTNING) && !pm->ps->powerups[PW_BLUEFLAG] && !pm->ps->powerups[PW_REDFLAG] && !pm->ps->powerups[PW_NEUTRALFLAG]) {
 		pm->ps->stats[STAT_WJTIME] = 800;
 #ifdef _GAME
 		gentity_t *self = (gentity_t *)pm_entSelf;
@@ -4110,7 +4142,7 @@ static void PM_ThrustMove(void)
 	if (pm->ps->stats[STAT_WJTIME] > 500) { //500 to 0
 		float strength;
 		float basespeed = pm->ps->basespeed;
-		float dot = DotProduct(pml.forward, pm->ps->velocity); //-1 to 1.  -1 should be strongest 1 sh ould be weakest.  
+		float dot = DotProduct(pml.forward, pm->ps->velocity); //-1 to 1.  -1 should be strongest 1 sh ould be weakest.
 
 		if (dot < 0)
 			dot = 0;
@@ -4121,7 +4153,7 @@ static void PM_ThrustMove(void)
 
 		//Com_Printf("Strength modifier is %.2f because dot is %.2f and speed is %.2f\n", strength, dot, basespeed);
 		//Modify strength based on current vel length.  Faster we are going, less it boosts.  but define "we are going" as the vel length times the dotproduct of vel and forward.  Lower cap at 0 instead of -1.
-		
+
 		if (strength > 3)
 			strength = 3;
 		else if (strength < 0.4)
@@ -4135,7 +4167,7 @@ static void PM_ThrustMove(void)
 	}
 	else if (pm->ps->stats[STAT_WJTIME] > 300) { //This is messed up but it works. otherwise can't really modify fp as we go because deltatime and cant get more discrete than 1fp.
 		pm->ps->fd.forcePower = 0;
-		pm->ps->stats[STAT_WJTIME] = 0;
+		//pm->ps->stats[STAT_WJTIME] = 0;
 	}
 	else {
 		pm->ps->fd.forcePowersActive &= ~(1 << FP_SPEED);
@@ -4145,18 +4177,18 @@ static void PM_ThrustMove(void)
 static void PM_BlinkMove(void) //Just blink for now
 {
 	const float BLINK_DURATION = 300;
-	const float BLINK_STRENGTH = 5000.0f;
+	const float BLINK_STRENGTH = 4200.0f;
 	const int	FORCE_COST = 25;
 
 	//Todo - change bind from lightning? More restrictions? If keep as lightning, disregard actual lightning?
 	//Todo - fix the trace behaviour where if it hits a plane it just stops at that spot.  Should slide along for the rest of the stepsize?  this makes it really hard to use this if you are on the ground and aimed even 1 degree down
 	//Todo, rewrite so only checks if button is used.  Also way to pick a special (force profile?). Also rewrite so this calls individual special functions.
 
-	//Maybe there is a better way to do this performance-wise.  Or a way to redesign the traces so that instead of doign 1 every frame, it does 1 every time the trace stepsize > 100 or something.  
+	//Maybe there is a better way to do this performance-wise.  Or a way to redesign the traces so that instead of doign 1 every frame, it does 1 every time the trace stepsize > 100 or something.
 	//E.g. adding the blink stepsize each frame and only doing a trace when it hits the limit, then resetting the counter.
 	//Doing time*time means the traces at start/finish are very small
 
-	if (!pm->ps->stats[STAT_WJTIME] && (pm->ps->fd.forcePower > FORCE_COST) && (pm->cmd.buttons & BUTTON_FORCE_LIGHTNING) && (pm->ps->fd.forceRageRecoveryTime <= pm->cmd.serverTime)) {
+	if (!pm->ps->stats[STAT_WJTIME] && (pm->ps->fd.forcePower > FORCE_COST) && (pm->cmd.buttons & BUTTON_FORCE_LIGHTNING) && (pm->ps->fd.forceRageRecoveryTime <= pm->cmd.serverTime) && !pm->ps->powerups[PW_REDFLAG] && !pm->ps->powerups[PW_NEUTRALFLAG] && !pm->ps->powerups[PW_BLUEFLAG]) {
 		pm->ps->stats[STAT_WJTIME] = BLINK_DURATION;
 		pm->ps->fd.forcePower -= FORCE_COST;
 		if (pm->ps->fd.forcePower < 0)
@@ -4165,7 +4197,7 @@ static void PM_BlinkMove(void) //Just blink for now
 		gentity_t *self = (gentity_t *)pm_entSelf;
 		G_PlayEffectID(G_EffectIndex("howler/sonic"), pm->ps->origin, pm->ps->viewangles);
 		G_PlayEffectID(G_EffectIndex("env/powerbolt_long"), pm->ps->origin, pm->ps->viewangles);
-		G_Sound(self, CHAN_BODY, G_SoundIndex("sound/weapons/force/rage.wav"));
+		G_Sound(self, CHAN_BODY, G_SoundIndex("sound/weapons/force/teamforce.mp3"));
 		pm->ps->fd.forceRageRecoveryTime = level.time + 10000; // ?
 #endif
 	}
@@ -4214,8 +4246,15 @@ static void PM_CheckDash(void)
 	if (moveStyle == MV_TRIBES && (((pm->ps->velocity[0]*pm->ps->velocity[0] + pm->ps->velocity[1] *pm->ps->velocity[1]) > (pm->ps->speed * pm->ps->speed * 1.48f)) || (pm->ps->fd.forcePower < 25))) {
 		return;
 	}
-	if (pm->ps->groundEntityNum == ENTITYNUM_NONE && (PM_GroundDistance() > 2.0f)) //MV_TRIBES problem, sometimes it detects us being in the air when we are actually on ground(or like 1 unit off ground during a ski?).  Have to check ground dist instead?
-		return;
+
+	if (moveStyle == MV_TRIBES) {
+		if (pm->ps->groundEntityNum == ENTITYNUM_NONE && (PM_GroundDistance() > 2.0f)) //MV_TRIBES problem, sometimes it detects us being in the air when we are actually on ground(or like 1 unit off ground during a ski?).  Have to check ground dist instead?
+			return;
+	}
+	else {
+		if (pm->ps->groundEntityNum == ENTITYNUM_NONE) //MV_TRIBES problem, sometimes it detects us being in the air when we are actually on ground(or like 1 unit off ground during a ski?).  Have to check ground dist instead?
+			return;
+	}
 
 	if (moveStyle == MV_TRIBES)
 		pm->ps->stats[STAT_DASHTIME] = 1050;
@@ -4546,8 +4585,10 @@ static void PM_GrappleMoveTribes(void) {
 		PM_Accelerate(diffNormal, 600, pullStrength); //600 is WishSpeed
 		newVel = VectorLength(pm->ps->velocity);
 
-		if (newVel > (pm->ps->speed * 1.75f))//Dont give them an advantage to grapple launching instead of dashing for gaining speed
-			VectorScale(pm->ps->velocity, oldVel / newVel, pm->ps->velocity);
+		if (newVel > (pm->ps->speed * 1.75f)) {//Dont give them an advantage to grapple launching instead of dashing for gaining speed
+			newVel += pml.frametime * 200; //Grapple air friction
+			VectorScale(pm->ps->velocity, (oldVel / newVel), pm->ps->velocity);
+		}
 
 		//Com_Printf("^7Detecting hook is stationary\n");
 	}
@@ -4646,6 +4687,9 @@ static void PM_WalkMove( void ) {
 	else if (moveStyle == MV_TRIBES && (pm->cmd.buttons & BUTTON_DASH)) {
 		realaccelerate = 2.5f;
 	}
+	else if (moveStyle == MV_SURF) {
+		realaccelerate = 12.0f;
+	}
 
 	PM_Friction ();
 
@@ -4663,8 +4707,10 @@ static void PM_WalkMove( void ) {
 	pml.right[2] = 0;
 
 	// project the forward and right directions onto the ground plane
-	PM_ClipVelocity (pml.forward, pml.groundTrace.plane.normal, pml.forward, OVERCLIP );
-	PM_ClipVelocity (pml.right, pml.groundTrace.plane.normal, pml.right, OVERCLIP );
+	if (moveStyle != MV_SURF) {
+		PM_ClipVelocity(pml.forward, pml.groundTrace.plane.normal, pml.forward, OVERCLIP);
+		PM_ClipVelocity(pml.right, pml.groundTrace.plane.normal, pml.right, OVERCLIP);
+	}
 	//
 	VectorNormalize (pml.forward);
 	VectorNormalize (pml.right);
@@ -4715,6 +4761,13 @@ static void PM_WalkMove( void ) {
 		VectorCopy (wishvel, wishdir);
 		wishspeed = VectorNormalize(wishdir);
 		wishspeed *= scale;
+	}
+
+	if (moveStyle == MV_SURF) {
+		if (wishspeed != 0 && (wishspeed > 250.0f)) {
+			VectorScale(wishvel, 250.0f / wishspeed, wishvel);
+			wishspeed = 250.0f;
+		}
 	}
 
 	// clamp the speed lower if ducking
@@ -4777,6 +4830,11 @@ static void PM_WalkMove( void ) {
 	else {
 		PM_Accelerate(wishdir, wishspeed, accelerate);
 	}
+
+	if (moveStyle == MV_SURF) {
+		pm->ps->velocity[2] -= pm->ps->gravity * 0.5 *pml.frametime;
+	}
+
 	/*
 	if (pm->ps->clientNum >= MAX_CLIENTS)
 	{
@@ -5007,6 +5065,7 @@ static int PM_TryRoll( void )
 		(moveStyle == MV_RJCPM) ||
 		(moveStyle == MV_SLICK) ||
 		(moveStyle == MV_BOTCPM) ||
+		(moveStyle == MV_SURF) ||
 		!BG_CanUseFPNow(pm->gametype, pm->ps, pm->cmd.serverTime, FP_LEVITATION))
 	{ //Not using saber, or can't use jump
 		return 0;
@@ -5120,7 +5179,7 @@ PM_CrashLand
 Check for hard landings that generate sound events
 =================
 */
-static void PM_CrashLand( void ) {
+static void PM_CrashLand(void) {
 	float		delta;
 	float		dist;
 	float		vel, acc;
@@ -5140,12 +5199,12 @@ static void PM_CrashLand( void ) {
 	b = vel;
 	c = -dist;
 
-	den =  b * b - 4 * a * c;
-	if ( den < 0 ) {
+	den = b * b - 4 * a * c;
+	if (den < 0) {
 		pm->ps->inAirAnim = qfalse;
 		return;
 	}
-	t = (-b - sqrt( den ) ) / ( 2 * a );
+	t = (-b - sqrt(den)) / (2 * a);
 
 	delta = vel + t * acc;
 	delta = delta*delta * 0.0001;
@@ -5162,7 +5221,7 @@ static void PM_CrashLand( void ) {
 	PM_CrashLandEffect();
 #endif
 	// ducking while falling doubles damage
-	if ( pm->ps->pm_flags & PMF_DUCKED ) {
+	if (pm->ps->pm_flags & PMF_DUCKED) {
 		delta *= 2;
 	}
 
@@ -5172,7 +5231,7 @@ static void PM_CrashLand( void ) {
 		pm->ps->legsAnim == BOTH_A7_KICK_L_AIR)
 	{
 		int landAnim = -1;
-		switch ( pm->ps->legsAnim )
+		switch (pm->ps->legsAnim)
 		{
 		case BOTH_A7_KICK_F_AIR:
 			landAnim = BOTH_FORCELAND1;
@@ -5187,22 +5246,22 @@ static void PM_CrashLand( void ) {
 			landAnim = BOTH_FORCELANDLEFT1;
 			break;
 		}
-		if ( landAnim != -1 )
+		if (landAnim != -1)
 		{
-			if ( pm->ps->torsoAnim == pm->ps->legsAnim )
+			if (pm->ps->torsoAnim == pm->ps->legsAnim)
 			{
-				PM_SetAnim(SETANIM_BOTH, landAnim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
+				PM_SetAnim(SETANIM_BOTH, landAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 			}
 			else
 			{
-				PM_SetAnim(SETANIM_LEGS, landAnim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
+				PM_SetAnim(SETANIM_LEGS, landAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 			}
 		}
 	}
 	else if (pm->ps->legsAnim == BOTH_FORCEJUMPLEFT1 ||
-			pm->ps->legsAnim == BOTH_FORCEJUMPRIGHT1 ||
-			pm->ps->legsAnim == BOTH_FORCEJUMPBACK1 ||
-			pm->ps->legsAnim == BOTH_FORCEJUMP1)
+		pm->ps->legsAnim == BOTH_FORCEJUMPRIGHT1 ||
+		pm->ps->legsAnim == BOTH_FORCEJUMPBACK1 ||
+		pm->ps->legsAnim == BOTH_FORCEJUMP1)
 	{
 		int fjAnim;
 		switch (pm->ps->legsAnim)
@@ -5220,17 +5279,18 @@ static void PM_CrashLand( void ) {
 			fjAnim = BOTH_LAND1;
 			break;
 		}
-		PM_SetAnim(SETANIM_BOTH, fjAnim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
+		PM_SetAnim(SETANIM_BOTH, fjAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 	}
 	// decide which landing animation to use
 	else if (!BG_InRoll(pm->ps, pm->ps->legsAnim) && pm->ps->inAirAnim && !pm->ps->m_iVehicleNum)
 	{ //only play a land animation if we transitioned into an in-air animation while off the ground
 		if (!BG_SaberInSpecial(pm->ps->saberMove))
 		{
-			if ( pm->ps->pm_flags & PMF_BACKWARDS_JUMP ) {
-				PM_ForceLegsAnim( BOTH_LANDBACK1 );
-			} else {
-				PM_ForceLegsAnim( BOTH_LAND1 );
+			if (pm->ps->pm_flags & PMF_BACKWARDS_JUMP) {
+				PM_ForceLegsAnim(BOTH_LANDBACK1);
+			}
+			else {
+				PM_ForceLegsAnim(BOTH_LAND1);
 			}
 		}
 	}
@@ -5240,17 +5300,17 @@ static void PM_CrashLand( void ) {
 		//This will push us back into our weaponready stance from the land anim.
 		if (pm->ps->weapon == WP_DISRUPTOR && pm->ps->zoomMode == 1)
 		{
-			PM_StartTorsoAnim( TORSO_WEAPONREADY4 );
+			PM_StartTorsoAnim(TORSO_WEAPONREADY4);
 		}
 		else
 		{
 			if (pm->ps->weapon == WP_EMPLACED_GUN)
 			{
-				PM_StartTorsoAnim( BOTH_GUNSIT1 );
+				PM_StartTorsoAnim(BOTH_GUNSIT1);
 			}
 			else
 			{
-				PM_StartTorsoAnim( WeaponReadyAnim[pm->ps->weapon] );
+				PM_StartTorsoAnim(WeaponReadyAnim[pm->ps->weapon]);
 			}
 		}
 	}
@@ -5281,26 +5341,26 @@ static void PM_CrashLand( void ) {
 	}
 
 	// never take falling damage if completely underwater
-	if ( pm->waterlevel == 3 ) {
+	if (pm->waterlevel == 3) {
 		return;
 	}
 
 	// reduce falling damage if there is standing water
-	if ( pm->waterlevel == 2 ) {
+	if (pm->waterlevel == 2) {
 		delta *= 0.25;
 	}
-	if ( pm->waterlevel == 1 ) {
+	if (pm->waterlevel == 1) {
 		delta *= 0.5;
 	}
 
-	if ( delta < 1 ) {
+	if (delta < 1) {
 		return;
 	}
 
-	if ( pm->ps->pm_flags & PMF_DUCKED )
+	if (pm->ps->pm_flags & PMF_DUCKED)
 	{
-		if( delta >= 2 && !PM_InOnGroundAnim( pm->ps->legsAnim ) && !PM_InKnockDown( pm->ps ) && !BG_InRoll(pm->ps, pm->ps->legsAnim) &&
-			pm->ps->forceHandExtend == HANDEXTEND_NONE )
+		if (delta >= 2 && !PM_InOnGroundAnim(pm->ps->legsAnim) && !PM_InKnockDown(pm->ps) && !BG_InRoll(pm->ps, pm->ps->legsAnim) &&
+			pm->ps->forceHandExtend == HANDEXTEND_NONE)
 		{//roll!
 			int anim = PM_TryRoll();
 
@@ -5309,11 +5369,11 @@ static void PM_CrashLand( void ) {
 				anim = 0;
 				pm->ps->legsTimer = 0;
 				pm->ps->legsAnim = 0;
-				PM_SetAnim(SETANIM_BOTH,BOTH_LAND1,SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
+				PM_SetAnim(SETANIM_BOTH, BOTH_LAND1, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 				pm->ps->legsTimer = TIMER_LAND;
 			}
 
-			if ( anim )
+			if (anim)
 			{//absorb some impact
 				pm->ps->legsTimer = 0;
 				delta /= 3; // /= 2 just cancels out the above delta *= 2 when landing while crouched, the roll itself should absorb a little damage
@@ -5322,7 +5382,7 @@ static void PM_CrashLand( void ) {
 				{ //get out of it on torso
 					pm->ps->torsoTimer = 0;
 				}
-				PM_SetAnim(SETANIM_BOTH,anim,SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
+				PM_SetAnim(SETANIM_BOTH, anim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 				didRoll = qtrue;
 			}
 		}
@@ -5330,7 +5390,7 @@ static void PM_CrashLand( void ) {
 
 	// SURF_NODAMAGE is used for bounce pads where you don't ever
 	// want to take damage or play a crunch sound
-	if ( !(pml.groundTrace.surfaceFlags & SURF_NODAMAGE) )  {
+	if (!(pml.groundTrace.surfaceFlags & SURF_NODAMAGE)) {
 		if (delta > 7)
 		{
 			int delta_send = (int)delta;
@@ -5375,30 +5435,44 @@ static void PM_CrashLand( void ) {
 
 			if (didRoll)
 			{ //Add the appropriate event..
-				PM_AddEventWithParm( EV_ROLL, delta_send );
+				PM_AddEventWithParm(EV_ROLL, delta_send);
 			}
 			else
 			{
-				PM_AddEventWithParm( EV_FALL, delta_send );
+				if (pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES && ((pm->cmd.buttons & BUTTON_DASH) || (pm->ps->clientNum >= MAX_CLIENTS && (pm->cmd.buttons & BUTTON_WALKING)))) {
+					if (delta_send > 150)
+						PM_AddEventWithParm(EV_FALL, 1);
+				}
+				else {
+					PM_AddEventWithParm(EV_FALL, delta_send);
+				}
 			}
 		}
 		else
 		{
 			if (didRoll)
 			{
-				PM_AddEventWithParm( EV_ROLL, 0 );
+				PM_AddEventWithParm(EV_ROLL, 0);
 			}
 			else
 			{
-				PM_AddEventWithParm( EV_FOOTSTEP, PM_FootstepForSurface() );
+				if (pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES && ((pm->cmd.buttons & BUTTON_DASH) || (pm->ps->clientNum >= MAX_CLIENTS && (pm->cmd.buttons & BUTTON_WALKING)))) {
+				}
+				else {
+					PM_AddEventWithParm(EV_FOOTSTEP, PM_FootstepForSurface());
+				}
 			}
 		}
 	}
 
 	// make sure velocity resets so we don't bounce back up again in case we miss the clear elsewhere
-	pm->ps->velocity[2] = 0;
+	if (pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES && ((pm->cmd.buttons & BUTTON_DASH) || (pm->ps->clientNum >= MAX_CLIENTS && (pm->cmd.buttons & BUTTON_WALKING)))) {
+	}
+	else {
+		pm->ps->velocity[2] = 0;
+	}
 
-	if ((moveStyle == MV_CPM || moveStyle == MV_OCPM || moveStyle == MV_Q3 || moveStyle == MV_RJQ3 || moveStyle == MV_RJCPM || moveStyle == MV_SLICK || moveStyle == MV_BOTCPM) && ((int)pm->ps->fd.forceJumpZStart > pm->ps->origin[2] + 1)) {
+	if ((moveStyle == MV_CPM || moveStyle == MV_OCPM || moveStyle == MV_Q3 || moveStyle == MV_RJQ3 || moveStyle == MV_RJCPM || moveStyle == MV_SLICK || moveStyle == MV_BOTCPM || moveStyle == MV_SURF) && ((int)pm->ps->fd.forceJumpZStart > pm->ps->origin[2] + 1)) {
 		if (1 > (sqrt(pm->ps->velocity[0] * pm->ps->velocity[0] + pm->ps->velocity[1] * pm->ps->velocity[1])))//No xyvel
 			pm->ps->velocity[2] = -vel; //OVERBOUNCE OVER BOUNCE
 	}
@@ -5642,7 +5716,8 @@ static void PM_GroundTrace( void ) {
 			Com_Printf("%i:steep\n", c_pmove);
 		}
 		pm->ps->groundEntityNum = ENTITYNUM_NONE;
-		pml.groundPlane = qtrue;
+		if (pm->ps->stats[STAT_MOVEMENTSTYLE] != MV_SURF)
+			pml.groundPlane = qtrue;
 		pml.walking = qfalse;
 		return;
 	}
@@ -5740,12 +5815,7 @@ static void PM_GroundTrace( void ) {
 #endif
 		}
 
-		if (pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES && ((pm->cmd.buttons & BUTTON_DASH) || (pm->ps->clientNum >= MAX_CLIENTS && (pm->cmd.buttons & BUTTON_WALKING)))) {
-			//Probably should stillcrashland and do some effects but not the speedloss
-		}
-		else {
-			PM_CrashLand();
-		}
+		PM_CrashLand();
 
 #ifdef _GAME
 		if (pm->ps->clientNum < MAX_CLIENTS &&
@@ -7734,6 +7804,18 @@ void PM_BeginWeaponChange( int weapon ) {
 	PM_AddEventWithParm( EV_CHANGE_WEAPON, weapon );
 	pm->ps->weaponstate = WEAPON_DROPPING;
 	pm->ps->weaponTime += 200;
+
+#if _GAME
+#if _SPECIFICWEAPONTIME
+	if ((g_tweakWeapons.integer & WT_TRIBES) && !pm->ps->stats[STAT_RACEMODE]) {
+		int i;
+		for (i = 0; i < MAX_WEAPONS; i++) {
+			((gentity_t *)pm_entSelf)->client->specificWeaponTime[i] = 200;
+		}
+	}
+#endif
+#endif
+
 	//PM_StartTorsoAnim( TORSO_DROPWEAP1 );
 	PM_SetAnim(SETANIM_TORSO, TORSO_DROPWEAP1, SETANIM_FLAG_OVERRIDE);
 
@@ -7782,6 +7864,18 @@ void PM_FinishWeaponChange( void ) {
 #else
 		pm->ps->weaponTime += 250;
 #endif
+
+#if _GAME
+#if _SPECIFICWEAPONTIME
+		if ((g_tweakWeapons.integer & WT_TRIBES) && !pm->ps->stats[STAT_RACEMODE]) {
+			int i;
+			for (i = 0; i < MAX_WEAPONS; i++) {
+				((gentity_t *)pm_entSelf)->client->specificWeaponTime[i] = 250;
+			}
+		}
+#endif
+#endif
+
 }
 
 #ifdef _GAME
@@ -9144,6 +9238,15 @@ if (pm->ps->duelInProgress)
 	if ( pm->ps->weaponTime > 0 ) {
 		pm->ps->weaponTime -= pml.msec;
 	}
+#if _GAME
+#if _SPECIFICWEAPONTIME
+	if (g_tweakWeapons.integer & WT_TRIBES) {
+		if (((gentity_t *)pm_entSelf)->client->specificWeaponTime[pm->ps->weapon] > 0) {
+			((gentity_t *)pm_entSelf)->client->specificWeaponTime[pm->ps->weapon] -= pml.msec;
+		}
+	}
+#endif
+#endif
 
 	if (pm->ps->isJediMaster && pm->ps->emplacedIndex)
 	{
@@ -9249,6 +9352,17 @@ if (pm->ps->duelInProgress)
 	// check for weapon change
 	// can't change if weapon is firing, but can change
 	// again if lowering or raising
+#if _GAME
+#if _SPECIFICWEAPONTIME
+	if ((g_tweakWeapons.integer & WT_TRIBES) && !pm->ps->stats[STAT_RACEMODE]) {
+		if (pm->ps->weapon != pm->cmd.weapon) {
+			if (((gentity_t *)pm_entSelf)->client->specificWeaponTime[pm->ps->weapon] <= 0)
+			PM_BeginWeaponChange(pm->cmd.weapon);
+		}
+	}
+ 	else
+#endif
+#endif
 	if ( pm->ps->weaponTime <= 0 || pm->ps->weaponstate != WEAPON_FIRING ) {
 		if ( pm->ps->weapon != pm->cmd.weapon ) {
 			PM_BeginWeaponChange( pm->cmd.weapon );
@@ -9260,6 +9374,22 @@ if (pm->ps->duelInProgress)
 		if (pm->ps->stats[STAT_RACEMODE] && pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_JETPACK && pm->ps->weapon == WP_DET_PACK && pm->ps->hasDetPackPlanted && /*!(pm->cmd.buttons & BUTTON_ATTACK) &&*/ pm->cmd.buttons & BUTTON_ALT_ATTACK) {
 		}
 		else {
+#if _GAME
+#if _SPECIFICWEAPONTIME
+			if ((g_tweakWeapons.integer & WT_TRIBES) && !pm->ps->stats[STAT_RACEMODE])
+			{
+				if (((gentity_t *)pm_entSelf)->client->specificWeaponTime[pm->ps->weapon] > 0) {
+					// change weapon if time
+					//Com_Printf("Weaponstate is %i and changing is %i\n", pm->ps->weaponstate, pm->ps->weapon != pm->cmd.weapon);
+					if (pm->ps->weapon != pm->cmd.weapon) {
+						PM_FinishWeaponChange();
+					}
+					return;
+				}
+			}
+			else
+#endif
+#endif
 			return;
 		}
 	}
@@ -9787,7 +9917,7 @@ if (pm->ps->duelInProgress)
 				addTime = 1050;
 			break;
 		case WP_THERMAL:
-			if (!pm->ps->stats[STAT_RACEMODE] && (g_tweakWeapons.integer & WT_IMPACT_NITRON) || (g_tweakWeapons.integer & WT_TRIBES))
+			if (!(pm->ps->stats[STAT_RACEMODE]) && ((g_tweakWeapons.integer & WT_IMPACT_NITRON) || (g_tweakWeapons.integer & WT_TRIBES)))
 				addTime = 1500;
 			break;
 		case WP_DET_PACK:
@@ -9896,6 +10026,15 @@ if (pm->ps->duelInProgress)
 #endif
 
 	pm->ps->weaponTime += addTime;
+
+#if _GAME
+#if _SPECIFICWEAPONTIME
+	if ((g_tweakWeapons.integer & WT_TRIBES) && !pm->ps->stats[STAT_RACEMODE]) {
+		((gentity_t *)pm_entSelf)->client->specificWeaponTime[pm->ps->weapon] += addTime;
+	}
+#endif
+#endif
+
 }
 
 /*
@@ -12610,10 +12749,11 @@ void PM_MoveForKata(usercmd_t *ucmd)
 	}
 }
 
+/*
 static QINLINE float bg_roundfloat(float n)
 {
 	return (n < 0.0f) ? ceilf(n - 0.5f) : floorf(n + 0.5f);
-}
+}*/
 
 void PmoveSingle (pmove_t *pmove) {
 	qboolean stiffenedUp = qfalse;
@@ -13318,16 +13458,19 @@ void PmoveSingle (pmove_t *pmove) {
 		PM_CheckWallJump();
 	}
 
+	if (pm->ps->stats[STAT_RACEMODE] && pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES)
+		PM_ThrustMove();
+	else
 #if _GAME
 	if (!pm->ps->stats[STAT_RACEMODE] && g_tweakWeapons.integer & WT_TRIBES) { //Tribes special
 	#else
 	if (!pm->ps->stats[STAT_RACEMODE] && cgs.jcinfo2 & JAPRO_CINFO2_WTTRIBES) {
 #endif
-		if (pm->ps->stats[STAT_MAX_HEALTH] == 500) //FIXME
-			PM_BlinkMove();
-		else
-			PM_ThrustMove();
-		//PM_OverDriveMove();
+	if (pm->ps->fd.forcePowerSelected == 3) //FIXME
+		PM_ThrustMove();
+	else if (pm->ps->fd.forcePowerSelected == 4) //FIXME
+		PM_BlinkMove();
+		PM_OverDriveMove(); //This should just be an actual forcepower (absorb?), have it do the loop and set a ps flag on anyone in range.  then have code here to check for that flag and predict the movement on affected players?
 	}
 
 
@@ -13425,7 +13568,12 @@ void PmoveSingle (pmove_t *pmove) {
 		float gDist2 = gDist;
 		float scale = PM_CmdScale(&pm->cmd) / pm->ps->speed * 320.0f;
 
+		//todo - jetpack/tribes dif?
+
 		if (pm->cmd.upmove > 0 && pm->ps->velocity[2] < MAX_JETPACK_VEL_UP)	{//**??^^ unlock upward vel
+			float upScale = scale;
+			if (!pm->ps->stats[STAT_RACEMODE])
+				upScale *= pm->ps->gravity / 800.0f;
 			//Jet gets stronger the more your velocity is lower, and weaker the more your z vel is higher.  Same with WASD?
 			//Probably need to do something here to give it 2 stages.  1: Low velocity accel boost which fades away as you start getting fast.
 			if (pm->ps->velocity[2] > 0 && pm->ps->velocity[2] < 250) {
@@ -13442,7 +13590,7 @@ void PmoveSingle (pmove_t *pmove) {
 				else if (hackscale < 1)
 					hackscale = 1;
 
-				pm->ps->velocity[2] += 425.0f * pml.frametime * scale * hackscale;//was 18 with no grav
+				pm->ps->velocity[2] += 425.0f * pml.frametime * upScale * hackscale;//was 18 with no grav
 			}
 			else if (pm->ps->velocity[2] < 0) {
 				float hackscale = 1.25f;
@@ -13456,28 +13604,30 @@ void PmoveSingle (pmove_t *pmove) {
 				if (hackscale < 1)
 					hackscale = 1;
 
-				pm->ps->velocity[2] += 425.0f * pml.frametime * scale * hackscale;//was 18 with no grav
+				pm->ps->velocity[2] += 425.0f * pml.frametime * upScale * hackscale;//was 18 with no grav
 			}
-			else if (pm->ps->velocity[2] > 1500) {
-				float hackscale = 1500.0f / pm->ps->velocity[2];
-				pm->ps->velocity[2] += 425.0f * pml.frametime * scale * hackscale;//Weaken upjet if we are going up extremely fast already
+			else if (pm->ps->velocity[2] > 800) {
+				float hackscale = 800.0f / pm->ps->velocity[2];
+				if (hackscale < 0.5f)
+					hackscale = 0.5f;
+				pm->ps->velocity[2] += 425.0f * pml.frametime * upScale * hackscale;//Weaken upjet if we are going up extremely fast already
 			}
 			else {
-				pm->ps->velocity[2] += 425.0f * pml.frametime * scale;
+				pm->ps->velocity[2] += 425.0f * pml.frametime * upScale;
 			}
 			pm->ps->eFlags |= EF_JETPACK_FLAMING; //going up
 		}
 		else if (pm->cmd.upmove < 0 && pm->ps->velocity[2] > MAX_FALL_SPEED) { //**?? max fall speed
-			pm->ps->velocity[2] -= 150.0f * pml.frametime * scale;//was 12 with no grav
-			pm->ps->eFlags |= EF_JETPACK_FLAMING;
 			gDist2 = PM_GroundDistance(); //Have to get this since we dont do it when holding crouch normally
+			if (gDist2 >= 16) {
+				pm->ps->velocity[2] -= 150.0f * pml.frametime * scale;//was 12 with no grav
+				pm->ps->eFlags |= EF_JETPACK_FLAMING;
+			}
 		}
 
 		if (pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES && (pm->cmd.rightmove || pm->cmd.forwardmove)) {
 			//vec3_t forward;
 			//AngleVectors(pm->ps->viewangles, forward, NULL, NULL);
-
-
 
 			{ //use the proper way for siege
 
@@ -13491,6 +13641,8 @@ void PmoveSingle (pmove_t *pmove) {
 				float accel = 0.009f; //server should use pmove_float
 				vec3_t currentVelNormal;
 				float dot;
+				vec3_t xyvel;
+				float curSpeed;
 
 
 				scale /= pm->ps->speed;
@@ -13499,6 +13651,8 @@ void PmoveSingle (pmove_t *pmove) {
 
 				//problem, outside of jet they can still slow down their speed with air control ?
 				//problem, still going too high up with wasd.  need custom cmd scale?
+
+				//Todo, need a new hackscale based on current vel to give stronger if we are going slow.  Can this be done by changin pm_accelerate or its inputs?
 
 				if (!scale) {
 					wishvel[0] = 0;
@@ -13523,10 +13677,40 @@ void PmoveSingle (pmove_t *pmove) {
 				VectorCopy(pm->ps->velocity, currentVelNormal);
 				VectorNormalize(currentVelNormal);
 				dot = DotProduct(currentVelNormal, wishdir);
+
+				xyvel[0] = pm->ps->velocity[0];
+				xyvel[1] = pm->ps->velocity[1];
+				xyvel[2] = 0;
+				curSpeed = VectorLength(xyvel);
+
+
+				//Cases
+				// Going fast and wnt to go opposite - hackscale
+				//Going slow - hackscale
+				//How to smooth the hackscale
+
+
 				if (dot < 0) {
 					//Com_Printf("Dot is %.2f, old accel was %.2f, new accel is %.2f\n", dot, accel * 100, 100 * (accel * (((-dot) + 1) * 1.5)));
 					accel *= ((-dot) + 1) * 1.5;//1.5 further modifies the strength of "reverse lateral jetting" compared to regular lateral jetting
 				}
+
+
+				if (curSpeed < 320) { //Need to rework this and above to be more like t1
+					float xy_hackscale;
+					if (curSpeed)
+						xy_hackscale = 320 / curSpeed;
+					else
+						xy_hackscale = 320;
+
+					xy_hackscale *= xy_hackscale;
+
+					if (xy_hackscale > 3)
+						xy_hackscale = 3;
+					accel *= xy_hackscale;
+				}
+
+
 
 
 				VectorScale(wishdir, wishspeed, wishVelocity);
@@ -13554,10 +13738,10 @@ void PmoveSingle (pmove_t *pmove) {
 		}
 		*/
 
-		if (gDist2 <  16 && pm->cmd.upmove < 0) {//** changed this so jetpack shuts off on ground
+		//if (gDist2 < 16 && pm->cmd.upmove < 0) {//** changed this so jetpack shuts off on ground
 			//Sad hack, this stops sliding on ground with downjet
-			pm->ps->eFlags &= ~EF_JETPACK_ACTIVE;
-		}
+			//pm->ps->eFlags &= ~EF_JETPACK_ACTIVE;
+		//}
 
 	}
 
@@ -13894,7 +14078,7 @@ void PmoveSingle (pmove_t *pmove) {
 		{
 
 #if _GRAPPLE
-			if ((pm->ps->pm_flags & PMF_GRAPPLE) && !(pm->ps->pm_flags & PMF_DUCKED) && pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES) {
+			if ((pm->ps->pm_flags & PMF_GRAPPLE) && pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES) {
 				PM_GrappleMoveTribes();
 			}
 #if _GAME
@@ -13941,7 +14125,10 @@ void PmoveSingle (pmove_t *pmove) {
 	PM_SetWaterLevel();
 	if (pm->cmd.forcesel != (byte)-1 && (pm->ps->fd.forcePowersKnown & (1 << pm->cmd.forcesel)))
 	{
-		pm->ps->fd.forcePowerSelected = pm->cmd.forcesel;
+#if _GAME
+		if (!(g_tweakWeapons.integer & WT_TRIBES) || pm->ps->stats[STAT_RACEMODE])
+#endif
+			pm->ps->fd.forcePowerSelected = pm->cmd.forcesel;
 	}
 	if (pm->cmd.invensel != (byte)-1 && (pm->ps->stats[STAT_HOLDABLE_ITEMS] & (1 << pm->cmd.invensel)))
 	{
@@ -13999,6 +14186,7 @@ void PmoveSingle (pmove_t *pmove) {
 	//Walbug fix start, if getting stuck w/o noclip is even possible.  This should maybe be after round float? im not sure..
 	if ((pm->ps->persistant[PERS_TEAM] != TEAM_SPECTATOR) && pm->ps->stats[STAT_RACEMODE] && VectorCompare(pm->ps->origin, pml.previous_origin) /*&& (VectorLengthSquared(pm->ps->velocity) > VectorLengthSquared(pml.previous_velocity))*/)
 			VectorClear(pm->ps->velocity); //Their velocity is increasing while their origin is not moving (wallbug), so prevent this..
+			//VectorCopy(pml.previous_velocity, pm->ps->velocity);
 	//To fix rocket wallbug, since that gets applied elsewhere, just always reset vel if origins dont match?
 	//Wallbug fix end
 

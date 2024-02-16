@@ -554,7 +554,6 @@ typedef struct trRefdef_s {
 
 	int			num_entities;
 	trRefEntity_t	*entities;
-	trMiniRefEntity_t	*miniEntities;
 
 	int			num_dlights;
 	struct dlight_s	*dlights;
@@ -570,10 +569,17 @@ typedef struct trRefdef_s {
 //=================================================================================
 
 // skins allow models to be retextured without modifying the model file
-typedef struct skinSurface_s {
+typedef struct {
 	char		name[MAX_QPATH];
 	shader_t	*shader;
 } skinSurface_t;
+
+typedef struct skin_s {
+	char		name[MAX_QPATH];		// game path, including extension
+	int			numSurfaces;
+	skinSurface_t	*surfaces[128];
+} skin_t;
+
 
 typedef struct fog_s {
 	int			originalBrushNumber;
@@ -1101,6 +1107,7 @@ struct glconfigExt_t
 {
 	glconfig_t *glConfig;
 
+	qboolean textureFilterAnisotropicAvailable;
 	qboolean doGammaCorrectionWithShaders;
 	qboolean doStencilShadowsInOneDrawcall;
 	const char *originalExtensionString;
@@ -1284,6 +1291,9 @@ extern	cvar_t	*r_noServerGhoul2;
 /*
 Ghoul2 Insert End
 */
+
+extern	cvar_t	*r_patchStitching;
+
 //====================================================================
 
 void R_SwapBuffers( int );
@@ -1607,8 +1617,6 @@ CURVE TESSELATION
 
 ============================================================
 */
-
-#define PATCH_STITCHING
 
 srfGridMesh_t *R_SubdividePatchToGrid( int width, int height,
 								drawVert_t points[MAX_PATCH_SIZE*MAX_PATCH_SIZE] );

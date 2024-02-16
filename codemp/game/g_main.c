@@ -87,10 +87,10 @@ All but the last will have the teamchain field set to the next one
 void G_FindTeams( void ) {
 	gentity_t	*e, *e2;
 	int		i, j;
-	int		c, c2;
+	//int		c, c2;
 
-	c = 0;
-	c2 = 0;
+	//c = 0;
+	//c2 = 0;
 	for ( i=MAX_CLIENTS, e=g_entities+i ; i < level.num_entities ; i++,e++ ) {
 		if (!e->inuse)
 			continue;
@@ -101,8 +101,8 @@ void G_FindTeams( void ) {
 		if (e->r.contents==CONTENTS_TRIGGER)
 			continue;//triggers NEVER link up in teams!
 		e->teammaster = e;
-		c++;
-		c2++;
+		//c++;
+		//c2++;
 		for (j=i+1, e2=e+1 ; j < level.num_entities ; j++,e2++)
 		{
 			if (!e2->inuse)
@@ -113,7 +113,7 @@ void G_FindTeams( void ) {
 				continue;
 			if (!strcmp(e->team, e2->team))
 			{
-				c2++;
+				//c2++;
 				e2->teamchain = e->teamchain;
 				e->teamchain = e2;
 				e2->teammaster = e;
@@ -2067,7 +2067,7 @@ const char *int_to_string(int i, char *buf, size_t bufSize) {
 }
 
 void PrintStats(int client) {
-	int			i, j = 0, gametype = level.gametype;
+	int			i, j = 0;
 	char		msg[1024-128] = {0}, numbuf[16] = {0};
 	char		lKills[32], lDeaths[32], lNet[32], lDmgGiven[32], lDmgTaken[32], lDmgNet[32], lDmgPerDeath[32], lTK[32], lCaptures[32], lReturns[32], lFragCarrier[32], lAccuracy[32], lTE[32], lTH[32], lDrain[32], lName[MAX_NETNAME], whitespace[32];
 	qboolean	showAccuracy = qtrue, showTeamPowers = qtrue, showDrain = qtrue;
@@ -3943,11 +3943,11 @@ void G_RunFrame( int levelTime ) {
 				if (ent->client->ps.eFlags & EF_JETPACK_ACTIVE) {
 					if (ent->client->jetPackDebReduce < level.time) //ent->client->jetPackDebReduce can be negative or 0 or ?
 					{
-						if (ent->client->pers.tribesClass == 3) //Heavy
-							ent->client->ps.fd.forcePower -= 6;
-						if (ent->client->pers.tribesClass == 2) //Med
+						if (ent->client->pers.tribesClass == 3 && !ent->waterlevel) //Heavy
+							ent->client->ps.fd.forcePower -= 8;
+						else if (ent->client->pers.tribesClass == 2 && !ent->waterlevel) //Med
 							ent->client->ps.fd.forcePower -= 5;
-						else 
+						else if (!ent->waterlevel)
 							ent->client->ps.fd.forcePower -= 4;//Light
 
 						if (ent->client->ps.fd.forcePower <= 0) 

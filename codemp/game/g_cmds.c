@@ -747,7 +747,7 @@ static QINLINE void ResetSpecificPlayerTimers(gentity_t* ent, qboolean print) {
 			ent->client->ps.ammo[AMMO_DETPACK] = 4;
 		}
 
-		if (ent->client->pers.userName && ent->client->pers.userName[0]) {
+		if (ent->client->pers.userName[0]) {
 			if (ent->client->sess.raceMode && !ent->client->pers.practice && ent->client->pers.stats.startTime) {
 				ent->client->pers.stats.racetime += (trap->Milliseconds() - ent->client->pers.stats.startTime) * 0.001f - ent->client->afkDuration * 0.001f;
 				ent->client->afkDuration = 0;
@@ -1527,7 +1527,7 @@ void SetTeam( gentity_t *ent, char *s, qboolean forcedToJoin ) {//JAPRO - Modifi
 	if (client->ps.duelInProgress) {
 		gentity_t *duelAgainst = &g_entities[client->ps.duelIndex];
 
-		if (ent->client->pers.lastUserName && ent->client->pers.lastUserName[0] && duelAgainst->client && duelAgainst->client->pers.lastUserName && duelAgainst->client->pers.lastUserName[0]) {
+		if (ent->client->pers.lastUserName[0] && duelAgainst->client && duelAgainst->client->pers.lastUserName[0]) {
 			if (!(ent->client->sess.accountFlags & JAPRO_ACCOUNTFLAG_NODUEL) && !(duelAgainst->client->sess.accountFlags & JAPRO_ACCOUNTFLAG_NODUEL))
 				G_AddDuel(duelAgainst->client->pers.lastUserName, ent->client->pers.lastUserName, duelAgainst->client->pers.duelStartTime, dueltypes[ent->client->ps.clientNum], duelAgainst->client->ps.stats[STAT_HEALTH], duelAgainst->client->ps.stats[STAT_ARMOR]);
 		}
@@ -3094,7 +3094,7 @@ static voteString_t validVoteStrings[] = {
 };
 static const int validVoteStringsSize = ARRAY_LEN( validVoteStrings );
 
-void TimeToString(int duration_ms, char *timeStr, size_t strSize, qboolean noMs);
+void TimeSecToString(int duration_ms, char *timeStr, size_t strSize);
 
 void Svcmd_ToggleAllowVote_f( void ) {
 	if ( trap->Argc() == 1 ) {
@@ -3200,7 +3200,8 @@ void Cmd_CallVote_f( gentity_t *ent ) {
 					if (voteFloodProtect[j].voteTimeoutUntil && (voteFloodProtect[j].voteTimeoutUntil > time)) { //compare this to something other than level.time ?
 						//trap->Print("Client has just failed a vote, dont let them call this new one!\n");
 						char timeStr[32];
-						TimeToString((voteFloodProtect[j].voteTimeoutUntil - time) , timeStr, sizeof(timeStr), qtrue);
+						//TimeToString((voteFloodProtect[j].voteTimeoutUntil - time) , timeStr, sizeof(timeStr), qtrue);
+						TimeSecToString((voteFloodProtect[j].voteTimeoutUntil - time) * 0.001f, timeStr, sizeof(timeStr));
 						trap->SendServerCommand( ent-g_entities, va( "print \"Please wait %s before calling a new vote.\n\"", timeStr) );
 						return;
 					}
@@ -3233,7 +3234,8 @@ void Cmd_CallVote_f( gentity_t *ent ) {
 
 	if ((g_tweakVote.integer & TV_MAPCHANGELOCKOUT) && !Q_stricmp(arg1, "map") && (level.gametype == GT_FFA || g_raceMode.integer) && (level.startTime > (level.time - 1000*60*10))) { //Dont let a map vote be called within 10 mins of map load if we are in ffa
 		char timeStr[32];
-		TimeToString( (1000*60*10 - (level.time - level.startTime)) , timeStr, sizeof(timeStr), qtrue);
+		//TimeToString( (1000*60*10 - (level.time - level.startTime)) , timeStr, sizeof(timeStr), qtrue);
+		TimeSecToString(((1000*60*10 - (level.time - level.startTime))*0.001f), timeStr, sizeof(timeStr));
 		trap->SendServerCommand( ent-g_entities, va( "print \"The server just changed to this map, please wait %s before calling a map vote.\n\"", timeStr) );
 		return;
 	}
@@ -6725,6 +6727,8 @@ static void Cmd_MovementStyle_f(gentity_t *ent)
 				trap->SendServerCommand(ent-g_entities, "print \"Movement style updated: timer reset. Use +button13 for dash.\n\"");
 			else if (newStyle == MV_JETPACK)
 				trap->SendServerCommand(ent-g_entities, "print \"Movement style updated: timer reset. Use +button12 for grapple, double jump for jetpack.\n\"");
+			else if (newStyle == MV_TRIBES)
+				trap->SendServerCommand(ent - g_entities, "print \"Movement style updated: time reset. Use +button13 to ski and +force_lightning for thrust pack.\n\"");
 			else if (newStyle == MV_SWOOP)
 				trap->SendServerCommand(ent-g_entities, "print \"Movement style updated: timer reset. Use +attack for gravboost, +altattack for speedboost.\n\"");
 			else if (newStyle == MV_BOTCPM)
@@ -6741,6 +6745,8 @@ static void Cmd_MovementStyle_f(gentity_t *ent)
 				trap->SendServerCommand(ent-g_entities, "print \"Movement style updated. Use +button13 for dash.\n\"");
 			else if (newStyle == MV_JETPACK)
 				trap->SendServerCommand(ent-g_entities, "print \"Movement style updated. Use +button12 for grapple, double jump for jetpack.\n\"");
+			else if (newStyle == MV_TRIBES)
+				trap->SendServerCommand(ent - g_entities, "print \"Movement style updated. Use +button13 to ski and +force_lightning for thrust pack.\n\"");
 			else if (newStyle == MV_SWOOP)
 				trap->SendServerCommand(ent-g_entities, "print \"Movement style updated. Use +attack for gravboost, +altattack for speedboost.\n\"");
 			else if (newStyle == MV_BOTCPM)
@@ -7010,6 +7016,51 @@ static void Cmd_Ysal_f(gentity_t *ent)
 	}
 	else {
 		ent->client->ps.powerups[PW_YSALAMIRI] = 2147483648 - 1;// Q3_INFINITE;
+	}
+}
+
+int PackNameToInteger(char *style) {
+	Q_strlwr(style);
+	Q_CleanStr(style);
+
+	if (!Q_stricmp(style, "shield") || !Q_stricmp(style, "0"))
+		return 0;
+	if (!Q_stricmp(style, "thrust") || !Q_stricmp(style, "1"))
+		return 1;
+	if (!Q_stricmp(style, "blink") || !Q_stricmp(style, "2"))
+		return 2;
+	if (!Q_stricmp(style, "overdrive") || !Q_stricmp(style, "3"))
+		return 3;
+	return -1;
+}
+static void Cmd_TribesPack_f(gentity_t *ent) {
+	int pack;
+	char packStr[32];
+
+	if (!ent->client)
+		return;
+
+	Com_Printf("Pack is %i\n", ent->client->ps.fd.forcePowerSelected);
+
+	if (trap->Argc() != 2) {
+		trap->SendServerCommand(ent - g_entities, "print \"Usage: /pack <shield, thrust, blink, or overdrive. Bind +force_lightning to activate.>\n\"");
+		return;
+	}
+
+	trap->Argv(1, packStr, sizeof(packStr));
+	pack = PackNameToInteger(packStr);
+	//Just return if newstyle = old style?
+
+	if (pack >= 0) {
+		if (ent->client->sess.sessionTeam != TEAM_SPECTATOR) {
+			if (pack+2 != ent->client->ps.fd.forcePowerSelected)
+				G_Kill(ent);
+		}
+		ent->client->ps.fd.forcePowerSelected = pack + 2;//Can't use 1 cuz of fp_levitation dedicated validation
+		trap->SendServerCommand(ent - g_entities, "print \"Pack updated!\n\"");
+	}
+	else {
+		trap->SendServerCommand(ent - g_entities, "print \"Usage: /pack <shield, thrust, blink, or overdrive>\n\"");
 	}
 }
 
@@ -7296,7 +7347,7 @@ void Cmd_RaceTele_f(gentity_t *ent, qboolean useForce)
 void Cmd_WarpList_f(gentity_t *ent)
 {
 	char buf[MAX_STRING_CHARS-64] = {0};
-	int i, MAX_NUM_WARPS = 64;
+	int i, MAX_NUM_WARPS = 72;
 
 	if (!ent->client) {
 		trap->SendServerCommand( ent-g_entities, "print \"You can only use this command in racemode!\n\"" );
@@ -7307,6 +7358,7 @@ void Cmd_WarpList_f(gentity_t *ent)
 		return;
 	}
 
+/*
 	for (i = 0; i < MAX_NUM_WARPS; i++) {
 		if (!warpList[i].name[0])
 			break;
@@ -7316,11 +7368,37 @@ void Cmd_WarpList_f(gentity_t *ent)
 		trap->SendServerCommand(ent-g_entities, "print \"There are no warps on this map\n\"");
 	else
 		trap->SendServerCommand(ent-g_entities, va("print \"Warp list: \n%s\n\"", buf));
+
+*/
+
+	for (i = 0; i < MAX_NUM_WARPS; i++) {
+		char *tmpMsg = NULL;
+
+		if (!warpList[i].name[0])
+			break;
+		//Q_strcat(buf, sizeof(buf), va(" ^3%s", warpList[i].name));
+
+		//tmpMsg = va(" %s%-32s    ", ((i % 2) ? S_COLOR_GREEN : S_COLOR_YELLOW), sortedMaps[i]);
+		tmpMsg = va(" %s%s", ((i % 2) ? S_COLOR_GREEN : S_COLOR_YELLOW), warpList[i].name);
+		if (strlen(buf) + strlen(tmpMsg) >= sizeof(buf)) {
+			trap->SendServerCommand(ent - g_entities, va("print \"%s\"", buf));
+			buf[0] = '\0';
+		}
+		Q_strcat(buf, sizeof(buf), tmpMsg);
+	}
+	if (buf[0] == '\0')
+		trap->SendServerCommand(ent - g_entities, "print \"There are no warps on this map\n\"");
+	else
+		trap->SendServerCommand(ent - g_entities, va("print \"%s\n\"", buf));
+
+
+
+
 }
 
 void Cmd_Warp_f(gentity_t *ent)
 {
-	int i, warpNum = -1, MAX_NUM_WARPS = 64;
+	int i, warpNum = -1, MAX_NUM_WARPS = 72;
 	char enteredWarpName[MAX_NETNAME];
 	vec3_t	angles = {0, 0, 0}, origin = {0, 0, 0};
 
@@ -7660,6 +7738,9 @@ void Cmd_Race_f(gentity_t *ent)
 			else if (ent->client->pers.tribesClass) {
 				ent->client->pers.tribesClass = 0;
 			}
+		}
+		else {
+			ent->client->pers.tribesClass = 0;
 		}
 
 		G_Kill( ent ); //stop abuse
@@ -8547,6 +8628,18 @@ void Cmd_Throwflag_f( gentity_t *ent ) {
 
 }
 
+void WP_ThrowGrenade(gentity_t *ent);
+void Cmd_ThrowNade_f(gentity_t *ent) {
+	if (ent && ent->client && (ent->client->specificWeaponTime[WP_THERMAL] <= 0) && (ent->client->ps.ammo[AMMO_THERMAL] > 0) && !ent->client->sess.raceMode && (g_tweakWeapons.integer & WT_TRIBES)) {
+		ent->client->ps.weaponTime += 1000;
+		ent->client->specificWeaponTime[WP_THERMAL] += 1000;
+		if (!(g_tweakWeapons.integer & WT_INFINITE_AMMO))
+			ent->client->ps.ammo[AMMO_THERMAL] -= 1;
+		WP_ThrowGrenade(ent);
+		StandardSetBodyAnim(ent, BOTH_THERMAL_THROW, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_HOLDLESS, SETANIM_TORSO);
+	}
+}
+
 void Cmd_ShowNet_f( gentity_t *ent ) { //why does this crash sometimes..? conditional open/close issue??
 	int			i;
 	char		msg[1024-128] = {0};
@@ -8865,11 +8958,13 @@ command_t commands[] = {
 	{ "npc",				Cmd_NPC_f,					0 },//removed cheat for admin //meh let us npc kill all from spec
 	{ "nudge",				Cmd_Nudge_f,				CMD_CHEAT|CMD_NOINTERMISSION },
 
+	{ "pack",				Cmd_TribesPack_f,			CMD_NOINTERMISSION },
+
 	{ "practice",			Cmd_Practice_f,				CMD_NOINTERMISSION },
 	{ "printstats",			Cmd_PrintStats_f,			CMD_NOINTERMISSION },
 	{ "race",				Cmd_Race_f,					CMD_NOINTERMISSION },
 
-	{ "rCompare",			Cmd_DFCompare_f,			CMD_NOINTERMISSION },
+	//{ "rCompare",			Cmd_DFCompare_f,			CMD_NOINTERMISSION },
 
 	{ "register",			Cmd_ACRegister_f,			CMD_NOINTERMISSION },
 
@@ -8911,6 +9006,7 @@ command_t commands[] = {
 
 	{ "thedestroyer",		Cmd_TheDestroyer_f,			CMD_CHEAT|CMD_ALIVE },
 	{ "throwflag",			Cmd_Throwflag_f,			CMD_ALIVE|CMD_NOINTERMISSION },
+	{ "thrownade",			Cmd_ThrowNade_f,			CMD_ALIVE | CMD_NOINTERMISSION },
 
 #if _ELORANKING
 	{ "top",				Cmd_DuelTop10_f,			CMD_NOINTERMISSION },

@@ -85,14 +85,14 @@ void vk_create_descriptor_layout( void )
     {
         vk_create_layout_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, &vk.set_layout_sampler);
         vk_create_layout_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT, &vk.set_layout_uniform);
-        vk_create_layout_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, VK_SHADER_STAGE_FRAGMENT_BIT, &vk.set_layout_storage);
+        vk_create_layout_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT, &vk.set_layout_storage);
     }
 }
 
 void vk_create_pipeline_layout( void )
 {
     // Pipeline layouts
-    VkDescriptorSetLayout set_layouts[7];
+    VkDescriptorSetLayout set_layouts[6];
     VkPipelineLayoutCreateInfo desc;
     VkPushConstantRange push_range;
     
@@ -107,12 +107,11 @@ void vk_create_pipeline_layout( void )
     set_layouts[3] = vk.set_layout_sampler; // lightmap / fog-only
     set_layouts[4] = vk.set_layout_sampler; // blend
     set_layouts[5] = vk.set_layout_sampler; // collapsed fog texture
-    set_layouts[6] = vk.set_layout_sampler; // normalMap
 
     desc.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     desc.pNext = NULL;
     desc.flags = 0;
-    desc.setLayoutCount = (vk.maxBoundDescriptorSets >= 6) ? 7 : 4;
+    desc.setLayoutCount = (vk.maxBoundDescriptorSets >= VK_DESC_COUNT) ? VK_DESC_COUNT : 4;
     desc.pSetLayouts = set_layouts;
     desc.pushConstantRangeCount = 1;
     desc.pPushConstantRanges = &push_range;
@@ -999,7 +998,10 @@ VkPipeline vk_create_pipeline( const Vk_Pipeline_Def *def, renderPass_t renderPa
     rasterization_state.flags = 0;
     rasterization_state.depthClampEnable = VK_FALSE;
     rasterization_state.rasterizerDiscardEnable = VK_FALSE;
-    rasterization_state.polygonMode = ( def->state_bits & GLS_POLYMODE_LINE ) ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
+	if ( def->shader_type == TYPE_DOT )
+	    rasterization_state.polygonMode = VK_POLYGON_MODE_POINT;
+	else
+	    rasterization_state.polygonMode = ( def->state_bits & GLS_POLYMODE_LINE ) ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
 
     switch ( def->face_culling )
     {
@@ -1258,7 +1260,7 @@ static void vk_create_post_process_pipeline( int program_index, uint32_t width, 
             renderpass = vk.render_pass.dglow.blend;
             layout = vk.pipeline_layout_blend;
             samples = (VkSampleCountFlagBits)vkSamples;
-            pipeline_name = "bloom blend pipeline";
+            pipeline_name = "dglow blend pipeline";
             blend = qtrue;
             break;
         default: // gamma correction

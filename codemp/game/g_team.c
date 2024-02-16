@@ -754,7 +754,7 @@ int Team_TouchOneFlagBase (gentity_t *ent, gentity_t *other, int team) {
 	other->client->pers.teamState.captures++;
 	other->client->rewardTime = level.time + REWARD_SPRITE_TIME;
 	other->client->ps.persistant[PERS_CAPTURES]++;
-	if (other->client->pers.userName && other->client->pers.userName[0])
+	if (other->client->pers.userName[0])
 	G_AddSimpleStat(other->client->pers.userName, 4);
 
 	// other gets another 10 frag bonus
@@ -838,7 +838,7 @@ int Team_TouchOurFlag( gentity_t *ent, gentity_t *other, int team ) {
 
 		AddScore(other, ent->r.currentOrigin, CTF_RECOVERY_BONUS);
 		other->client->pers.teamState.flagrecovery++;
-		if (other->client->pers.userName && other->client->pers.userName[0])
+		if (other->client->pers.userName[0])
 			G_AddSimpleStat(other->client->pers.userName, 5);
 
 
@@ -933,7 +933,7 @@ int Team_TouchOurFlag( gentity_t *ent, gentity_t *other, int team ) {
 	other->client->pers.teamState.captures++;
 	other->client->rewardTime = level.time + REWARD_SPRITE_TIME;
 	other->client->ps.persistant[PERS_CAPTURES]++;
-	if (other->client->pers.userName && other->client->pers.userName[0])
+	if (other->client->pers.userName[0])
 			G_AddSimpleStat(other->client->pers.userName, 4);
 
 	// other gets another 10 frag bonus
@@ -1298,6 +1298,13 @@ gentity_t *SelectRandomTeamSpawnPoint( int teamstate, team_t team, int siegeClas
 		{ //siege point that's not enabled, can't use it
 			continue;
 		}
+
+		//Seperate spawning for 1flag and 2flag ctf?
+		if ((spot->spawnflags & 2) && level.gametype == GT_CTF && g_neutralFlag.integer >= 4) //eh?
+			continue;
+		if ((spot->spawnflags & 1) && level.gametype == GT_CTF && !g_neutralFlag.integer)
+			continue;
+		//
 
 		spots[ count ] = spot;
 		if (++count == MAX_TEAM_SPAWN_POINTS)

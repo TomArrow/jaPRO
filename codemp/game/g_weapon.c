@@ -194,9 +194,9 @@ void RocketDie(gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int d
 float WP_SpeedOfMissileForWeapon( int wp, qboolean alt_fire )
 {
 	if (g_tweakWeapons.integer & WT_TRIBES) {
-		if (wp = WP_CONCUSSION)
+		if (wp == WP_CONCUSSION)
 			return 2000 * g_projectileVelocityScale.integer;
-		if (wp = WP_BLASTER)
+		if (wp == WP_BLASTER)
 			return 10440 * g_projectileVelocityScale.integer;
 	}
 	return 500;
@@ -817,11 +817,10 @@ void WP_DisruptorProjectileFire(gentity_t* ent, qboolean altFire)
 	missile = CreateMissileNew(muzzle, forward, vel * g_projectileVelocityScale.value, 10000, ent, altFire, qtrue, qtrue);
 
 	if (altFire) {
-		float boxSize = 0;
 		count = (level.time - ent->client->ps.weaponChargeTime) / 50.0f;
 
 		if (g_tweakWeapons.integer & WT_TRIBES)
-			damage = 30 * g_weaponDamageScale.value;
+			damage = 20;
 		else
 			damage = 50;
 
@@ -830,7 +829,10 @@ void WP_DisruptorProjectileFire(gentity_t* ent, qboolean altFire)
 		else if (count > 30)
 			count = 30;
 
-		damage += count * 2.5f;
+		if (g_tweakWeapons.integer & WT_TRIBES)
+			damage += count * 1.5f;
+		else
+			damage += count * 2.5f;
 		damage *= g_weaponDamageScale.value;
 
 		count = ((count - 1.0f) / (30.0f - 1.0f)) * (20.0f - 1.0f) + 1.0f;//scale count back down to the 1-5 range for bullet size
@@ -841,8 +843,8 @@ void WP_DisruptorProjectileFire(gentity_t* ent, qboolean altFire)
 	}
 	else {
 		if (g_tweakWeapons.integer & WT_TRIBES)
-			damage = 20 * g_weaponDamageScale.value;
-		else 
+			damage = 15 * g_weaponDamageScale.value;
+		else
 			damage = 30 * g_weaponDamageScale.value;
 		missile->s.generic1 = 2;//always make the bullet a little bigger
 		missile->s.eFlags |= EF_ALT_FIRING; //have client render it right
@@ -3009,7 +3011,7 @@ static void WP_FireRocket( gentity_t *ent, qboolean altFire )
 	}
 
 	if (altFire) {
-		if (g_tweakWeapons.integer & WT_TRIBES)
+		if (!ent->client->sess.raceMode && (g_tweakWeapons.integer & WT_TRIBES))
 			vel = 125 * g_projectileVelocityScale.value;
 		else
 			vel *= 0.5f;
@@ -3151,9 +3153,9 @@ static void WP_CreateMortar( vec3_t start, vec3_t fwd, gentity_t *self)
 {
 	gentity_t	*missile;
 	float velocity = 2366 * g_projectileVelocityScale.value;
-	int lifetime = 3500, damage = 140 * g_weaponDamageScale.value, splashdamage = 140 * g_splashDamageScale.value, splashradius = 384;
+	int damage = 140 * g_weaponDamageScale.value, splashdamage = 140 * g_splashDamageScale.value, splashradius = 384;
 
-	missile = CreateMissileNew( start, fwd, velocity, lifetime, self, qtrue, qtrue, qtrue );
+	missile = CreateMissileNew( start, fwd, velocity, 10000, self, qtrue, qtrue, qtrue );
 
 	missile->think = mortarExplode;
 
@@ -3474,10 +3476,13 @@ gentity_t *WP_FireThermalDetonator( gentity_t *ent, qboolean altFire )
 	return bolt;
 }
 
-gentity_t *WP_DropThermal( gentity_t *ent )
+void WP_ThrowGrenade( gentity_t *ent ) //Unused in JKA so repurpose this for tribes
 {
-	AngleVectors( ent->client->ps.viewangles, forward, vright, up );
-	return (WP_FireThermalDetonator( ent, qfalse ));
+	if (ent && ent->client) {
+		AngleVectors(ent->client->ps.viewangles, forward, vright, up);
+		CalcMuzzlePoint(ent, forward, vright, up, muzzle);
+		WP_FireThermalDetonator(ent, qfalse);
+	}
 }
 
 
@@ -4784,13 +4789,26 @@ static void WP_FireConcussionAlt( gentity_t *ent )
 static void WP_FireConcussion( gentity_t *ent )
 {//a fast rocket-like projectile
 	vec3_t	start;
-	int		damage	= CONC_DAMAGE;
+	int		damage = CONC_DAMAGE, splashDamage = CONC_SPLASH_DAMAGE;
 	float	vel = CONC_VELOCITY;
 	gentity_t *missile;
 
-	if ((g_tweakWeapons.integer & WT_TRIBES) || (ent->client->sess.raceMode && ent->client->sess.movementStyle == MV_TRIBES)) {
+	if (ent->client->sess.raceMode) {
+		if (ent->client->sess.movementStyle == MV_TRIBES) {
+			vel = 3040;
+			damage = 75;
+			splashDamage = 75;
+		}
+		else {
+			vel = 3000;
+			damage = 75;
+			splashDamage = 40;
+		}
+	}
+	else if (!ent->client->sess.raceMode && (g_tweakWeapons.integer & WT_TRIBES)) {
 		vel = 3040 * g_projectileVelocityScale.value;
 		damage = 75 * g_weaponDamageScale.value;
+		splashDamage = 75 * g_splashDamageScale.value;
 	}
 
 	//hold us still for a bit
@@ -4825,12 +4843,7 @@ static void WP_FireConcussion( gentity_t *ent )
 	missile->splashMethodOfDeath = MOD_CONC;
 
 	missile->clipmask = MASK_SHOT | CONTENTS_LIGHTSABER;
-	if (g_tweakWeapons.integer & WT_TRIBES) {
-		missile->splashDamage = 75 * g_splashDamageScale.value;
-	}
-	else {
-		missile->splashDamage = CONC_SPLASH_DAMAGE;
-	}
+	missile->splashDamage = splashDamage;
 	missile->splashRadius = CONC_SPLASH_RADIUS;
 
 	// we don't want it to ever bounce
@@ -5258,7 +5271,7 @@ void Weapon_HookThink (gentity_t *ent)
 
 #if 1
 	if (ent->parent->client && ent->parent->client->sess.movementStyle == MV_TRIBES) { //Tribes grapple hook restriction
-		if (ent->s.time2 > 4000) {
+		if (ent->s.time2 > 3000) {
 			Weapon_HookFree(ent);	// don't work
 			return;
 		}
@@ -6424,7 +6437,7 @@ void FireWeapon( gentity_t *ent, qboolean altFire ) {
 			break;
 
 		case WP_ROCKET_LAUNCHER:
-				WP_FireRocket( ent, altFire );
+			WP_FireRocket( ent, altFire );
 			break;
 
 		case WP_THERMAL:

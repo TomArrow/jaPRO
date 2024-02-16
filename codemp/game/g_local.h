@@ -1197,6 +1197,7 @@ struct gclient_s {
 	int			lastInStartTrigger;
 	int			kothDebounce;
 	short		forcedFireMode;
+	int			specificWeaponTime[MAX_WEAPONS];
 	//int			numStakes;
 
 #if _GRAPPLE
@@ -1306,13 +1307,13 @@ typedef struct {
 
 //japro
 typedef struct Warp_s {
-	char			name[24];
+	char			name[28];
 	int				x;
 	int				y;
 	int				z;
 	short			yaw;
 } Warp_t;
-Warp_t	warpList[64];
+Warp_t	warpList[72];
 //japro
 
 //japro
@@ -1464,7 +1465,7 @@ typedef struct level_locals_s {
 #endif
 	fileHandle_t	playerLog;
 
-	char		courseName[64][32];//japro defrag
+	char		courseName[80][32];//japro defrag
 	int			numCourses;
 	int			numRealVotingClients; //fixed vote checking
 
@@ -1485,6 +1486,8 @@ typedef struct level_locals_s {
 	qboolean	redCapturing;//1flagctf
 	qboolean	blueCapturing;//1flagctf
 	int			flagCapturingDebounce;
+	int			wrNoise;
+	int			pbNoise;
 
 	//int			lastVoteFailTime;
 //JAPRO - Serverside - Amlockteam - End

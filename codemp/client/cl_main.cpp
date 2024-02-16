@@ -166,10 +166,10 @@ typedef struct serverStatus_s
 	qboolean retrieved;
 } serverStatus_t;
 
-serverStatus_t cl_serverStatusList[MAX_SERVERSTATUSREQUESTS] = { 0 };
+serverStatus_t cl_serverStatusList[MAX_SERVERSTATUSREQUESTS] = {{{0}}};
 int serverStatusCount = 0;
 
-IHeapAllocator *G2VertSpaceClient = 0;
+IHeapAllocator *G2VertSpaceClient = nullptr;
 
 extern void SV_BotFrame( int time );
 void CL_CheckForResend( void );
@@ -3692,6 +3692,23 @@ void CL_ServerInfoPacket( netadr_t from, msg_t *msg ) {
 	// if this is an MB2 server, ignore it
 	if (!Q_stricmp(Info_ValueForKey(infoString, "game"), "mbii") && Q_stricmp(Cvar_VariableString("fs_game"), "mbii")) {
 		return;
+	}
+
+	if ( cl_filterGames && cl_filterGames->string && cl_filterGames->string[0] ) {
+		const char *gameFolder = Info_ValueForKey( infoString, "game" );
+
+		// If no game folder was specified the server is using base. Use the BASEGAME string so we can filter for it.
+		if ( !gameFolder[0] ) gameFolder = BASEGAME;
+
+		// NOTE: As the command tokenization doesn't support nested quotes we can't filter fs_game with spaces using
+		//       this approach, but fs_game with spaces cause other issues as well, like downloads not working and at
+		//       the time of writing this no public servers actually use an fs_game with spaces...
+		Cmd_TokenizeString( cl_filterGames->string );
+		for ( i = 0; i < Cmd_Argc(); i++ ) {
+			if ( !Q_stricmp(Cmd_Argv(i), gameFolder) && Q_stricmp(Cmd_Argv(i), FS_GetCurrentGameDir(false)) ) {
+				return;
+			}
+		}
 	}
 
 	if ( cl_filterGames && cl_filterGames->string && cl_filterGames->string[0] ) {
