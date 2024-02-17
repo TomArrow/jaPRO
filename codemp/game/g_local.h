@@ -768,6 +768,7 @@ typedef struct {//JAPRO - Serverside - Stats
 	float topSpeed;
 	int lastCheckpointTime;//For checkpoint floodprotect
 	int	lastResetTime;
+	int	lastForcedPreRecordClear;
 
 	int	teamHealGiven;
 	int	teamEnergizeGiven;

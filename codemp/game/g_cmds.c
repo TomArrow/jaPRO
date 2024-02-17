@@ -801,6 +801,14 @@ void ResetPlayerTimers(gentity_t *ent, qboolean print)
 	}
 }
 
+void ClearPlayerDemoPreRecord(gentity_t* player) {
+	if (!player->client) return;
+	if ((player->client->pers.stats.lastForcedPreRecordClear + 2500) < level.time || player->client->pers.stats.lastForcedPreRecordClear > level.time) {
+		trap->SendConsoleCommand(EXEC_APPEND, va("svdemoclearprerecord %d\n", player->client->ps.clientNum));
+		player->client->pers.stats.lastForcedPreRecordClear = level.time;
+	}
+}
+
 /*
 ==================
 Cmd_Noclip_f
