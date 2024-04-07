@@ -21,7 +21,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9" CACHE STRING "Minimum OS X deployment ver
 
 set(InOpenJK ON)
 
-set(ProjectName "EternalJK" CACHE STRING "Project Name")
+set(ProjectName "TaystJK" CACHE STRING "Project Name")
 project(${ProjectName})
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -33,10 +33,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 #=============================================================================
 option(BuildPortableVersion "Build portable version (does not read or write files from your user/home directory" OFF)
 
-option(BuildMPEngine "Whether to create projects for the MP client (eternaljk.x86.exe)" ON)
-option(BuildMPRdVanilla "Whether to create projects for the MP default renderer (rd-eternaljk_x86.dll)" ON)
+option(BuildMPEngine "Whether to create projects for the MP client (taystjk.x86.exe)" ON)
+option(BuildMPRdVanilla "Whether to create projects for the MP default renderer (rd-taystjk_x86.dll)" ON)
 option(BuildMPRdVulkan "Whether to create projects for the MP vulkan renderer (rd-vulkan_x86.dll)" ON)
-option(BuildMPDed "Whether to create projects for the MP dedicated server (eternaljkded.exe)" ON)
+option(BuildMPDed "Whether to create projects for the MP dedicated server (taystjkded.exe)" ON)
 option(BuildMPGame "Whether to create projects for the MP server-side gamecode (jampgamex86.dll)" ON)
 option(BuildMPCGame "Whether to create projects for the MP clientside gamecode (cgamex86.dll)" ON)
 option(BuildMPUI "Whether to create projects for the MP UI code (uix86.dll)" ON)
@@ -61,16 +61,18 @@ set(UseInternalPNGDefault    OFF)
 set(UseInternalJPEGDefault   OFF)
 set(UseInternalSDL2Default   OFF)
 
-if(UseInternalLibs OR WIN32)
-  set(UseInternalOpenALDefault ON)
-  set(UseInternalZlibDefault   ON)
-  set(UseInternalPNGDefault    ON)
-  set(UseInternalJPEGDefault   ON)
-  set(UseInternalSDL2Default   ON)
-endif()
-
-if(APPLE)
-  set(UseInternalJPEGDefault ON)
+if(UseInternalLibs OR WIN32 OR APPLE)
+  if(WIN32)
+    set(UseInternalOpenALDefault ON)
+    set(UseInternalZlibDefault   ON)
+    set(UseInternalPNGDefault    ON)
+    set(UseInternalJPEGDefault   ON)
+    set(UseInternalSDL2Default   ON)
+  else()
+    set(UseInternalJPEGDefault ON)
+    set(UseInternalPNGDefault  ON)
+    set(UseInternalZlibDefault ON)
+  endif()
 endif()
 
 option(UseInternalOpenAL "If set, use bundled OpenAL."  ${UseInternalOpenALDefault})
@@ -90,6 +92,14 @@ endif()
 #
 #=============================================================================
 list(INSERT CMAKE_MODULE_PATH 0 "${CMAKE_SOURCE_DIR}/cmake/Modules")
+
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+	add_custom_target(
+		copy-compile-commands ALL
+		${CMAKE_COMMAND} -E copy_if_different
+		${CMAKE_BINARY_DIR}/compile_commands.json
+		${CMAKE_CURRENT_LIST_DIR})
+endif()
 
 #=============================================================================
 #
@@ -112,7 +122,6 @@ else()
 	if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
 		set(Architecture "arm64")
 		add_definitions(-DPNG_ARM_NEON_OPT=0)
-		set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum OS X deployment version")
 	elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^arm")
 		set(Architecture "arm")
 	elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^i.86$")
@@ -146,11 +155,11 @@ endif()
 # Binary names
 #
 #=============================================================================
-set(MPEngine "eternaljk.${Architecture}")
-set(MPVanillaRenderer "rd-eternaljk_${Architecture}")
-set(MPVulkanRenderer "rd-vulkan_${Architecture}")
-set(MPRend2 "rd-rend2e_${Architecture}")
-set(MPDed "eternaljkded.${Architecture}")
+set(MPEngine "taystjk.${Architecture}")
+set(MPVanillaRenderer "rd-taystjk_${Architecture}")
+set(MPVulkanRenderer "rd-vulkant_${Architecture}")
+set(MPRend2 "rd-rend2t_${Architecture}")
+set(MPDed "taystjkded.${Architecture}")
 set(MPGame "jampgame${Architecture}")
 set(MPCGame "cgame${Architecture}")
 set(MPUI "ui${Architecture}")
@@ -182,11 +191,11 @@ if(WIN64)
 endif()
 
 if (APPLE)
-	set(SharedDefines "MACOS_X")
+	set(SharedDefines ${SharedDefines} "MACOS_X")
 endif()
 
 if (NOT WIN32 AND NOT APPLE)
-	set(SharedDefines "ARCH_STRING=\"${Architecture}\"")
+	set(SharedDefines ${SharedDefines} "ARCH_STRING=\"${Architecture}\"")
 endif()
 
 if(CMAKE_SYSTEM_NAME MATCHES "BSD")
@@ -374,6 +383,7 @@ else()
 	endif()
 endif()
 
+add_subdirectory(lib/mongoose)
 configure_file(shared/qcommon/q_version.h.in shared/qcommon/q_version.h @ONLY)
 
 #=============================================================================
@@ -405,7 +415,7 @@ set(SharedCommonSafeFiles
 #
 #=============================================================================
 if(UseInternalJPEG)
-  add_subdirectory(lib/jpeg-9a)
+  add_subdirectory(lib/jpeg-9c)
 else()
   find_package(JPEG REQUIRED)
 endif()

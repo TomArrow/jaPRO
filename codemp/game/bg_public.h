@@ -111,7 +111,6 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define CS_FLAGSTATUS			23		// string indicating flag status in CTF
 #define CS_SHADERSTATE			24
 #define CS_BOTINFO				25
-#define CS_LEGACY_FIXES			26
 #define	CS_ITEMS				27		// string of 0's and 1's that tell which items are present
 
 #define CS_CLIENT_JEDIMASTER	28		// current jedi master
@@ -119,6 +118,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define CS_CLIENT_DUELISTS		30		// client numbers for both current duelists. Needed for a number of client-side things.
 #define CS_CLIENT_DUELHEALTHS	31		// nmckenzie: DUEL_HEALTH.  Hopefully adding this cs is safe and good?
 #define CS_GLOBAL_AMBIENT_SET	32
+
+#define CS_LEGACY_FIXES			36
 
 #define CS_AMBIENT_SET			37
 
@@ -158,6 +159,8 @@ Ghoul2 Insert End
 
 typedef enum legacyFixes_e {
 	LEGACYFIX_SABERMOVEDATA = 0,
+	LEGACYFIX_WEAPONATTACKANIM,
+	LEGACYFIX_RUNWALKANIMS,
 	/*
 	m    m                        ""#      "             m                    m
 	#    #  mmm   m   m             #    mmm     mmm   mm#mm   mmm   m mm     #
@@ -848,10 +851,8 @@ typedef enum {
 typedef enum {
 	PW_NONE,
 
-	#ifdef BASE_COMPAT
-		PW_QUAD,
-		PW_BATTLESUIT,
-	#endif // BASE_COMPAT
+	PW_QUAD,
+	PW_BATTLESUIT,
 
 	PW_PULL,
 
@@ -1058,10 +1059,8 @@ typedef enum {
 	EV_DEATH3,
 	EV_OBITUARY,
 
-	#ifdef BASE_COMPAT
-		EV_POWERUP_QUAD,
-		EV_POWERUP_BATTLESUIT,
-	#endif // BASE_COMPAT
+	EV_POWERUP_QUAD,
+	EV_POWERUP_BATTLESUIT,
 
 	EV_FORCE_DRAINED,
 
@@ -1875,6 +1874,7 @@ qboolean BG_InSaberLockOld( int anim );
 qboolean BG_InSaberLock( int anim );
 
 void BG_FixSaberMoveData( void );
+void BG_FixWeaponAttackAnim( void );
 
 void BG_SaberStartTransAnim( int clientNum, int saberAnimLevel, int weapon, int anim, float *animSpeed, int broken );
 
@@ -1954,45 +1954,59 @@ extern const char *gametypeStringShort[GT_MAX_GAME_TYPE];
 const char *BG_GetGametypeString( int gametype );
 int BG_GetGametypeForString( const char *gametype );
 
-extern	const	float	pm_stopspeed;
-extern	const	float	pm_duckScale;
-extern	const	float	pm_swimScale;
-extern	const	float	pm_wadeScale;
+int PM_GetMovePhysics(); //japro movement styles
 
-extern	const	float	pm_accelerate;
-extern	const	float	pm_airaccelerate;
-extern	const	float	pm_wateraccelerate;
-extern	const	float	pm_flyaccelerate;
+// movement parameters
+extern	const float	pm_stopspeed;
+extern	const float	pm_duckScale;
+extern	const float	pm_swimScale;
+extern	const float	pm_wadeScale;
 
-extern  const   float	pm_spectatorfriction;
-extern	const	float	pm_friction;
-extern	const	float	pm_waterfriction;
-extern	const	float	pm_flightfriction;
+extern	const float	pm_vehicleaccelerate;
+extern	const float	pm_accelerate;
+extern	const float	pm_airaccelerate;
+extern	const float	pm_wateraccelerate;
+extern	const float	pm_flyaccelerate;
 
-//japro/dfmania movement parameters start
+extern	const float pm_sp_accelerate;
+extern	const float pm_sp_airaccelerate;
+extern	const float pm_sp_airDecelRate;
 
-extern  const   float   pm_sp_accelerate;
-extern  const   float   pm_sp_airaccelerate;
-extern  const   float   pm_sp_airDecelRate;
+extern	const float	pm_friction;
+extern	const float	pm_waterfriction;
+extern	const float	pm_flightfriction;
+extern	const float	pm_spectatorfriction;
 
-extern	const	float	pm_vq3_duckScale;
+//japro/dfmania movement parameters
+extern	const float pm_vq3_duckScale;
+extern	const float pm_vq3_friction;
 
-extern	const	float	pm_cpm_accelerate;
-extern	const	float	pm_cpm_airaccelerate;
-extern	const	float	pm_cpm_airstopaccelerate;
-extern	const	float	pm_cpm_airstrafeaccelerate;
-extern	const	float	pm_cpm_airstrafewishspeed;
-extern	const	float	pm_cpm_aircontrol;
-extern	const	float	pm_cpm_friction;
+extern	const float	pm_cpm_accelerate;
+extern	const float	pm_cpm_airaccelerate;
+extern	const float	pm_cpm_airstopaccelerate;
+extern	const float	pm_cpm_airstrafeaccelerate;
+extern	const float	pm_cpm_airstrafewishspeed;
+extern	const float	pm_cpm_aircontrol;
 
-extern	const	float	pm_wsw_accelerate;
-extern	const	float	pm_wsw_duckScale;
+extern	const float pm_wsw_accelerate;
+extern	const float pm_wsw_duckScale;
 
-extern	const	float	pm_slick_accelerate;
-extern	const	float	pm_slick_airstrafeaccelerate;
-extern  const   float 	pm_slick_friction;
+extern	const float pm_slick_accelerate;
+extern	const float	pm_slick_airstrafeaccelerate;
+extern	const float	pm_slick_friction;
 
-extern	const	float	pm_qw_airaccelerate;
-extern	const	float	pm_qw_friction;
+extern	const float	pm_jetpack_airaccelerate;
 
-extern	const	float	pm_jetpack_airaccelerate;
+extern	const float pm_qw_airaccelerate;
+extern	const float pm_qw_friction;
+extern	const float	pm_qw_airstrafewishspeed;
+
+extern	const float pm_tribes_accelerate;
+extern	const float pm_tribes_airaccelerate;
+extern	const float pm_tribes_groundfriction;
+extern	const float pm_tribes_airfriction;
+extern	const float	pm_tribes_groundstrafewishspeed;
+
+extern	const float	pm_surf_accelerate;
+extern	const float	pm_surf_airaccelerate;
+extern	const float	pm_surf_wishspeed;

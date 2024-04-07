@@ -2219,6 +2219,11 @@ void G_Say( gentity_t *ent, gentity_t *target, int mode, const char *chatText ) 
 	//	mode = SAY_ALL;
 	//}
 
+	if (g_forceLogin.integer > 1 && !(ent->r.svFlags & SVF_BOT) && !ent->client->pers.userName[0]) {
+		trap->SendServerCommand(ent - g_entities, "print \"^1You must login to chat!\n\"");
+		return;
+	}
+
 	if (mode == SAY_TEAM) {
 		if (ent->client->sess.sayteammod == 1)//clanpass
 			mode = SAY_CLAN;
@@ -2522,6 +2527,11 @@ static void Cmd_VGSCommand_f(gentity_t *ent)
 	if (g_allowVGS.integer < 2 && (ent->client->sess.sessionTeam == TEAM_SPECTATOR || ent->client->tempSpectate >= level.time))
 	{
 		trap->SendServerCommand(ent - g_entities, va("print \"%s\n\"", G_GetStringEdString("MP_SVGAME", "NOVOICECHATASSPEC")));
+		return;
+	}
+
+	if (g_forceLogin.integer > 1 && !(ent->r.svFlags & SVF_BOT) && !ent->client->pers.userName[0]) {
+		trap->SendServerCommand(ent - g_entities, "print \"^1You must login to VGS!\n\"");
 		return;
 	}
 
@@ -6689,7 +6699,7 @@ static void Cmd_MovementStyle_f(gentity_t *ent)
 		return;
 
 	if (trap->Argc() != 2) {
-		trap->SendServerCommand( ent-g_entities, "print \"Usage: /move <siege, jka, qw, cpm, ocpm, q3, pjk, wsw, rjq3, rjcpm, swoop, jetpack, speed, sp, slick, botcpm, coop, ocpm, or tribes>.\n\"" );
+		trap->SendServerCommand( ent-g_entities, "print \"Usage: /move <siege, jka, qw, cpm, q3, pjk, wsw, rjq3, rjcpm, swoop, jetpack, speed, sp, slick, botcpm, coop, ocpm, tribes, or surf>.\n\"" );
 		return;
 	}
 

@@ -955,7 +955,7 @@ void G_AddToDBFromFile(void) { //loda fixme, we can filter out the slower times 
 }
 #endif
 
-gentity_t *G_SoundTempEntity( vec3_t origin, int event, int channel );
+//ntity_t *G_SoundTempEntity( vec3_t origin, int event, int channel );
 #if 0
 void PlayActualGlobalSound2(char * sound) { //loda fixme, just go through each client and play it on them..?
 	gentity_t	*te;
@@ -972,6 +972,8 @@ void PlayActualGlobalSound2(char * sound) { //loda fixme, just go through each c
 void PlayActualGlobalSound(int soundindex) {
 	gentity_t *player;
 	int i;
+
+	//G_AddEvent(ent, EV_GLOBAL_SOUND, soundindex); //need to svf_broadcast firsT? and what ent to use ??
 
 	for (i=0; i<MAX_CLIENTS; i++) {//Build a list of clients
 		if (!g_entities[i].inuse)
@@ -1528,7 +1530,7 @@ void TimeSecToString(int duration_ms, char *timeStr, size_t strSize) {
 	}
 }
 
-void TimeToString(int duration_ms, char *timeStr, size_t strSize) { 
+void TimeToString(int duration_ms, char *timeStr, size_t strSize) {
 	if (duration_ms > (60*60*1000)) { //thanks, eternal
 		int hours, minutes, seconds, milliseconds; 
 		hours = (int)((duration_ms / (1000*60*60))); //wait wut
@@ -1549,7 +1551,7 @@ void TimeToString(int duration_ms, char *timeStr, size_t strSize) {
 	}
 }
 
-void PrintRaceTime(char *username, char *playername, char *message, char *style, int topspeed, int average, char *timeStr, int clientNum, int season_newRank, qboolean spb, int global_newRank, qboolean loggedin, qboolean valid, int season_oldRank, int global_oldRank, float addedScore, int awesomenoise) {
+void PrintRaceTime(char *username, char *playername, char *message, char *style, int topspeed, int average, char *timeStr, int clientNum, int season_newRank, qboolean spb, int global_newRank, qboolean loggedin, qboolean valid, int season_oldRank, int global_oldRank, float addedScore, int awesomenoise, int worldrecordnoise) {
 	int nameColor, color;
 	char awardString[28] = {0}, messageStr[64] = {0}, nameStr[32] = {0};
 
@@ -1557,13 +1559,14 @@ void PrintRaceTime(char *username, char *playername, char *message, char *style,
 
 	if (topspeed || average) { //weird hack to not play double sound coop
 		if (global_newRank == 1) {//WR, Play the sound
-			//if (awesomenoise)
-				//PlayActualGlobalSound(awesomenoise); //Only for simple PB not WR i guess..
-			//else
-			if (!level.wrNoise) {
-				level.wrNoise = G_SoundIndex("sound/chars/rosh_boss/misc/victory3"); //Maybe this should be done when df_trigger_finish is spawned cuz its still gonna hitch maybe on first wr of map? idk
+			if (worldrecordnoise)
+				PlayActualGlobalSound(worldrecordnoise); //Only for simple PB not WR i guess..
+			else if (worldrecordnoise != -1) {
+				if (!level.wrNoise) {
+					level.wrNoise = G_SoundIndex("sound/chars/rosh_boss/misc/victory3"); //Maybe this should be done when df_trigger_finish is spawned cuz its still gonna hitch maybe on first wr of map? idk
+				}
+				PlayActualGlobalSound(level.wrNoise);
 			}
-			PlayActualGlobalSound(level.wrNoise);
 		}
 		else if (global_newRank > 0) {//PB
 			if (awesomenoise)
@@ -1800,7 +1803,7 @@ void SV_RebuildUnlocks_f(void) {
 }
 
 void StripWhitespace(char *s);
-void G_AddRaceTime(char *username, char *message, int duration_ms, int style, int topspeed, int average, int clientNum, int awesomenoise) {//should be short.. but have to change elsewhere? is it worth it?
+void G_AddRaceTime(char *username, char *message, int duration_ms, int style, int topspeed, int average, int clientNum, int awesomenoise, int worldrecordnoise) {//should be short.. but have to change elsewhere? is it worth it?
 	time_t	rawtime;
 	char	string[1024] = {0}, info[1024] = {0}, coursename[40], timeStr[32] = {0}, styleString[32] = {0};
 	qboolean seasonPB = qfalse, globalPB = qfalse;//, WR = qfalse;
@@ -1983,7 +1986,7 @@ void G_AddRaceTime(char *username, char *message, int duration_ms, int style, in
 						i--;
 					}
 					lastDuration = duration;
-				}	
+				}
 				if (duration_ms < duration) { //We are faster than this time... If we dont find anything newrank stays -1
 					global_newRank = i;
 					break;
@@ -2087,7 +2090,7 @@ void G_AddRaceTime(char *username, char *message, int duration_ms, int style, in
 	CALL_SQLITE(close(db));
 
 	TimeToString((int)(duration_ms), timeStr, sizeof(timeStr));
-	PrintRaceTime(username, cl->pers.netname, message, styleString, topspeed, average, timeStr, clientNum, season_newRank, seasonPB, global_newRank, qtrue, qtrue, season_oldRank, global_oldRank, addedScore, awesomenoise);
+	PrintRaceTime(username, cl->pers.netname, message, styleString, topspeed, average, timeStr, clientNum, season_newRank, seasonPB, global_newRank, qtrue, qtrue, season_oldRank, global_oldRank, addedScore, awesomenoise, worldrecordnoise);
 	//DebugWriteToDB("G_AddRaceTime");
 }
 
@@ -6072,7 +6075,7 @@ GROUP BY coursename, style, season
 				}
 				else
 					tmpMsg = va("^5%2i^3: ^3%s\n", start + row, sqlite3_column_text(stmt, 0)); //Print username, inputstyle, coursename
-		
+
 				if (strlen(msg) + strlen(tmpMsg) >= sizeof(msg)) {
 					trap->SendServerCommand(ent - g_entities, va("print \"%s\"", msg));
 					msg[0] = '\0';
@@ -7391,6 +7394,138 @@ void G_SpawnWarpLocationsFromCfg(void) //loda fixme
 	}
 
 	Com_Printf ("Loaded warp locations from %s\n", filename);
+}
+
+
+void G_SpawnCapRoutesFromCFG(void) {
+	fileHandle_t f;
+	int		fLen = 0, routeNum, numRedRoutes = 0, i = 0; //use max num warps idk
+	const int MAX_NUM_ITEMS = 100000, MAX_ROUTES_PER_TEAM = 6;
+	char	fileName[MAX_QPATH], buf[512 * 1024] = { 0 }, mapname[40], info[1024] = { 0 };//eh
+	char*	pch;
+	ivec3_t spot = { 0 };
+
+
+	//float radius;
+
+
+	trap->GetServerinfo(info, sizeof(info));
+	Q_strncpyz(mapname, Info_ValueForKey(info, "mapname"), sizeof(mapname));
+	Q_strlwr(mapname);//dat linux
+
+	for (i = 0; i < strlen(mapname); i++) {//Replace / in mapname with _ since we cant have a file named mp/duel1.cfg etc.
+		if (mapname[i] == '/')
+			mapname[i] = '_';
+	}
+
+
+	//Com_Printf("^5Mapname is %s\n", mapname);
+
+	//Loop through max # of route options
+	for (routeNum = 0; routeNum < MAX_ROUTES_PER_TEAM; routeNum++) {
+		int args = 1, row = 0;
+		Com_sprintf(fileName, sizeof(fileName), "caproutes/%s_b_%i.cfg", mapname, routeNum+1); //mapname
+		//Com_Printf("^5Filename blue is %s\n", fileName);
+																			
+
+		fLen = trap->FS_Open(fileName, &f, FS_READ);
+
+		if (!f) {
+			//Com_Printf("Couldn't load path locations from %s\n", fileName); //not needed?
+			break;
+		}
+		if (fLen >= sizeof(buf)) {
+			trap->FS_Close(f);
+			Com_Printf("Couldn't load path locations from %s, file is too large\n", fileName);
+			continue;
+		}
+
+		trap->FS_Read(buf, fLen, f);
+		buf[fLen] = 0;
+		trap->FS_Close(f);
+
+
+		pch = strtok(buf, " \n\t");  //loda fixme why is this broken
+		while (pch != NULL && row < MAX_NUM_ITEMS)
+		{
+			if ((args % 3) == 1)
+				spot[0] = atoi(pch);
+			else if ((args % 3) == 2)
+				spot[1] = atoi(pch);
+			else if ((args % 3) == 0) {
+				spot[2] = atoi(pch);
+
+				blueRouteList[routeNum].pos[row][0] = spot[0];
+				blueRouteList[routeNum].pos[row][1] = spot[1];
+				blueRouteList[routeNum].pos[row][2] = spot[2];
+				//trap->Print("^5Blue Route spot added: route %i row %i [%i %i %i]\n", routeNum, row, blueRouteList[routeNum].pos[row][0], blueRouteList[routeNum].pos[row][1], blueRouteList[routeNum].pos[row][2]);
+				row++;
+			}
+			pch = strtok(NULL, " \n\t");
+			args++;
+
+			//Routes named like raindance_1_r.cfg or raindance_2_b.cfg.  6 per team max? or 12 max?  lets do 12 max
+
+			//put them in memory I guess ? If tribes mode ? (latched rquirement ? )
+		}
+		blueRouteList[routeNum].length = row;
+
+	}
+
+	numRedRoutes = routeNum;
+
+	//Loop through max # of route options
+	for (routeNum = 0; routeNum < MAX_ROUTES_PER_TEAM; routeNum++) {
+		int args = 1, row = 0;
+		Com_sprintf(fileName, sizeof(fileName), "caproutes/%s_r_%i.cfg", mapname, routeNum+1); //mapname
+
+
+		fLen = trap->FS_Open(fileName, &f, FS_READ);
+
+		if (!f) {
+			//Com_Printf("Couldn't load route path from %s\n", fileName); //not needed?
+			break;
+		}
+		if (fLen >= sizeof(buf)) {
+			trap->FS_Close(f);
+			Com_Printf("Couldn't load route path from %s, file is too large\n", fileName);
+			continue;
+		}
+
+		trap->FS_Read(buf, fLen, f);
+		buf[fLen] = 0;
+		trap->FS_Close(f);
+
+
+		pch = strtok(buf, " \n\t");  //loda fixme why is this broken
+		while (pch != NULL && row < MAX_NUM_ITEMS)
+		{
+			if ((args % 3) == 1)
+				spot[0] = atoi(pch);
+			else if ((args % 3) == 2)
+				spot[1] = atoi(pch);
+			else if ((args % 3) == 0) {
+				spot[2] = atoi(pch);
+
+				redRouteList[routeNum].pos[row][0] = spot[0];
+				redRouteList[routeNum].pos[row][1] = spot[1];
+				redRouteList[routeNum].pos[row][2] = spot[2];
+				//trap->Print("^5Red Route spot added: route %i row %i [%i %i %i]\n", routeNum, row, spot[0], spot[1], spot[2]);
+
+				row++;
+			}
+			pch = strtok(NULL, " \n\t");
+			args++;
+
+			//Routes named like raindance_1_r.cfg or raindance_2_b.cfg.  6 per team max? or 12 max?  lets do 12 max
+
+			//put them in memory I guess ? If tribes mode ? (latched rquirement ? )
+
+		}
+		redRouteList[routeNum].length = row;
+	}
+
+		Com_Printf("Loaded %i red cap routes and %i blue cap routes from files\n", numRedRoutes, routeNum);
 }
 
 #if 0

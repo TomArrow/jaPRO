@@ -571,7 +571,7 @@ void pas_fire( gentity_t *ent )
 
 	if (g_tweakWeapons.integer & WT_TRIBES)
 		WP_FireTurretMissile(&g_entities[ent->genericValue3], myOrg, fwd, qfalse, 10*g_weaponDamageScale.value, 5220 * g_projectileVelocityScale.value, MOD_SENTRY, ent );
-	else 
+	else
 		WP_FireTurretMissile(&g_entities[ent->genericValue3], myOrg, fwd, qfalse, 10*g_weaponDamageScale.value, 2300 * g_projectileVelocityScale.value, MOD_SENTRY, ent);
 
 	G_RunObject(ent);
@@ -2270,18 +2270,18 @@ int Pickup_Ammo (gentity_t *ent, gentity_t *other)
 				other->client->ps.ammo[AMMO_THERMAL] = 2;
 				other->client->ps.ammo[AMMO_TRIPMINE] = 2;
 
-				if (other->health < other->client->ps.stats[STAT_MAX_HEALTH]) {
+				if (other->health > 0 && other->health < other->client->ps.stats[STAT_MAX_HEALTH]) {
 					other->client->passiveHealthDebReduce = level.time; //Passif regen
 					if (other->client->pers.tribesClass == 1) {
-						other->health += 300;
+						other->health += 250;
 						other->client->ps.stats[STAT_HOLDABLE_ITEMS] |= (1 << HI_SENTRY_GUN);
 					}
 					else if (other->client->pers.tribesClass == 2) {
-						other->health += 350;
+						other->health += 300;
 						other->client->ps.stats[STAT_HOLDABLE_ITEMS] |= (1 << HI_EWEB);
 					}
 					else if (other->client->pers.tribesClass == 3) {
-						other->health += 400;
+						other->health += 350;
 						other->client->ps.stats[STAT_HOLDABLE_ITEMS] |= (1 << HI_SHIELD);
 					}
 
@@ -2401,6 +2401,10 @@ int Pickup_Health (gentity_t *ent, gentity_t *other) {
 	}
 	other->client->ps.stats[STAT_HEALTH] = other->health;
 
+	if (g_showHealth.integer)
+		G_ScaleNetHealth(other); //WT_TRIBES rework
+
+
 	if ( ent->item->quantity == 100 ) {		// mega health respawns slow
 		return RESPAWN_MEGAHEALTH;
 	}
@@ -2417,6 +2421,9 @@ int Pickup_Armor( gentity_t *ent, gentity_t *other )
 	{
 		other->client->ps.stats[STAT_ARMOR] = other->client->ps.stats[STAT_MAX_HEALTH] * ent->item->giTag;
 	}
+
+	if (g_showHealth.integer)
+		G_ScaleNetHealth(other); //WT_TRIBES rework
 
 	return adjustRespawnTime(RESPAWN_ARMOR, ent->item->giType, ent->item->giTag);
 }
@@ -3487,26 +3494,40 @@ void G_BounceItem( gentity_t *ent, trace_t *trace ) {
 			return;
 		}
 	}
-
 	// check for stop
-    if (trace->plane.normal[2] > 0 && ent->s.pos.trDelta[2] < 40) {
-        trace->endpos[2] += 1.0;	// make sure it is off ground
-        SnapVector(trace->endpos);
-        G_SetOrigin(ent, trace->endpos);
-        ent->s.groundEntityNum = trace->entityNum;
+	{
+		qboolean checkStop = qfalse;
 
-        // check if flag is falling to death, to avoid overboarding
-        if ( ent->item && ent->item->giType == IT_TEAM) {
-                vec3_t		origin;
-                trace_t		tr;    
-                BG_EvaluateTrajectory(&ent->s.pos, level.time, origin);
+
+		if (ent->item && ent->item->giType == IT_TEAM && g_allowFlagThrow.integer) {
+			if (ent->s.pos.trDelta[2] > -5 && ent->s.pos.trDelta[2] < 25) { //piddling
+				checkStop = qtrue;
+			}
+		}
+		else {
+			if ((trace->plane.normal[2] > 0) && (ent->s.pos.trDelta[2] < 40))
+				checkStop = qtrue;
+		}
+
+		if (checkStop) {
+			trace->endpos[2] += 1.0;	// make sure it is off ground
+			SnapVector(trace->endpos);
+			G_SetOrigin(ent, trace->endpos);
+			ent->s.groundEntityNum = trace->entityNum;
+
+			// check if flag is falling to death, to avoid overboarding
+			if (ent->item && ent->item->giType == IT_TEAM) {
+				vec3_t		origin;
+				trace_t		tr;
+				BG_EvaluateTrajectory(&ent->s.pos, level.time, origin);
 				JP_Trace(&tr, ent->r.currentOrigin, ent->r.mins, ent->r.maxs, origin, ent->r.ownerNum, CONTENTS_TRIGGER, qfalse, 0, 0);
 				//Emergent gameplay is to bounce the flag in a pit so it never stops moving and won't return until timer makes it return :?
-                if ( (tr.startsolid || tr.fraction != 1) && g_entities[tr.entityNum].damage == -1 ) {
-                    ent->nextthink = level.time;
-                }    
-        }
-		return;
+				if ((tr.startsolid || tr.fraction != 1) && g_entities[tr.entityNum].damage == -1) {
+					ent->nextthink = level.time;
+				}
+			}
+			return;
+		}
 	}
 
 	VectorAdd( ent->r.currentOrigin, trace->plane.normal, ent->r.currentOrigin);

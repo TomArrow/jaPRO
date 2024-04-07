@@ -27,26 +27,22 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // q_shared.h -- included first by ALL program modules.
 // A user mod should never modify this file
 
-#define PRODUCT_NAME			"eternaljk"
+#define PRODUCT_NAME			"taystjk"
 
-#define CLIENT_WINDOW_TITLE "EternalJK"
-#define CLIENT_CONSOLE_TITLE "EternalJK Console"
-#define HOMEPATH_NAME_UNIX "EternalJK"
-#define HOMEPATH_NAME_WIN "EternalJK"
+#define CLIENT_WINDOW_TITLE "TaystJK"
+#define CLIENT_CONSOLE_TITLE "TaystJK Console"
+#define HOMEPATH_NAME_UNIX "TaystJK"
+#define HOMEPATH_NAME_WIN "TaystJK"
 #define HOMEPATH_NAME_MACOSX HOMEPATH_NAME_WIN
 
 #define	BASEGAME "base"
-#define ETERNALJKGAME "EternalJK"
+#define TAYSTJKGAME "taystjk"
 
 //NOTENOTE: Only change this to re-point ICARUS to a new script directory
 #define Q3_SCRIPT_DIR	"scripts"
 
 #define MAX_TEAMNAME 32
 #define MAX_MASTER_SERVERS      5	// number of supported master servers
-
-#define BASE_COMPAT // some unused and leftover code has been stripped out, but this breaks compatibility
-					//	between base<->modbase clients and servers (mismatching events, powerups, etc)
-					// leave this defined to ensure compatibility
 
 #include "qcommon/q_math.h"
 #include "qcommon/q_color.h"

@@ -4990,6 +4990,7 @@ static const char *g_bindCommands[] = {
 	"gloat",
 	"invnext",
 	"invprev",
+	"invfree",
 	"meditate",
 	"messagemode",
 	"messagemode2",
@@ -5033,7 +5034,17 @@ static const char *g_bindCommands[] = {
 	"flipkick",
 	"kill",
 	"spot",
-	"weaplast"
+	"weaplast",
+	"slot 1",
+	"slot 10",
+	"slot 2",
+	"slot 3",
+	"slot 4",
+	"slot 5",
+	"slot 6",
+	"slot 7",
+	"slot 8",
+	"slot 9"
 };
 
 #define g_bindCount ARRAY_LEN(g_bindCommands)
@@ -8681,7 +8692,7 @@ Hacks to fix issues with Team Arena menu scripts
 ===============
 */
 static void Item_ApplyHacks( itemDef_t *item ) {
-#if !defined(_WIN32) || ( defined(_WIN32) && defined(idx64) )
+#ifndef _WIN32
 	if ( item->type == ITEM_TYPE_MULTI && item->cvar && !Q_stricmp( item->cvar, "s_UseOpenAL" ) ) {
 		if( item->parent )
 		{
@@ -8706,7 +8717,7 @@ static void Item_ApplyHacks( itemDef_t *item ) {
 		}
 	}
 #endif
-	
+
 	// Fix length of favorite address in createfavorite.menu
 	if ( item->type == ITEM_TYPE_EDITFIELD && item->cvar && !Q_stricmp( item->cvar, "ui_favoriteAddress" ) ) {
 		editFieldDef_t *editField = item->typeData.edit;

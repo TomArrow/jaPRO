@@ -262,6 +262,8 @@ typedef struct clientConnection_s {
 
 	// big stuff at end of structure so most offsets are 15 bits or less
 	netchan_t	netchan;
+	dlHandle_t	httpHandle;
+	char        httpdl[128];
 } clientConnection_t;
 
 extern	clientConnection_t clc;
@@ -356,6 +358,7 @@ typedef struct clientStatic_s {
 	qhandle_t	charSetShader;
 	qhandle_t	whiteShader;
 	qhandle_t	consoleShader;
+	int			consoleFont;
 
 	// Cursor
 	qboolean	cursorActive;
@@ -378,19 +381,28 @@ typedef struct clientStatic_s {
 #define	CON_TEXTSIZE	0x30000 //was 32768
 #define	NUM_CON_TIMES	64
 
-typedef struct console_s {
+typedef union {
+	struct {
+		unsigned char	color;
+		char			character;
+	} f;
+	unsigned short	compare;
+} conChar_t;
+
+typedef struct {
 	qboolean	initialized;
 
-	short	text[CON_TEXTSIZE];
+	conChar_t	text[CON_TEXTSIZE];
 	int		current;		// line where next message will be printed
 	int		x;				// offset in current line for next print
 	int		display;		// bottom of console displays this line
 
 	int 	linewidth;		// characters across screen
+	int		rowwidth;		// timestamp, text and line wrap character
 	int		totallines;		// total lines in console scrollback
 
 	int		charWidth;		// Scaled console character width
-	int		charHeight;		// Scaled console character height.
+	int		charHeight;		// Scaled console character height
 
 	float	xadjust;		// for wide aspect screens
 	float	yadjust;		// for wide aspect screens
@@ -464,6 +476,7 @@ extern	cvar_t	*cl_inGameVideo;
 
 extern	cvar_t	*cl_consoleKeys;
 extern	cvar_t	*cl_consoleUseScanCode;
+extern	cvar_t	*cl_consoleShiftRequirement;
 
 extern  cvar_t  *cl_lanForcePackets;
 
@@ -573,6 +586,10 @@ extern int cl_connectedToCheatServer;
 
 void CL_SystemInfoChanged( void );
 void CL_ParseServerMessage( msg_t *msg );
+
+void CL_EndHTTPDownload(dlHandle_t handle, qboolean success, const char *err_msg);
+void CL_ProcessHTTPDownload(size_t dltotal, size_t dlnow);
+void CL_KillDownload();
 
 //====================================================================
 

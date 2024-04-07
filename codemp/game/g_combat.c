@@ -4755,7 +4755,7 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 	if (g_godChat.integer && level.gametype == GT_FFA && attacker && attacker->client && (attacker->client->ps.eFlags & EF_TALK))//Japro - dont allow people to chat and still do damage with godchat (should this be after the 3s period instead?)
 		return;
 
-	if ((level.gametype == GT_FFA) && !g_friendlyFire.value && g_neutralFlag.integer < 4) {
+	if ((level.gametype == GT_FFA) && !g_friendlyFire.value && (g_neutralFlag.integer && g_neutralFlag.integer < 4)) {
 		if (attacker && attacker->client && !attacker->client->ps.duelInProgress && !attacker->client->ps.powerups[PW_NEUTRALFLAG] && targ && targ->client && !targ->client->ps.duelInProgress && !targ->client->sess.raceMode && !targ->client->ps.powerups[PW_NEUTRALFLAG])
 			return;
 	}
@@ -4968,10 +4968,10 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 
 	if ((mod == MOD_DISRUPTOR || mod == MOD_DISRUPTOR_SNIPER) && targ && targ->client && !(targ->client->ps.fd.forcePowersActive & (1 << FP_PROTECT)) && !(g_tweakWeapons.integer & WT_PROJ_SNIPER) && (g_tweakWeapons.integer & WT_TRIBES))
 	{
-		float cut;	
+		float cut;
 		if (g_tribesMode.integer)
 			cut = 1 - ((damage * 0.0005));
-		else 
+		else
 			cut = 1 - ((damage * 0.0025f));
 
 		if (cut > 1)
@@ -5092,7 +5092,10 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 	//Higher self knockback for tribes, discjump disc jump
 	if (attacker && attacker->client && attacker->client->sess.movementStyle == MV_TRIBES) {
 		//if (targ == attacker)
+		if (attacker->client->sess.raceMode) //temp until finalized
 			knockback *= 1.5f;
+		else
+			knockback *= 1.75f;
 		if (mod == MOD_THERMAL || mod == MOD_THERMAL_SPLASH) {
 			knockback *= 3.75f; //guess this just does nothing
 		}
@@ -5412,17 +5415,15 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 		}
 	}
 
-	#ifdef BASE_COMPAT
-		// battlesuit protects from all radius damage (but takes knockback)
-		// and protects 50% against all damage
-		if ( client && client->ps.powerups[PW_BATTLESUIT] ) {
-			G_AddEvent( targ, EV_POWERUP_BATTLESUIT, 0 );
-			if ( ( dflags & DAMAGE_RADIUS ) || ( mod == MOD_FALLING ) ) {
-				return;
-			}
-			damage *= 0.5;
+	// battlesuit protects from all radius damage (but takes knockback)
+	// and protects 50% against all damage
+	if ( client && client->ps.powerups[PW_BATTLESUIT] ) {
+		G_AddEvent( targ, EV_POWERUP_BATTLESUIT, 0 );
+		if ( ( dflags & DAMAGE_RADIUS ) || ( mod == MOD_FALLING ) ) {
+			return;
 		}
-	#endif
+		damage *= 0.5;
+	}
 
 	// add to the attacker's hit counter (if the target isn't a general entity like a prox mine)
 	if ( attacker->client && targ != attacker && targ->health > 0
@@ -5962,7 +5963,7 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_
 				if (targ->client->ps.fd.forcePower < 0)
 				{
 					if (g_tribesMode.integer)
-						subamt += targ->client->ps.fd.forcePower * 5; 
+						subamt += targ->client->ps.fd.forcePower * 5;
 					else
 						subamt += targ->client->ps.fd.forcePower;
 					targ->client->ps.fd.forcePower = 0;

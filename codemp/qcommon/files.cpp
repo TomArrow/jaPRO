@@ -580,6 +580,20 @@ char *FS_BuildOSPath( const char *base, const char *game, const char *qpath ) {
 	return ospath[toggle];
 }
 
+char *FS_BuildOSPath(const char *base, const char *path) {
+	char	temp[MAX_OSPATH];
+	static char ospath[2][MAX_OSPATH];
+	static int toggle;
+
+	toggle ^= 1;		// flip-flop to allow two returns without clash
+
+	Com_sprintf(temp, sizeof(temp), "/%s", path);
+	FS_ReplaceSeparators(temp);
+	Com_sprintf(ospath[toggle], sizeof(ospath[0]), "%s%s", base, temp);
+
+	return ospath[toggle];
+}
+
 /*
 ============
 FS_CreatePath
@@ -3898,7 +3912,7 @@ void FS_Startup( const char *gameName ) {
 #ifdef DEDICATED
 	fs_basegame = Cvar_Get ("fs_basegame", "", CVAR_INIT );
 #else
-	fs_basegame = Cvar_Get ("fs_basegame", ETERNALJKGAME, CVAR_INIT );
+	fs_basegame = Cvar_Get ("fs_basegame", TAYSTJKGAME, CVAR_INIT );
 #endif
 	fs_portable = Cvar_Get ("fs_portable", "1", CVAR_INIT|CVAR_PROTECTED, "Disable fs_homepath and use only one folder for all game files" );
 	homePath = Sys_DefaultHomePath();
@@ -3914,7 +3928,7 @@ void FS_Startup( const char *gameName ) {
 #ifdef DEDICATED
 	fs_forcegame = Cvar_Get ("fs_forcegame", "", CVAR_INIT, "Folder to use for overriding of fs_game (can not be set by the server)." );
 #else
-	fs_forcegame = Cvar_Get("fs_forcegame", "EternalJK", CVAR_INIT, "Folder to use for overriding of fs_game (can not be set by the server).");
+	fs_forcegame = Cvar_Get("fs_forcegame", TAYSTJKGAME, CVAR_INIT, "Folder to use for overriding of fs_game (can not be set by the server).");
 #endif
 	// add search path elements in reverse priority order (lowest priority first)
 	if (fs_cdpath->string[0]) {
@@ -4832,17 +4846,7 @@ const char *FS_MV_VerifyDownloadPath(const char *pk3file) {
 				return NULL;
 
 			if (search->pack->referenced) {
-				static char gameDataPath[MAX_OSPATH];
-				Q_strncpyz(gameDataPath, search->pack->pakFilename, sizeof(gameDataPath));
-
-				char *sp = strrchr(gameDataPath, PATH_SEP);
-				if ( sp ) *sp = 0;
-				else return NULL;
-				sp = strrchr(gameDataPath, PATH_SEP);
-				if ( sp ) *sp = 0;
-				else return NULL;
-
-				return gameDataPath;
+				return search->pack->pakFilename;
 			}
 		}
 	}

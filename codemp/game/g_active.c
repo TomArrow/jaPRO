@@ -884,9 +884,7 @@ Check for lava / slime contents and drowning
 =============
 */
 void P_WorldEffects( gentity_t *ent ) {
-#ifdef BASE_COMPAT
 	qboolean	envirosuit = qfalse;
-#endif
 	int			waterlevel;
 
 	if ( ent->client->noclip ) {
@@ -896,19 +894,15 @@ void P_WorldEffects( gentity_t *ent ) {
 
 	waterlevel = ent->waterlevel;
 
-	#ifdef BASE_COMPAT
-		envirosuit = ent->client->ps.powerups[PW_BATTLESUIT] > level.time;
-	#endif // BASE_COMPAT
+	envirosuit = ent->client->ps.powerups[PW_BATTLESUIT] > level.time;
 
 	//
 	// check for drowning
 	//
 	if ( waterlevel == 3 ) {
-		#ifdef BASE_COMPAT
-			// envirosuit give air
-			if ( envirosuit )
-				ent->client->airOutTime = level.time + 10000;
-		#endif // BASE_COMPAT
+		// envirosuit give air
+		if ( envirosuit )
+			ent->client->airOutTime = level.time + 10000;
 
 		// if out of air, start drowning
 		if ( ent->client->airOutTime < level.time) {
@@ -948,11 +942,9 @@ void P_WorldEffects( gentity_t *ent ) {
 	{
 		if ( ent->health > 0 && ent->client->tempSpectate < level.time && ent->pain_debounce_time <= level.time )
 		{
-		#ifdef BASE_COMPAT
 			if ( envirosuit )
 				G_AddEvent( ent, EV_POWERUP_BATTLESUIT, 0 );
 			else
-		#endif
 			{
 				if (!ent->client || !ent->client->sess.raceMode) { //No sizzle dmg in racemode?
 					if (ent->watertype & CONTENTS_LAVA)
@@ -3487,7 +3479,7 @@ void ClientThink_real( gentity_t *ent ) {
 	{
 		qboolean forceSingle = qfalse;
 		qboolean changeStyle = qfalse;
-		if ((g_saberDisable.integer || (!client->sess.raceMode && g_tweakWeapons.integer & MV_TRIBES) || (client->sess.raceMode && client->sess.movementStyle == MV_COOP_JKA))
+		if ((g_saberDisable.integer || (!client->sess.raceMode && g_tweakWeapons.integer & WT_TRIBES) || (client->sess.raceMode && client->sess.movementStyle == MV_COOP_JKA))
 			&& ent->s.weapon == WP_SABER && ent->s.eType == ET_PLAYER && client->sess.sessionTeam != TEAM_SPECTATOR) {
 			//trap->Print("AnimLevel: %i, DrawLevel: %i, Baselevel: %i\n", ent->client->ps.fd.saberAnimLevel, ent->client->ps.fd.saberDrawAnimLevel, ent->client->ps.fd.saberAnimLevelBase);
 			if (!client->sess.raceMode && (g_tweakWeapons.integer & WT_TRIBES)) {
@@ -3764,7 +3756,7 @@ void ClientThink_real( gentity_t *ent ) {
 		trap->Cvar_Set("pmove_msec", "66");
 	}
 
-	if (!isNPC && !(ent->r.svFlags & SVF_BOT) && client->sess.sessionTeam != TEAM_SPECTATOR && g_forceLogin.integer && !client->pers.userName[0]) {
+	if (!isNPC && !(ent->r.svFlags & SVF_BOT) && client->sess.sessionTeam != TEAM_SPECTATOR && g_forceLogin.integer && !client->pers.userName[0]) { //This ok here or better to have in logout function?
 		SetTeam ( ent, "spectator", qtrue );
 		trap->SendServerCommand( ent-g_entities, "print \"^1You must login to join the game\n\"");
 	}
@@ -4354,6 +4346,9 @@ void ClientThink_real( gentity_t *ent ) {
 				else
 				{
 					client->ps.gravity = g_gravity.value;
+					if (ent->NPC && client->ps.eFlags2 & EF2_NOT_USED_1) { //props
+						client->ps.gravity *= 0.5f;
+					}
 					if (client->sess.raceMode || client->ps.stats[STAT_RACEMODE]) {
 						if (client->ps.electrifyTime > level.time && client->sess.movementStyle == MV_COOP_JKA) {//grav gun
 							client->ps.gravity = 200;
@@ -5824,7 +5819,25 @@ void ClientThink_real( gentity_t *ent ) {
 	//Com_Printf("Flags: %i, hasbeenfired: %i, fireheld: %i\n", ent->client->ps.pm_flags, ent->client->hookHasBeenFired, ent->client->fireHeld);
 #endif
 	
+	//New fall damage?
+	{
+		if (ent->client->ps.stats[STAT_MOVEMENTSTYLE] == MV_TRIBES && !ent->client->ps.stats[STAT_RACEMODE] && ent->client->ps.pm_type == PM_NORMAL) {
+			//impact damage
+			vec3_t lostVel;
+			float lostSpeed;
+			VectorSubtract(ent->client->lastVelocity, ent->client->ps.velocity, lostVel);
+			lostSpeed = VectorLength(lostVel);
+			if (lostSpeed > 1200) {
+				int damage = lostSpeed * 0.1f;
+				//Com_Printf("lost Speed is %.0f damage is %i\n", lostSpeed, damage);
+				if (damage > g_maxFallDmg.integer)
+					damage = g_maxFallDmg.integer;
+				BG_AddPredictableEventToPlayerstate(EV_FALL, damage, &ent->client->ps);
+				G_Damage(ent, ent, ent, NULL, ent->client->ps.origin, damage, DAMAGE_NO_PROTECTION, MOD_FALLING);//why does this not happen from the event?
+			}
 
+		}
+	}
 	//Copy current velocity to lastvelocity
 	VectorCopy(ent->client->ps.velocity, ent->client->lastVelocity);
 

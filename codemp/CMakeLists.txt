@@ -31,7 +31,7 @@ if (GIT_FOUND)
 		add_custom_target(GET_GIT_TAG_AND_HASH
 		COMMAND "${CMAKE_SOURCE_DIR}/scripts/header/update_header.sh" "${CMAKE_BINARY_DIR}/shared/qcommon/q_version.h")
 	endif()
-endif()	
+endif()
 
 #    Add Game Project
 if(BuildMPGame)
@@ -62,6 +62,14 @@ endif(BuildMPRdVulkan)
 if(BuildMPRend2)
 	add_subdirectory("${MPDir}/rd-rend2")
 endif(BuildMPRend2)
+
+#	Add the assets target when building modules
+if(BuildMPGame OR BuildMPCGame OR BuildMPUI)
+	add_custom_target(Assets
+		COMMAND
+		${CMAKE_COMMAND} -E tar cf "${CMAKE_CURRENT_BINARY_DIR}/japro-assets.pk3" --format=zip -- .
+		WORKING_DIRECTORY  "${CMAKE_SOURCE_DIR}/assets/japro")
+endif(BuildMPGame OR BuildMPCGame OR BuildMPUI)
 
 #    Common things between Engine and Dedicated Server
 if(BuildMPEngine OR BuildMPDed)
@@ -155,7 +163,7 @@ if(BuildMPEngine OR BuildMPDed)
 		"${MPDir}/qcommon/qcommon.h"
 		"${MPDir}/qcommon/qfiles.h"
 		"${MPDir}/qcommon/tags.h"
-		
+
 		${SharedCommonFiles}
 		)
 	source_group("common" FILES ${MPBotlibCommonFiles})
@@ -204,6 +212,10 @@ if(BuildMPEngine OR BuildMPDed)
 	# Transparently use either bundled or system zlib.
 	list(APPEND MPEngineAndDedIncludeDirectories ${ZLIB_INCLUDE_DIR})
 	list(APPEND MPEngineAndDedLibraries          ${ZLIB_LIBRARIES})
+
+	# mongoose
+	list(APPEND MPEngineAndDedIncludeDirectories 	${MVMPDEDIncludeDirs} ${MONGOOSE_INCLUDE_DIRS})
+	list(APPEND MPEngineAndDedLibraries 			${MVMPDEDLibraries} ${MONGOOSE_LIBRARIES})
 
 	set(MPEngineAndDedCgameFiles
 		"${MPDir}/cgame/cg_public.h"
@@ -260,7 +272,8 @@ if(BuildMPEngine OR BuildMPDed)
 		"${MPDir}/qcommon/matcomp.cpp"
 		"${MPDir}/qcommon/net_chan.cpp"
 		"${MPDir}/qcommon/net_ip.cpp"
-		"${MPDir}/qcommon/persistence.cpp"
+        "${MPDir}/qcommon/net_http.cpp"
+        "${MPDir}/qcommon/persistence.cpp"
 		"${MPDir}/qcommon/q_shared.cpp"
 		"${MPDir}/qcommon/qcommon.h"
 		"${MPDir}/qcommon/qfiles.h"
@@ -290,7 +303,7 @@ if(BuildMPEngine OR BuildMPDed)
 	endif(WIN32)
 	source_group("common" FILES ${MPEngineAndDedCommonFiles})
 	set(MPEngineAndDedFiles ${MPEngineAndDedFiles} ${MPEngineAndDedCommonFiles})
-	
+
 	set(MPEngineAndDedCommonSafeFiles
 		"${SharedDir}/qcommon/safe/files.cpp"
 		"${SharedDir}/qcommon/safe/files.h"
@@ -386,42 +399,51 @@ if(BuildMPEngine)
 		find_package(OpenGL REQUIRED)
 		set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${OPENGL_INCLUDE_DIR})
 		set(MPEngineLibraries ${MPEngineLibraries} ${OPENGL_LIBRARIES})
-
-		if(BuildDiscordRichPresence)
-			if (APPLE AND NOT Architecture MATCHES "arm64")
-				set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${OpenJKLibDir}/discord-rpc/include)
-				set(MPEngineDefines ${MPEngineDefines} "DISCORD")
-				set(MPEngineLibraries ${MPEngineLibraries} ${OpenJKLibDir}/discord-rpc/lib/osx/libdiscord-rpc.a)
-			elseif(Architecture MATCHES "x86_64")
-				set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${OpenJKLibDir}/discord-rpc/include)
-				set(MPEngineDefines ${MPEngineDefines} "DISCORD")
-				set(MPEngineLibraries ${MPEngineLibraries} ${OpenJKLibDir}/discord-rpc/lib/libdiscord-rpc.a)
-			endif(APPLE)
-		endif(BuildDiscordRichPresence)
 	endif()
 
+	# Discord Rich Presence
+	if(BuildDiscordRichPresence)
+		if (APPLE AND Architecture MATCHES "x86_64")
+			set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${OpenJKLibDir}/discord-rpc/include)
+			set(MPEngineDefines ${MPEngineDefines} "DISCORD")
+			set(MPEngineLibraries ${MPEngineLibraries} ${OpenJKLibDir}/discord-rpc/lib/osx/libdiscord-rpc.a)
+		elseif(UNIX AND Architecture MATCHES "x86_64")
+			set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${OpenJKLibDir}/discord-rpc/include)
+			set(MPEngineDefines ${MPEngineDefines} "DISCORD")
+			set(MPEngineLibraries ${MPEngineLibraries} ${OpenJKLibDir}/discord-rpc/lib/libdiscord-rpc.a)
+		elseif(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 4)
+			set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${OpenJKLibDir}/discord-rpc/include)
+			set(MPEngineDefines ${MPEngineDefines} "DISCORD")
+			set(MPEngineLibraries ${MPEngineLibraries} ${OpenJKLibDir}/discord-rpc/lib/discord-rpc.lib)
+		endif()
+	endif(BuildDiscordRichPresence)
+
 	# OpenAL (is optionally included for Windows)
-	if (MSVC AND NOT WIN64)
+	if(MSVC)
 		if(UseInternalOpenAL)
-			# There's a libs/OpenAL32.lib
-			# (mrw) TODO Is this actually required on windows? It is loaded at runtime, should not be linked?
-			find_library(OpenALLibrary NAMES OpenAL32 PATHS ${OpenJKLibDir})
-			if(NOT OpenALLibrary)
-				message(FATAL_ERROR "UseInternalOpenAL enabled, but lib/OpenAL32.lib not found!")
-			endif(NOT OpenALLibrary)
+			if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+				# There's a libs/OpenAL32.lib
+				# (mrw) TODO Is this actually required on windows? It is loaded at runtime, should not be linked?
+				find_library(OpenALLibrary NAMES OpenAL32 PATHS ${OpenJKLibDir})
+				if(NOT OpenALLibrary)
+					message(FATAL_ERROR "UseInternalOpenAL enabled, but libs/OpenAL32.lib not found!")
+				endif(NOT OpenALLibrary)
+			else()
+				# There's a libs/OpenAL32.x86_64.lib
+				# (mrw) TODO Is this actually required on windows? It is loaded at runtime, should not be linked?
+				find_library(OpenALLibrary NAMES OpenAL32.x86_64 PATHS ${OpenJKLibDir})
+				if(NOT OpenALLibrary)
+					message(FATAL_ERROR "UseInternalOpenAL enabled, but libs/OpenAL32.x86_64.lib not found!")
+				endif(NOT OpenALLibrary)
+			endif()
 			set(MPEngineLibraries ${MPEngineLibraries} ${OpenALLibrary})
 		else(UseInternalOpenAL)
 			find_package(OpenAL REQUIRED)
 			set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${OPENAL_INCLUDE_DIR})
 			set(MPEngineLibraries ${MPEngineLibraries} ${OPENAL_LIBRARY})
 		endif(UseInternalOpenAL)
+	endif(MSVC)
 
-		if(BuildDiscordRichPresence)
-			set(MPEngineIncludeDirectories ${MPEngineIncludeDirectories} ${OpenJKLibDir}/discord-rpc/include)
-			set(MPEngineDefines ${MPEngineDefines} "DISCORD")
-			set(MPEngineLibraries ${MPEngineLibraries} ${OpenJKLibDir}/discord-rpc/lib/discord-rpc.lib)
-		endif(BuildDiscordRichPresence)
-	endif()
 
 	if(UseInternalSDL2)
 		if(CMAKE_SIZEOF_VOID_P EQUAL 4)
@@ -760,26 +782,17 @@ if(BuildMPDed)
 	endif()
 endif(BuildMPDed)
 
-include(InstallZIP)
-
-add_zip_command(japro-assets.pk3
-	FILES ${CMAKE_SOURCE_DIR}/assets/japro/*)
-
-add_custom_target(Assets
-	ALL
-	DEPENDS japro-assets.pk3)
-
 install(FILES
 		${CMAKE_CURRENT_BINARY_DIR}/japro-assets.pk3
-		DESTINATION "${JKAInstallDir}/EternalJK"
+		DESTINATION "${JKAInstallDir}/taystjk"
 		COMPONENT ${JKAMPCoreComponent})
 
 install(FILES
 		${CMAKE_SOURCE_DIR}/assets/settings/cosmetics/example.cosmetic
-		DESTINATION "${JKAInstallDir}/EternalJK/settings/cosmetics/hats/"
+		DESTINATION "${JKAInstallDir}/taystjk/settings/cosmetics/hats/"
 		COMPONENT ${JKAMPCoreComponent})
 
 install(FILES
 		${CMAKE_SOURCE_DIR}/assets/settings/cosmetics/example.cosmetic
-		DESTINATION "${JKAInstallDir}/EternalJK/settings/cosmetics/capes/"
+		DESTINATION "${JKAInstallDir}/taystjk/settings/cosmetics/capes/"
 		COMPONENT ${JKAMPCoreComponent})

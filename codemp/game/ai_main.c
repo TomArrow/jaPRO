@@ -576,6 +576,8 @@ void BotInputToUserCommand(bot_input_t *bi, usercmd_t *ucmd, int delta_angles[3]
 
 	if (bi->actionflags & ACTION_FORCEPOWER) ucmd->buttons |= BUTTON_FORCEPOWER;
 
+	if (bi->actionflags & ACTION_SKI) ucmd->buttons |= BUTTON_DASH;
+
 	if (useTime < level.time && Q_irand(1, 10) < 5)
 	{ //for now just hit use randomly in case there's something useable around
 		ucmd->buttons |= BUTTON_USE;
@@ -4740,7 +4742,7 @@ void G_NewBotAIAimLeading(bot_state_t* bs, vec3_t headlevel) {
 			else {
 				vec3_t predictedSpotGrav;
 				trace_t tr;
-				float playerDrop = (0.5f) * g_gravity.integer * (eta * eta);
+				float playerDrop = (0.5f) * g_gravity.value * (eta * eta);
 
 				predictedSpotGrav[0] = predictedSpot[0];
 				predictedSpotGrav[1] = predictedSpot[1];
@@ -6267,11 +6269,13 @@ void NewBotAI_GetAim(bot_state_t *bs)
 	gentity_t *saber;
 
 	bs->hitSpotted = qfalse;
-
 	if (bs->runningLikeASissy) {
 		NewBotAI_GetStrafeAim(bs);
 		return;
 	}
+
+	if (!bs->currentEnemy || !bs->currentEnemy->client)
+		return;
 
 	/*
 		trType_t	trType;
@@ -6280,7 +6284,6 @@ void NewBotAI_GetAim(bot_state_t *bs)
 	vec3_t	trBase;
 	vec3_t	trDelta;			// velocity, etc
 	*/
-
 	//Well we should loop through every client and see if they are saberthrowing.  Then get the closest saber to us and aim at that if its close enough.
 	if (!g_entities[bs->client].client->ps.saberInFlight) {
 		while (i <= MAX_CLIENTS)
@@ -6302,7 +6305,6 @@ void NewBotAI_GetAim(bot_state_t *bs)
 			i++;
 		}
 	}
-
 	//Saber is inrange , AND  nearest target is far enough away OR thrower is nearest target(?
 	if (saberDistance < 200*200 && (bs->frame_Enemy_Len > 200 || bs->currentEnemy->client->ps.clientNum == saberOwner)) { //Dont aim at it if theres a diff enemy in saber range?
 		vec3_t a, ang;
@@ -6311,12 +6313,13 @@ void NewBotAI_GetAim(bot_state_t *bs)
 		//VectorCopy(saber->s.pos.trBase, headlevel);
 		//BotAimLeading(bs, headlevel, bLeadAmount);
 
-		VectorSubtract(saber->s.pos.trBase, bs->eye, a);
-		vectoangles(a, ang);
-		VectorCopy(ang, bs->goalAngles);
-		bs->hitSpotted = qtrue;
+		if (saber) {
+			VectorSubtract(saber->s.pos.trBase, bs->eye, a);
+			vectoangles(a, ang);
+			VectorCopy(ang, bs->goalAngles);
+			bs->hitSpotted = qtrue;
+		}
 	}
-
 	/*
 	if (bs->cur_ps.weapon == WP_SABER && bs->currentEnemy->client->ps.saberInFlight && bs->frame_Enemy_Len > 200) { //Try to block saber in air
 		//Go through each entity, check if saber and if owner is currentenemY? if yes aim at it..?
@@ -6334,13 +6337,12 @@ void NewBotAI_GetAim(bot_state_t *bs)
 	else { //Normal aim at player
 		VectorCopy(bs->currentEnemy->client->ps.origin, headlevel);
 
-		if (bs->currentEnemy->client)
+		if (bs->currentEnemy && bs->currentEnemy->client)
 			headlevel[2] += bs->currentEnemy->client->ps.viewheight - 16;//aim at chest?
 		if (bs->cur_ps.saberInFlight)
 			headlevel[2] += 24; //aim a bit higher for saberthrow
 		G_NewBotAIAimLeading(bs, headlevel);
 	}
-
 	VectorCopy(bs->goalAngles, bs->ideal_viewangles);
 }
 
@@ -6772,6 +6774,159 @@ float NewBotAI_GetSpeedTowardsEnemy(bot_state_t *bs)
 	return 0;
 }
 
+
+int NewBotAI_GetTribesWeapon(bot_state_t *bs)
+{
+	const int /*hisHealth = bs->currentEnemy->health,*/ distance = bs->frame_Enemy_Len;
+	int hisWeapon = WP_SABER;
+	int bestWeapon = bs->cur_ps.weapon;
+	const int forcedFireMode = level.clients[bs->client].forcedFireMode;
+
+	bs->doAltAttack = 0;
+
+	if (bs->currentEnemy->client)
+		hisWeapon = bs->currentEnemy->client->ps.weapon;
+
+	//Dependant on distance from enemy, enemys health, enemys weapon, and our health?
+
+
+	if (distance > 3000) {
+		if (BotWeaponSelectable(bs, WP_DISRUPTOR))
+			bestWeapon = WP_DISRUPTOR;
+		else if (BotWeaponSelectable(bs, WP_BLASTER) && (bs->cur_ps.weapon != WP_BLASTER && bs->cur_ps.jetpackFuel == 100) || (bs->cur_ps.weapon == WP_BLASTER && bs->cur_ps.jetpackFuel > 10)) {
+			bestWeapon = WP_BLASTER;
+		}
+		else if (BotWeaponSelectableAltFire(bs, WP_BRYAR_OLD) && (bs->cur_ps.weapon == WP_BRYAR_OLD && bs->cur_ps.jetpackFuel == 100) || (bs->cur_ps.weapon == WP_BRYAR_OLD && bs->cur_ps.jetpackFuel > 10)) { //logic to let us run down to 0 but nto switch to 0
+			bestWeapon = WP_BRYAR_OLD;
+			bs->doAltAttack = 1;
+			bs->altChargeTime = 800;
+		}
+		else if (BotWeaponSelectable(bs, WP_REPEATER) && forcedFireMode != 2)
+			bestWeapon = WP_REPEATER;
+		else if (BotWeaponSelectableAltFire(bs, WP_DEMP2) && forcedFireMode != 1) {
+			bestWeapon = WP_DEMP2;
+			bs->doAltAttack = 1;
+			bs->altChargeTime = 2100;
+		}
+		else if (BotWeaponSelectable(bs, WP_CONCUSSION) && bs->cur_ps.fd.forcePower > 90 && forcedFireMode != 1) {
+			bestWeapon = WP_CONCUSSION;
+			bs->doAltAttack = 1;
+		}
+		else if (BotWeaponSelectable(bs, WP_CONCUSSION) && forcedFireMode != 2) {
+			bestWeapon = WP_CONCUSSION;
+		}
+		else if (BotWeaponSelectable(bs, WP_ROCKET_LAUNCHER) && forcedFireMode != 2) {
+			bestWeapon = WP_ROCKET_LAUNCHER;
+		}
+		else if (BotWeaponSelectable(bs, WP_FLECHETTE)) {
+			bestWeapon = WP_FLECHETTE;
+			bs->doAltAttack = 1;
+		}
+		else if (bs->cur_ps.stats[STAT_WEAPONS] & (1 << WP_SABER))
+			bestWeapon = WP_SABER;
+	}
+	else if (distance > 800 && distance < 2800) { //Have some padding between distance tiers so we dont weaponswitch spam
+		if (BotWeaponSelectableAltFire(bs, WP_BLASTER) && (bs->cur_ps.weapon != WP_BLASTER && bs->cur_ps.jetpackFuel == 100) || (bs->cur_ps.weapon == WP_BLASTER && bs->cur_ps.jetpackFuel > 10)) {
+			bestWeapon = WP_BLASTER;
+		}
+		else if (BotWeaponSelectable(bs, WP_REPEATER) && forcedFireMode != 2)
+			bestWeapon = WP_REPEATER;
+		else if (BotWeaponSelectableAltFire(bs, WP_BRYAR_OLD) && (bs->cur_ps.weapon == WP_BRYAR_OLD && bs->cur_ps.jetpackFuel == 100) || (bs->cur_ps.weapon == WP_BRYAR_OLD && bs->cur_ps.jetpackFuel > 10)) {
+			bestWeapon = WP_BRYAR_OLD;
+			bs->doAltAttack = 1;
+			bs->altChargeTime = 800;
+		}
+		else if (BotWeaponSelectableAltFire(bs, WP_BOWCASTER)) {
+			bestWeapon = WP_BOWCASTER;
+			bs->doAltAttack = 1;
+		}
+		else if (BotWeaponSelectable(bs, WP_CONCUSSION) && bs->cur_ps.fd.forcePower > 90 && forcedFireMode != 1) {
+			bestWeapon = WP_CONCUSSION;
+			bs->doAltAttack = 1;
+		}
+		else if (BotWeaponSelectable(bs, WP_CONCUSSION) && forcedFireMode != 2) {
+			bestWeapon = WP_CONCUSSION;
+		}
+		else if (BotWeaponSelectable(bs, WP_ROCKET_LAUNCHER) && forcedFireMode != 2) {
+			bestWeapon = WP_ROCKET_LAUNCHER;
+		}
+		else if (BotWeaponSelectable(bs, WP_DISRUPTOR))
+			bestWeapon = WP_DISRUPTOR;
+		else if (BotWeaponSelectableAltFire(bs, WP_DEMP2) && forcedFireMode != 2) {
+			bestWeapon = WP_DEMP2;
+		}
+		else if (BotWeaponSelectableAltFire(bs, WP_DEMP2) && forcedFireMode != 1) {
+			bestWeapon = WP_DEMP2;
+			bs->doAltAttack = 1;
+			bs->altChargeTime = 2100;
+		}
+		else if (BotWeaponSelectable(bs, WP_FLECHETTE)) {
+			bestWeapon = WP_FLECHETTE;
+			bs->doAltAttack = 1;
+		}
+		else if (bs->cur_ps.stats[STAT_WEAPONS] & (1 << WP_SABER))
+			bestWeapon = WP_SABER;
+	}
+	else if (distance < 600) { //Most DPS!
+		if (BotWeaponSelectableAltFire(bs, WP_THERMAL) && (bs->currentEnemy->client->ps.powerups[PW_REDFLAG] || bs->currentEnemy->client->ps.powerups[PW_BLUEFLAG] || bs->currentEnemy->client->ps.powerups[PW_NEUTRALFLAG])) {
+			bestWeapon = WP_THERMAL;
+		}
+		if (BotWeaponSelectableAltFire(bs, WP_BLASTER) && (bs->cur_ps.weapon == WP_BLASTER && bs->cur_ps.jetpackFuel == 100) || (bs->cur_ps.weapon == WP_BLASTER && bs->cur_ps.jetpackFuel > 10)) {
+			bestWeapon = WP_BLASTER;
+			bs->doAltAttack = 1;
+		}
+		else if (BotWeaponSelectable(bs, WP_FLECHETTE))
+			bestWeapon = WP_FLECHETTE;
+		else if (BotWeaponSelectable(bs, WP_ROCKET_LAUNCHER))
+			bestWeapon = WP_ROCKET_LAUNCHER;
+		else if (BotWeaponSelectable(bs, WP_CONCUSSION) && forcedFireMode != 2)
+			bestWeapon = WP_CONCUSSION;
+		else if (BotWeaponSelectableAltFire(bs, WP_BOWCASTER)) {
+			bestWeapon = WP_BOWCASTER;
+			bs->doAltAttack = 1;
+		}
+		else if (BotWeaponSelectableAltFire(bs, WP_DEMP2) && forcedFireMode != 2) {
+			bestWeapon = WP_DEMP2;
+		}
+		else if (BotWeaponSelectable(bs, WP_DISRUPTOR))
+			bestWeapon = WP_DISRUPTOR;
+		else if (BotWeaponSelectableAltFire(bs, WP_BRYAR_OLD)) {
+			bestWeapon = WP_BRYAR_OLD;
+			bs->doAltAttack = 1;
+			bs->altChargeTime = 800;
+		}
+		else if (BotWeaponSelectableAltFire(bs, WP_BRYAR_PISTOL)) {
+			bestWeapon = WP_BRYAR_PISTOL;
+			bs->doAltAttack = 1;
+			bs->altChargeTime = 1200;
+		}
+		else if (BotWeaponSelectable(bs, WP_CONCUSSION) && bs->cur_ps.fd.forcePower > 90 && forcedFireMode != 1) {
+			bestWeapon = WP_CONCUSSION;
+			bs->doAltAttack = 1;
+		}
+		else if (BotWeaponSelectableAltFire(bs, WP_DEMP2) && forcedFireMode != 1) {
+			bestWeapon = WP_DEMP2;
+			bs->doAltAttack = 1;
+			bs->altChargeTime = 2100;
+		}
+		else if (bs->cur_ps.stats[STAT_WEAPONS] & (1 << WP_SABER))
+			bestWeapon = WP_SABER;
+	}
+
+
+	if (bs->currentEnemy->client && bs->currentEnemy->client->ps.weapon == WP_DEMP2) //dont charge if they can cancel it
+		bs->altChargeTime = 50;
+
+	if (forcedFireMode == 1)
+		bs->doAltAttack = 0;
+	else if (forcedFireMode == 2)
+		bs->doAltAttack = 1;
+
+	//todo- weapon table.
+
+	return bestWeapon;
+}
+
 int NewBotAI_GetWeapon(bot_state_t *bs)
 {
 	const int /*hisHealth = bs->currentEnemy->health,*/ distance = bs->frame_Enemy_Len;
@@ -6801,10 +6956,6 @@ int NewBotAI_GetWeapon(bot_state_t *bs)
 			}
 			else if (BotWeaponSelectable(bs, WP_BLASTER)) {
 				bestWeapon = WP_BLASTER;
-			}
-			else if (BotWeaponSelectable(bs, WP_REPEATER) && (g_tweakWeapons.integer & WT_TRIBES) && (g_tweakWeapons.integer & WT_INFINITE_AMMO) && forcedFireMode != 1) {
-				bestWeapon = WP_REPEATER;
-				bs->doAltAttack = 1;
 			}
 			else if (distance > 500 && BotWeaponSelectableAltFire(bs, WP_BRYAR_OLD)) {
 				bestWeapon = WP_BRYAR_OLD;
@@ -6843,10 +6994,6 @@ int NewBotAI_GetWeapon(bot_state_t *bs)
 				bestWeapon = WP_BLASTER;
 				bs->doAltAttack = 1;
 			}
-			else if (BotWeaponSelectable(bs, WP_ROCKET_LAUNCHER) && (g_tweakWeapons.integer & WT_TRIBES) && (g_tweakWeapons.integer & WT_INFINITE_AMMO))
-				bestWeapon = WP_ROCKET_LAUNCHER;
-			else if (BotWeaponSelectable(bs, WP_CONCUSSION) && (g_tweakWeapons.integer & WT_TRIBES) && (g_tweakWeapons.integer & WT_INFINITE_AMMO))
-				bestWeapon = WP_CONCUSSION;
 			else if (BotWeaponSelectableAltFire(bs, WP_BOWCASTER)) {
 				bestWeapon = WP_BOWCASTER;
 				bs->doAltAttack = 1;
@@ -6920,14 +7067,6 @@ int NewBotAI_GetWeapon(bot_state_t *bs)
 			}
 			else if (BotWeaponSelectable(bs, WP_BLASTER))
 				bestWeapon = WP_BLASTER;
-			else if (BotWeaponSelectable(bs, WP_ROCKET_LAUNCHER) && (g_tweakWeapons.integer & WT_TRIBES) && (g_tweakWeapons.integer & WT_INFINITE_AMMO))
-				bestWeapon = WP_ROCKET_LAUNCHER;
-			else if (BotWeaponSelectable(bs, WP_CONCUSSION) && (g_tweakWeapons.integer & WT_TRIBES) && (g_tweakWeapons.integer & WT_INFINITE_AMMO))
-				bestWeapon = WP_CONCUSSION;
-			else if (BotWeaponSelectable(bs, WP_REPEATER) && (g_tweakWeapons.integer & WT_TRIBES) && (g_tweakWeapons.integer & WT_INFINITE_AMMO) && forcedFireMode != 1) {
-				bestWeapon = WP_REPEATER;
-				bs->doAltAttack = 1;
-			}
 			else if (BotWeaponSelectableAltFire(bs, WP_BRYAR_OLD)) {
 				bestWeapon = WP_BRYAR_OLD;
 				bs->doAltAttack = 1;
@@ -6957,10 +7096,6 @@ int NewBotAI_GetWeapon(bot_state_t *bs)
 			else if (distance < 768 && BotWeaponSelectableAltFire(bs, WP_STUN_BATON) && (g_tweakWeapons.integer & WT_STUN_LG) && !(g_tweakWeapons.integer & WT_STUN_HEAL)) {
 				bestWeapon = WP_STUN_BATON;
 			}
-			else if (BotWeaponSelectable(bs, WP_ROCKET_LAUNCHER) && (g_tweakWeapons.integer & WT_TRIBES) && (g_tweakWeapons.integer & WT_INFINITE_AMMO))
-				bestWeapon = WP_ROCKET_LAUNCHER;
-			else if (BotWeaponSelectable(bs, WP_CONCUSSION) && (g_tweakWeapons.integer & WT_TRIBES) && (g_tweakWeapons.integer & WT_INFINITE_AMMO))
-				bestWeapon = WP_CONCUSSION;
 			else if (BotWeaponSelectableAltFire(bs, WP_BOWCASTER)) {
 				bestWeapon = WP_BOWCASTER;
 				bs->doAltAttack = 1;
@@ -7041,14 +7176,6 @@ int NewBotAI_GetWeapon(bot_state_t *bs)
 				bestWeapon = WP_DISRUPTOR;
 			else if (BotWeaponSelectable(bs, WP_BLASTER))
 				bestWeapon = WP_BLASTER;
-			else if (BotWeaponSelectable(bs, WP_ROCKET_LAUNCHER) && (g_tweakWeapons.integer & WT_TRIBES) && (g_tweakWeapons.integer & WT_INFINITE_AMMO))
-				bestWeapon = WP_ROCKET_LAUNCHER;
-			else if (BotWeaponSelectable(bs, WP_CONCUSSION) && (g_tweakWeapons.integer & WT_TRIBES) && (g_tweakWeapons.integer & WT_INFINITE_AMMO))
-				bestWeapon = WP_CONCUSSION;
-			else if (BotWeaponSelectable(bs, WP_REPEATER) && (g_tweakWeapons.integer & WT_TRIBES) && (g_tweakWeapons.integer & WT_INFINITE_AMMO) && forcedFireMode != 1) {
-				bestWeapon = WP_REPEATER;
-				bs->doAltAttack = 1;
-			}
 			else if (bs->cur_ps.stats[STAT_WEAPONS] & WP_SABER)
 				bestWeapon = WP_SABER;
 			else if (BotWeaponSelectableAltFire(bs, WP_BRYAR_OLD)) {
@@ -7083,10 +7210,6 @@ int NewBotAI_GetWeapon(bot_state_t *bs)
 			else if (BotWeaponSelectableAltFire(bs, WP_STUN_BATON) && (g_tweakWeapons.integer & WT_STUN_LG) && !(g_tweakWeapons.integer & WT_STUN_HEAL)) {
 				bestWeapon = WP_STUN_BATON;
 			}
-			else if (BotWeaponSelectable(bs, WP_ROCKET_LAUNCHER) && (g_tweakWeapons.integer & WT_TRIBES) && (g_tweakWeapons.integer & WT_INFINITE_AMMO))
-				bestWeapon = WP_ROCKET_LAUNCHER;
-			else if (BotWeaponSelectable(bs, WP_CONCUSSION) && (g_tweakWeapons.integer & WT_TRIBES) && (g_tweakWeapons.integer & WT_INFINITE_AMMO))
-				bestWeapon = WP_CONCUSSION;
 			else if (bs->cur_ps.stats[STAT_WEAPONS] & WP_SABER)
 				bestWeapon = WP_SABER;
 			else if (BotWeaponSelectableAltFire(bs, WP_BRYAR_OLD)) {
@@ -7217,7 +7340,13 @@ void NewBotAI_GetAttack(bot_state_t *bs)
 	int weapon;
 	// const float speed = NewBotAI_GetSpeedTowardsEnemy(bs);
 
-	weapon = NewBotAI_GetWeapon(bs);
+	if (!bs->client || !bs->currentEnemy || !bs->currentEnemy->client)
+		return;
+
+	if (g_tweakWeapons.integer & WT_TRIBES)
+		weapon = NewBotAI_GetTribesWeapon(bs);
+	else
+		weapon = NewBotAI_GetWeapon(bs);
 	BotSelectWeapon(bs->client, weapon);
 
 	if (bs->runningLikeASissy) //Dont attack when chasing them with strafe i guess
@@ -8348,6 +8477,152 @@ void NewBotAI_NF(bot_state_t *bs)
 	//NewBotAI_GetAttack(bs);
 }
 
+void G_Kill(gentity_t *ent);
+qboolean NewBotAI_CapRoute(bot_state_t *bs, float thinktime)
+{
+	int activeCapRoute, activeCapRouteSequence; //sequence,
+	vec3_t newSpot = { 0 };
+
+	if (level.gametype != GT_CTF || !g_entities[bs->client].client || !g_entities[bs->client].client->pers.activeCapRoute)
+		return qfalse;
+
+	if (level.clients[bs->client].sess.sessionTeam == TEAM_RED) {
+		activeCapRoute = g_entities[bs->client].client->pers.activeCapRoute;
+		activeCapRouteSequence = g_entities[bs->client].client->activeCapRouteSequence;
+		//Com_Printf("Seq %i max %i\n", activeCapRouteSequence, redRouteList[g_entities[bs->client].client->activeCapRoute].length);
+		if (activeCapRouteSequence >= redRouteList[g_entities[bs->client].client->pers.activeCapRoute-1].length) {
+			g_entities[bs->client].client->pers.activeCapRoute = 0;
+			G_Kill(&g_entities[bs->client]);
+			return qfalse;//route over.  self kill?
+		}
+		newSpot[0] = redRouteList[activeCapRoute-1].pos[activeCapRouteSequence][0];
+		newSpot[1] = redRouteList[activeCapRoute-1].pos[activeCapRouteSequence][1];
+		newSpot[2] = redRouteList[activeCapRoute-1].pos[activeCapRouteSequence][2];
+		g_entities[bs->client].client->activeCapRouteSequence++;
+	}
+	else if (level.clients[bs->client].sess.sessionTeam == TEAM_BLUE) {
+		activeCapRoute = g_entities[bs->client].client->pers.activeCapRoute;
+		activeCapRouteSequence = g_entities[bs->client].client->activeCapRouteSequence;
+		//Com_Printf("Seq %i max %i\n", activeCapRouteSequence, blueRouteList[g_entities[bs->client].client->activeCapRoute].length);
+		if (activeCapRouteSequence >= blueRouteList[g_entities[bs->client].client->pers.activeCapRoute-1].length) {
+			g_entities[bs->client].client->pers.activeCapRoute = 0;
+			G_Kill(&g_entities[bs->client]);
+			return qfalse;//route over.  self kill?
+		}
+
+		//Com_Printf("^5Setting origin for route %i seq %i\n", activeCapRoute, activeCapRouteSequence);
+		newSpot[0] = blueRouteList[activeCapRoute-1].pos[activeCapRouteSequence][0];
+		newSpot[1] = blueRouteList[activeCapRoute-1].pos[activeCapRouteSequence][1];
+		newSpot[2] = blueRouteList[activeCapRoute-1].pos[activeCapRouteSequence][2];
+		g_entities[bs->client].client->activeCapRouteSequence++;
+		}
+	else {
+		return qfalse;
+	}
+
+	trap->EA_Action(bs->client, ACTION_SKI);
+	bs->ideal_viewangles[YAW] = vectoyaw(g_entities[bs->client].client->ps.velocity);
+
+	if (g_entities[bs->client].client->ps.velocity[2]) {
+		if (level.time % 1000 > 500) { //what the fuck /sad hack to make it lok like they are jetting
+			trap->EA_Jump(bs->client);
+			trap->EA_MoveUp(bs->client);
+		}
+		else {
+			trap->EA_MoveDown(bs->client); 
+			trap->EA_Crouch(bs->client);
+		}
+	}
+
+	{
+		trace_t tr;
+		vec3_t playerMins = { -15, -15, DEFAULT_MINS_2 };
+		vec3_t playerMaxs = { 15, 15, DEFAULT_MAXS_2 };
+
+		JP_Trace(&tr, g_entities[bs->client].client->ps.origin, playerMins, playerMaxs, newSpot, bs->client, CONTENTS_BODY, qfalse, 0, 0);
+
+		if (tr.fraction != 1) { //Hit someone else
+			g_entities[bs->client].client->pers.activeCapRoute = 0;
+			return qfalse;
+		}
+
+		VectorSubtract(newSpot, g_entities[bs->client].client->ps.origin, g_entities[bs->client].client->ps.velocity);
+		VectorScale(g_entities[bs->client].client->ps.velocity, 40.0f, g_entities[bs->client].client->ps.velocity);//sv_fps ?
+		//Com_Printf("Vel is %.1f\n", len);
+		//VectorClear(g_entities[bs->client].client->ps.velocity);
+
+		//VectorCopy(newSpot, g_entities[bs->client].client->ps.origin);
+	}
+
+	return qtrue;
+}
+
+void NewBotAI_Tribes(bot_state_t *bs, float thinktime)
+{
+
+	//For capper bot. need to keep track of what spot we are at.
+	//How do we we store which route the bot is currently on?
+	//Bot->capRouteSequence starts at 0
+	//Set origin to the selected route[sequence]
+	//increment sequence
+
+	//Make bot abandon route if knockedback and have him fight instead?
+	if (bs->cur_ps.eFlags & EF_JETPACK_FLAMING || bs->cur_ps.eFlags & EF_JETPACK_ACTIVE) {
+		//if (!(bs->cur_ps.pm_flags & PMF_JUMP_HELD))
+		//{
+			//bs->jumpTime = level.time + 200;
+			//bs->jumpHoldTime = level.time + 200;
+		//}
+		//Com_Printf("2 Still going up\n");
+		trap->EA_Jump(bs->client);
+	}
+	else if (bs->cur_ps.fd.forcePower > 98) {
+		//Com_Printf("1 Going up\n");
+		//bs->jumpTime = level.time + 200;
+		//bs->jumpHoldTime = level.time + 200;
+
+		trap->EA_Jump(bs->client);
+	}
+	else {
+		//Com_Printf("3 Flaming? %i, Active? %i, FP: %i\n", (bs->cur_ps.eFlags & EF_JETPACK_FLAMING), bs->cur_ps.eFlags & EF_JETPACK_ACTIVE, bs->cur_ps.fd.forcePower);
+	}
+
+	/*
+	if (bs->jumpTime > level.time && bs->jDelay < level.time)
+	{
+	if (bs->jumpHoldTime > level.time)
+	{
+	trap->EA_Jump(bs->client);
+	if (bs->wpCurrent)
+	{
+	if ((bs->wpCurrent->origin[2] - bs->origin[2]) < 64)
+	{
+	trap->EA_MoveForward(bs->client);
+	}
+	}
+	else
+	{
+	trap->EA_MoveForward(bs->client);
+	}
+	if (g_entities[bs->client].client->ps.groundEntityNum == ENTITYNUM_NONE)
+	{
+	g_entities[bs->client].client->ps.pm_flags |= PMF_JUMP_HELD;
+	}
+	}
+	else if (!(bs->cur_ps.pm_flags & PMF_JUMP_HELD))
+	{
+	trap->EA_Jump(bs->client);
+	}
+		*/
+	trap->EA_Action(bs->client, ACTION_SKI);
+
+	StandardBotAI(bs, thinktime);
+	NewBotAI_GetAim(bs);
+	NewBotAI_GetAttack(bs);
+	//NewBotAI_GetMovement(bs);
+	//NewBotAI_GetAttack(bs);
+}
+
 void NewBotAI_StrafeJump(bot_state_t *bs, float distance)
 {
 	qboolean aimright = qfalse;
@@ -8641,7 +8916,7 @@ void NewBotAI(bot_state_t *bs, float thinktime) //BOT START
 			continue;
 		if (!ent->client)
 			continue;//should never happen
-		if (ent->client->lastHereTime > level.time - 60000) { //They have moved in last 60 seconds.
+		if (ent->client->lastHereTime > level.time - 120000) { //They have moved in last 120 seconds.
 			someonesHere = qtrue;
 			break;
 		}
@@ -8657,6 +8932,7 @@ void NewBotAI(bot_state_t *bs, float thinktime) //BOT START
 	if (g_entities[bs->client].client->pers.amfreeze) //No AI if we are frozen
 		return;
 
+
 	if (g_newBotAITarget.integer < 0)
 		closestID = NewBotAI_ScanForEnemies(bs); //This has been modified to take health into account, and ignore FOV, mindtrick, etc, when newBotAI is being used.
 	else {
@@ -8669,6 +8945,17 @@ void NewBotAI(bot_state_t *bs, float thinktime) //BOT START
 		cl = &level.clients[closestID];
 		if (!cl || cl->pers.connected != CON_CONNECTED)//Or in spectate? or?
 			closestID = -1;
+	}
+
+	if (g_movementStyle.integer == MV_TRIBES) { //&& CAPPING?
+		if (closestID == -1 && (!g_entities[bs->client].client || !g_entities[bs->client].client->pers.activeCapRoute)) { //if we have no active route and no1 near, suicid
+			if ((redRouteList[0].length && g_entities[bs->client].client->sess.sessionTeam == TEAM_RED) || (blueRouteList[0].length && g_entities[bs->client].client->sess.sessionTeam == TEAM_BLUE)) { //only if the map actually has cap routes do we behave like they have cap routes
+				G_Kill(&g_entities[bs->client]);
+				return;
+			}
+		}
+		if (NewBotAI_CapRoute(bs, thinktime))
+			return;
 	}
 
 	if (closestID == -1) {//Its just us, or they are too far away.
@@ -8727,6 +9014,11 @@ void NewBotAI(bot_state_t *bs, float thinktime) //BOT START
 		return;
 	}
 	*/
+
+	if (g_movementStyle.integer == MV_TRIBES && (g_startingItems.integer & (1 << HI_JETPACK))) {
+		NewBotAI_Tribes(bs, thinktime);
+		return;
+	}
 
 	if ((g_forcePowerDisable.integer != 163837 && g_forcePowerDisable.integer != 163839) || (g_flipKick.integer) || (bs->cur_ps.weapon != WP_SABER)) {
 		if (bs->currentEnemy->client->ps.fd.forceSide == FORCE_LIGHTSIDE) { // They are LS.

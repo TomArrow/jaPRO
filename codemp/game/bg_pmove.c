@@ -88,6 +88,7 @@ const float	pm_spectatorfriction = 5.0f;
 
 //japro/dfmania movement parameters
 const float pm_vq3_duckScale = 0.25f;
+const float pm_vq3_friction = 8.0f;
 
 const float	pm_cpm_accelerate = 15.0f;
 const float	pm_cpm_airaccelerate = 1.0f;
@@ -96,7 +97,6 @@ const float	pm_cpm_airstrafeaccelerate = 70.0f;
 const float	pm_cpm_airstrafewishspeed = 30.0f;
 
 const float	pm_cpm_aircontrol = 150.0f;
-const float pm_cpm_friction = 8.0f;
 
 const float pm_wsw_accelerate = 12.0f;
 const float pm_wsw_duckScale = 0.3125f;
@@ -104,12 +104,22 @@ const float pm_wsw_duckScale = 0.3125f;
 const float pm_slick_accelerate = 30.0f;
 const float	pm_slick_airstrafeaccelerate = 100.0f;
 const float	pm_slick_friction = 0.0f;
+
 const float	pm_jetpack_airaccelerate = 1.4f;
-
-
 
 const float pm_qw_airaccelerate = 0.7f;
 const float pm_qw_friction = 4.0f;
+const float	pm_qw_airstrafewishspeed = 30.0f;
+
+const float pm_tribes_accelerate = 2.5f;
+const float pm_tribes_airaccelerate = 0.25f;
+const float pm_tribes_groundfriction = 0.5f;
+const float pm_tribes_airfriction = 1.9f;
+const float	pm_tribes_groundstrafewishspeed = 30.0f;
+
+const float pm_surf_accelerate = 12.0f;
+const float pm_surf_airaccelerate = 100.0f;
+const float pm_surf_wishspeed = 250.0f;
 
 //japro/dfmania movement parameters
 
@@ -238,11 +248,11 @@ static int GetFlipkick(playerState_t *ps) {
 #else
 		if (cgs.serverMod == SVMOD_JAPRO) {
 			if (ps->duelInProgress) {
-				if (cg_dueltypes[ps->clientNum] == 1) { //NF 
+				if (cg_dueltypes[ps->clientNum] == 1) { //NF
 					return 0;
 				}
 			}
-			if (cgs.jcinfo & JAPRO_CINFO_FLIPKICK) { 
+			if (cgs.jcinfo & JAPRO_CINFO_FLIPKICK) {
 				if (cgs.jcinfo & JAPRO_CINFO_FIXSIDEKICK)
 					return 3;
 				return 2; //1 ans 2 are the same thing clientside...hmm
@@ -268,7 +278,7 @@ static int GetFixRoll(playerState_t *ps) {
 		if (ps->stats[STAT_RACEMODE])
 			return 3;
 		if (ps->duelInProgress) {
-			if (dueltypes[ps->clientNum] == 0) { //NF 
+			if (dueltypes[ps->clientNum] == 0) { //NF
 				return 0;
 			}
 			if (dueltypes[ps->clientNum] == 1) { //FF
@@ -281,7 +291,7 @@ static int GetFixRoll(playerState_t *ps) {
 			if (ps->stats[STAT_RACEMODE])
 				return 3;
 			if (ps->duelInProgress) {
-				if (cg_dueltypes[ps->clientNum] == 1) { //NF 
+				if (cg_dueltypes[ps->clientNum] == 1) { //NF
 					return 0;
 				}
 				if (cg_dueltypes[ps->clientNum] == 2) { //FF
@@ -385,8 +395,10 @@ qboolean BG_CanJetpack(playerState_t *ps)
 	if (BG_InRoll(ps, ps->legsAnim))
 		return qfalse;
 	if (BG_InSpecialJump(ps->legsAnim))
-		return qfalse;	
+		return qfalse;
 	if (BG_InKnockDown(ps->legsAnim))
+		return qfalse;
+	if (pm->waterlevel > 1)
 		return qfalse;
 	//if (ps->stats[STAT_JUMPTIME] > 0) //revert until bot jetpack behaviour is fixed
 		//return qfalse;
@@ -416,7 +428,6 @@ static QINLINE qboolean PM_IsRocketTrooper(void)
 	return qfalse;
 }
 
-int PM_GetMovePhysics(void);
 QINLINE int PM_GetMovePhysics(void)
 {
 #if _GAME
@@ -425,9 +436,9 @@ QINLINE int PM_GetMovePhysics(void)
 	else if ((g_movementStyle.integer >= MV_SIEGE && g_movementStyle.integer <= MV_WSW) || (g_movementStyle.integer == MV_SP || g_movementStyle.integer == MV_SLICK || g_movementStyle.integer == MV_OCPM || g_movementStyle.integer == MV_TRIBES))
 		return (g_movementStyle.integer);
 	else if (g_movementStyle.integer < MV_SIEGE)
-		return 0;
+		return MV_SIEGE;
 	else if (g_movementStyle.integer >= MV_NUMSTYLES)
-		return 1;
+		return MV_JKA;
 #else
 	if (cgs.serverMod == SVMOD_JAPRO) {
 			if (!pm)
@@ -1112,10 +1123,10 @@ void PM_ClipVelocity( vec3_t in, vec3_t normal, vec3_t out, float overbounce ) {
 	float	change;
 	float	oldInZ;
 	int		i;
-	
+
 	//pass in entitynum of hit entity?
 	//dotproduct instead of clipvelocity to the normal?
-	
+
 	if ( (pm->ps->pm_flags&PMF_STUCK_TO_WALL) )
 	{//no sliding!
 		VectorCopy( in, out );
@@ -1160,7 +1171,7 @@ static void PM_Friction( void ) {
 	float	speed, newspeed, control, drop, realfriction = pm_friction;
 	bgEntity_t *pEnt = NULL;
 	const int moveStyle = PM_GetMovePhysics();
-	
+
 	vel = pm->ps->velocity;
 
 	VectorCopy( vel, vec );
@@ -1188,7 +1199,7 @@ static void PM_Friction( void ) {
 	}
 
 	if (moveStyle == MV_CPM || moveStyle == MV_WSW || moveStyle == MV_RJCPM || moveStyle == MV_SLICK || moveStyle == MV_BOTCPM)
-		realfriction = 8.0f;
+		realfriction = pm_vq3_friction;
 
 	// apply ground friction, even if on ladder
 	if (pm_flying != FLY_VEHICLE &&
@@ -1231,12 +1242,17 @@ static void PM_Friction( void ) {
 	{
 		// apply ground friction
 		if ( pm->waterlevel <= 1 ) {
-			if (pml.walking && !(pml.groundTrace.surfaceFlags & SURF_SLICK) && ((moveStyle != MV_SLICK || (pm->cmd.buttons & BUTTON_WALKING)) && (moveStyle != MV_TRIBES || !(pm->cmd.buttons & BUTTON_DASH)) && (moveStyle != MV_TRIBES || pm->ps->clientNum < MAX_CLIENTS || !(pm->cmd.buttons & BUTTON_WALKING))) ) { //Slick style here potentially
+			if (pml.walking && !(pml.groundTrace.surfaceFlags & SURF_SLICK) && ((moveStyle != MV_SLICK || (pm->cmd.buttons & BUTTON_WALKING)) && (moveStyle != MV_TRIBES || !(pm->cmd.buttons & BUTTON_DASH)) && (moveStyle != MV_TRIBES || pm->ps->clientNum < MAX_CLIENTS || (pm->ps->eFlags2 & EF2_NOT_USED_1 && !pm->waterlevel) || !(pm->cmd.buttons & BUTTON_WALKING))) ) { //Slick style here potentially
 				//do this unless its (slick and walking) or unless its (tribes and not walking)
-																																																					  // if getting knocked back, no friction
+										
+				// if getting knocked back, no friction
 				if ( ! (pm->ps->pm_flags & PMF_TIME_KNOCKBACK) ) { //GB?
 					control = speed < pm_stopspeed ? pm_stopspeed : speed;
 					drop += control*realfriction*pml.frametime;
+				}
+
+				if (moveStyle == MV_TRIBES && pm->ps->eFlags2 & EF2_NOT_USED_1 && !pm->waterlevel && pm->ps->clientNum >= MAX_CLIENTS) {//tribes props should have some friction here. speed based?
+					drop *= 0.1f;
 				}
 			}
 		}
@@ -1318,15 +1334,15 @@ void PM_AirAccelerate (vec3_t wishdir, float wishspeed, float accel)
 		if (pm->ps->pm_flags & PMF_TIME_WATERJUMP)
 			return;
 
-        if (wishspd > 30)
-                wishspd = 30;
+        if (wishspd > pm_qw_airstrafewishspeed)
+                wishspd = pm_qw_airstrafewishspeed;
 
         currentspeed = DotProduct (pm->ps->velocity, wishdir);
         addspeed = wishspd - currentspeed;// See how much to add
         if (addspeed <= 0)// If not adding any, done.
                 return;
 
-        accelspeed = accel * wishspeed * pml.frametime * 4.0f;// QUAKECLASSIC: accelspeed = accel * wishspeed * pmove->frametime * pmove->friction;
+        accelspeed = accel * wishspeed * pml.frametime * pm_qw_friction;// QUAKECLASSIC: accelspeed = accel * wishspeed * pmove->frametime * pmove->friction;
 
         if (accelspeed > addspeed) // Cap it
                 accelspeed = addspeed;
@@ -1338,38 +1354,61 @@ void PM_AirAccelerate (vec3_t wishdir, float wishspeed, float accel)
 void PM_AirAccelerateTribes(vec3_t wishdir, float wishspeed)
 {
 	int		i;
-	float	addspeed, accelspeed, currentspeed, wishspd = wishspeed, friction = 1.9f, accel = 0.20f;
-	// friction = 1.65f, accel = 0.32f;
+	float	addspeed, accelspeed, currentspeed, wishspd = wishspeed;
 
 	if (pm->ps->pm_type == PM_DEAD)
 		return;
 	if (pm->ps->pm_flags & PMF_TIME_WATERJUMP)
 		return;
 
-	//if (wishspd > 300)
-		//wishspd = 300;
-
-	//Scale friction by falling speed?
-	//fabs(pm->ps->velocity[2])
-	/*
-	if (pm->ps->velocity[2] < -800) {
-		Com_Printf("zSpeed Modifier %.2f\n", pm->ps->velocity[2] / 800.0f);
-		friction *= pm->ps->velocity[2] / 800.0f;
-	}
-	*/
 
 	currentspeed = DotProduct(pm->ps->velocity, wishdir);
 	addspeed = wishspd - currentspeed;// See how much to add
 	if (addspeed <= 0)// If not adding any, done.
 		return;
 
-	accelspeed = accel * wishspeed * pml.frametime * friction;// QUAKECLASSIC: accelspeed = accel * wishspeed * pmove->frametime * pmove->friction;
+	accelspeed = pm_tribes_airaccelerate * wishspeed * pml.frametime * pm_tribes_airfriction;// QUAKECLASSIC: accelspeed = accel * wishspeed * pmove->frametime * pmove->friction;
 
 	if (accelspeed > addspeed) // Cap it
 		accelspeed = addspeed;
 
-	for (i = 0; i<3; i++)// Adjust pmove vel.
-		pm->ps->velocity[i] += accelspeed*wishdir[i];
+	//for (i = 0; i<3; i++)// Adjust pmove vel.
+
+
+	if (0)
+	{
+
+		vec3_t tmpVel, oldVel;
+		float oldSpeed, newSpeed;
+		VectorCopy(pm->ps->velocity, tmpVel);
+		oldVel[2] = 0;
+		VectorCopy(tmpVel, oldVel);
+
+		tmpVel[0] += accelspeed*wishdir[0];
+		tmpVel[1] += accelspeed*wishdir[1];
+
+		oldSpeed = oldVel[0] * oldVel[0] + oldVel[1] * oldVel[1];
+		newSpeed = tmpVel[0] * tmpVel[0] + tmpVel[1] * tmpVel[1];
+
+		if (newSpeed > oldSpeed) {
+			//Com_Printf("Cutting by %.2f\n", (oldSpeed / newSpeed));   //why does this fuck up jetpack speed? we need to isolate the scaling to speed just created by this not jetpack
+			//VectorScale(tmpVel, (oldSpeed / newSpeed), tmpVel);
+		}
+
+		tmpVel[2] = pm->ps->velocity[2];
+		VectorCopy(tmpVel, pm->ps->velocity);
+
+		pm->ps->velocity[2] += accelspeed*wishdir[2];
+	}
+	else {
+		for (i = 0; i < 3; i++)// Adjust pmove vel.
+			pm->ps->velocity[i] += accelspeed*wishdir[i];
+	}
+
+
+
+
+
 }
 
 void PM_GroundAccelerateTribes(vec3_t wishdir, float wishspeed, float accel)
@@ -1382,15 +1421,15 @@ void PM_GroundAccelerateTribes(vec3_t wishdir, float wishspeed, float accel)
 	if (pm->ps->pm_flags & PMF_TIME_WATERJUMP)
 		return;
 
-	if (wishspd > 30)
-		wishspd = 30;
+	if (wishspd > pm_tribes_groundstrafewishspeed)
+		wishspd = pm_tribes_groundstrafewishspeed;
 
 	currentspeed = DotProduct(pm->ps->velocity, wishdir);
 	addspeed = wishspd - currentspeed;// See how much to add
 	if (addspeed <= 0)// If not adding any, done.
 		return;
 
-	accelspeed = accel * wishspeed * pml.frametime * 0.5f;// QUAKECLASSIC: accelspeed = accel * wishspeed * pmove->frametime * pmove->friction;
+	accelspeed = accel * wishspeed * pml.frametime * pm_tribes_groundfriction;// QUAKECLASSIC: accelspeed = accel * wishspeed * pmove->frametime * pmove->friction;
 
 	if (accelspeed > addspeed) // Cap it
 		accelspeed = addspeed;
@@ -1463,7 +1502,7 @@ void CPM_PM_Aircontrol (pmove_t *pm, vec3_t wishdir, float wishspeed )
 	float	zspeed, speed, dot, k;
 	int		i;
 
-	if ( (pm->ps->movementDir && pm->ps->movementDir !=4) || wishspeed == 0.0) 
+	if ( (pm->ps->movementDir && pm->ps->movementDir !=4) || wishspeed == 0.0)
 		return; // can't control movement if not moveing forward or backward
 
 	zspeed = pm->ps->velocity[2];
@@ -1471,17 +1510,17 @@ void CPM_PM_Aircontrol (pmove_t *pm, vec3_t wishdir, float wishspeed )
 	speed = VectorNormalize(pm->ps->velocity);
 
 	dot = DotProduct(pm->ps->velocity,wishdir);
-	k = 32; 
-	k *= 150.0f*dot*dot*pml.frametime;//cpm_pm_aircontrol
-	
-	
+	k = 32;
+	k *= pm_cpm_aircontrol*dot*dot*pml.frametime;
+
+
 	if (dot > 0) {	// we can't change direction while slowing down
 		for (i=0; i < 2; i++)
 			pm->ps->velocity[i] = pm->ps->velocity[i]*speed + wishdir[i]*k;
 		VectorNormalize(pm->ps->velocity);
 	}
-	
-	for (i=0; i < 2; i++) 
+
+	for (i=0; i < 2; i++)
 		pm->ps->velocity[i] *=speed;
 
 	pm->ps->velocity[2] = zspeed;
@@ -1872,7 +1911,7 @@ qboolean PM_AdjustAngleForWallRunUp( playerState_t *ps, usercmd_t *ucmd, qboolea
 		}
 
 		//Forwardmove is 0 here when it shouldnt be with lowfps due to chopping
-		if ( //ucmd->upmove <= 0 && 
+		if ( //ucmd->upmove <= 0 &&
 			ps->legsTimer > 0 &&
 			ucmd->forwardmove > 0 &&
 			trace.fraction < 1.0f &&
@@ -2371,7 +2410,7 @@ static qboolean PM_CheckJump( void )
 				}
 				//check for max force jump level and cap off & cut z vel
 				if ( ( curHeight<=forceJumpHeight[0] ||//still below minimum jump height
-						(pm->ps->fd.forcePower&&pm->cmd.upmove>=10) ) &&////still have force power available and still trying to jump up 
+						(pm->ps->fd.forcePower&&pm->cmd.upmove>=10) ) &&////still have force power available and still trying to jump up
 					curHeight < realForceJumpHeight &&
 					pm->ps->fd.forceJumpZStart)//still below maximum jump height
 				{//can still go up
@@ -2518,7 +2557,7 @@ static qboolean PM_CheckJump( void )
 					if (moveStyle == MV_QW || moveStyle == MV_PJK) {//Forcejump rampjump
 						//need to scale this down, start with height velocity (based on max force jump height) and scale down to regular jump vel
 						float realForceJumpHeight = forceJumpHeight[pm->ps->fd.forcePowerLevel[FP_LEVITATION]] * (pm->ps->stats[STAT_LASTJUMPSPEED] / (float)JUMP_VELOCITY);
-						
+
 						pm->ps->velocity[2] = (realForceJumpHeight-curHeight)/realForceJumpHeight*forceJumpStrength[pm->ps->fd.forcePowerLevel[FP_LEVITATION]];//JUMP_VELOCITY;
 						pm->ps->velocity[2] /= 10;//need to scale this down, start with height velocity (based on max force jump height) and scale down to regular jump vel
 
@@ -2542,7 +2581,7 @@ static qboolean PM_CheckJump( void )
 				*/
 				else
 				{
-					if ( pm->ps->velocity[2] > JUMP_VELOCITY) //Also add a check for pjk/wsw? 
+					if ( pm->ps->velocity[2] > JUMP_VELOCITY) //Also add a check for pjk/wsw?
 						//At the end of a forcejump, if we are still going up super fast we dont want to immediately slow down.. would take like 5000 speed rampjump for this to show up though
 					{
 							pm->ps->velocity[2] = JUMP_VELOCITY;
@@ -2804,7 +2843,7 @@ static qboolean PM_CheckJump( void )
 
 				if (GetFlipkick(pm->ps) > 0)
 					contents = MASK_PLAYERSOLID;
-				else 
+				else
 					contents = MASK_SOLID;
 /*
 #ifdef _GAME
@@ -2815,9 +2854,9 @@ static qboolean PM_CheckJump( void )
 
 #else
 				if ((cgs.serverMod == SVMOD_JAPLUS && cgs.cinfo & JAPLUS_CINFO_FLIPKICK) || (cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_FLIPKICK))
-					contents = MASK_PLAYERSOLID;//MASK_PLAYERSOLID; 
-				else 
-					contents = MASK_SOLID;//MASK_PLAYERSOLID; 
+					contents = MASK_PLAYERSOLID;//MASK_PLAYERSOLID;
+				else
+					contents = MASK_SOLID;//MASK_PLAYERSOLID;
 #endif
 */
 //JAPRO - Serverside + Clientside - Re add flipkick sidekick - End
@@ -3109,7 +3148,7 @@ static qboolean PM_CheckJump( void )
 #ifdef _GAME
 						if (g_flipKick.integer > 2)
 							pm->ps->legsTimer = 0;
-						else 
+						else
 #endif
 							pm->ps->legsTimer -= 600; //I force this anim to play to the end to prevent landing on your head and suddenly flipping over.
 											  //It is a bit too long at the end though, so I'll just shorten it.
@@ -3127,7 +3166,7 @@ static qboolean PM_CheckJump( void )
 						if ((trace.entityNum < MAX_CLIENTS) || (g_flipKick.integer && kickedEnt->s.eType == ET_NPC))
 #else
 						if ((trace.entityNum < MAX_CLIENTS) || ((cgs.serverMod == SVMOD_JAPRO && cgs.jcinfo & JAPRO_CINFO_FLIPKICK) && kickedEnt->s.eType == ET_NPC))
-#endif	
+#endif
 */
 						pm->ps->forceKickFlip = trace.entityNum+1; //let the server know that this person gets kicked by this client
 					}
@@ -3140,7 +3179,7 @@ static qboolean PM_CheckJump( void )
 #if 1
 			else if ( pm->cmd.forwardmove > 0 //pushing forward -- this is used for wallruns i guess?
 				//&& pm->ps->fd.forceRageRecoveryTime < pm->cmd.serverTime	//not in a force Rage recovery period //JAPRO - Serverside + Clientside - Allow wallrun in rage recovery
-				&& pm->ps->fd.forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_1 
+				&& pm->ps->fd.forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_1
 				&& PM_WalkableGroundDistance() <= 80 //unfortunately we do not have a happy ground timer like SP (this would use up more bandwidth if we wanted prediction workign right), so we'll just use the actual ground distance.
 				&& (pm->ps->legsAnim == BOTH_JUMP1 || pm->ps->legsAnim == BOTH_INAIR1 ) )//not in a flip or spin or anything
 			{//run up wall, flip backwards
@@ -3176,7 +3215,7 @@ static qboolean PM_CheckJump( void )
 					VectorSubtract( pm->ps->origin, traceto, idealNormal );
 					VectorNormalize( idealNormal );
 					traceEnt = PM_BGEntForNum(trace.entityNum);
-						
+
 					if ( trace.fraction < 1.0f && ((trace.entityNum < ENTITYNUM_WORLD && traceEnt && traceEnt->s.solid != SOLID_BMODEL) || DotProduct(trace.plane.normal,idealNormal) > 0.7))
 					{//there is a wall there
 						pm->ps->velocity[0] = pm->ps->velocity[1] = 0;
@@ -3216,9 +3255,9 @@ static qboolean PM_CheckJump( void )
 				}
 			}
 
-#endif 
+#endif
 
-			else if ( (!BG_InSpecialJump( legsAnim )//not in a special jump anim 
+			else if ( (!BG_InSpecialJump( legsAnim )//not in a special jump anim
 						||BG_InReboundJump( legsAnim )//we're already in a rebound
 						||BG_InBackFlip( legsAnim ) )//a backflip (needed so you can jump off a wall behind you)
 					//&& pm->ps->velocity[2] <= 0
@@ -3311,7 +3350,7 @@ static qboolean PM_CheckJump( void )
 	if ((cgs.serverMod == SVMOD_JAPRO && !pm->ps->stats[STAT_RACEMODE] && (cgs.jcinfo & JAPRO_CINFO_JK2DFA)) || (cgs.serverMod == SVMOD_JAPLUS && (cgs.jcinfo & JAPLUS_CINFO_JK2DFA)))
 #endif
 	{
-		if ( pm->cmd.upmove > 0 
+		if ( pm->cmd.upmove > 0
 			&& (pm->ps->weapon == WP_SABER || pm->ps->weapon == WP_MELEE)
 			&& !PM_IsRocketTrooper()
 			&& (pm->ps->weaponTime > 0||pm->cmd.buttons&BUTTON_ATTACK) )
@@ -3515,6 +3554,7 @@ static void PM_WaterMove( void ) {
 	vec3_t	wishdir;
 	float	scale;
 	float	vel;
+	float realspeed = pm->ps->speed;
 
 	if ( PM_CheckWaterJump() ) {
 		PM_WaterJumpMove();
@@ -3543,7 +3583,16 @@ static void PM_WaterMove( void ) {
 	if ( !scale ) {
 		wishvel[0] = 0;
 		wishvel[1] = 0;
-		wishvel[2] = -60;		// sink towards bottom
+		if (pm->ps->clientNum >= MAX_CLIENTS && pm->ps->eFlags2 & EF2_NOT_USED_1) { //don't sink)
+			realspeed = 100;
+			if (pm->waterlevel == 2)
+				wishvel[2] = 30;		// float towards top
+			else if (pm->waterlevel > 2)
+				wishvel[2] = 60;		// float towards top
+		}
+		else {
+			wishvel[2] = -60;		// sink towards bottom;
+		}
 	} else {
 		for (i=0 ; i<3 ; i++)
 			wishvel[i] = scale * pml.forward[i]*pm->cmd.forwardmove + scale * pml.right[i]*pm->cmd.rightmove;
@@ -3554,9 +3603,12 @@ static void PM_WaterMove( void ) {
 	VectorCopy (wishvel, wishdir);
 	wishspeed = VectorNormalize(wishdir);
 
-	if ( wishspeed > pm->ps->speed * pm_swimScale ) {
-		wishspeed = pm->ps->speed * pm_swimScale;
+	if ( wishspeed > realspeed * pm_swimScale ) {
+		wishspeed = realspeed * pm_swimScale;
 	}
+
+	if (pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES)
+		wishspeed *= 2;
 
 	PM_Accelerate (wishdir, wishspeed, pm_wateraccelerate);
 
@@ -3815,7 +3867,7 @@ static void PM_AirMove( void ) {
 				if ( speed < 0 )
 				{//speed is negative, but since our command is reverse, make speed positive
 					speed = fabs( speed );
-					
+
 					if ( pml.groundPlane )
 					{//on a slope, still have some control
 						speed = fabs( speed );
@@ -3824,7 +3876,7 @@ static void PM_AirMove( void ) {
 					{//can't reverse in air
 						speed = 0;
 					}
-					
+
 				}
 				else if ( speed > 0 )
 				{//trying to move back but speed is still positive, so keep moving forward (we'll slow down eventually)
@@ -3865,7 +3917,7 @@ static void PM_AirMove( void ) {
 					{//alternate control scheme: can strafe
 						if ( smove )
 						{
-							
+
 							if ( fmove > 0 )
 							{//actively accelerating
 								strafeSpeed = pm->ps->speed;
@@ -3874,7 +3926,7 @@ static void PM_AirMove( void ) {
 							{//not stepping on accelerator, only strafe based on magnitude of current forward velocity
 								strafeSpeed = fabs(DotProduct( pm->ps->velocity, vfwd ));
 							}
-							
+
 							strafeSpeed = ((float)(smove))/127.0f;
 						}
 					}
@@ -3915,11 +3967,20 @@ static void PM_AirMove( void ) {
 	else if (BG_IsNewJetpacking(pm->ps)) //New Jetpack
 	{ //reduced air control while not jetting
 		//REDO THIS NEWJETPACK2. FM3 scales by 2.2f (spacetrooper, genosian) or 1.75f not 0.9f.  Do we want to just adjust basespeed instead? More air control kinda crosses into grapples function
-		for ( i = 0 ; i < 2 ; i++ )
-		{
-			wishvel[i] = pml.forward[i]*fmove + pml.right[i]*smove;
+		if (0 && moveStyle == MV_TRIBES) {
+			for (i = 0; i < 2; i++)
+			{
+				wishvel[i] = 0;// pml.forward[i] * fmove + pml.right[i] * smove;
+			}
+			wishvel[2] = 0;
 		}
-		wishvel[2] = 0;
+		else {
+			for (i = 0; i < 2; i++)
+			{
+				wishvel[i] = pml.forward[i] * fmove + pml.right[i] * smove;
+			}
+			wishvel[2] = 0;
+		}
 
 
 		VectorScale(wishvel, 1.75f, wishvel);
@@ -3943,10 +4004,10 @@ static void PM_AirMove( void ) {
 			pm->cmd.rightmove = 0;
 		}
 
-		if (wishspeed > 250.0f)
+		if (wishspeed > pm_surf_wishspeed)
 		{
-			VectorScale(wishvel, 250.0f / wishspeed, wishvel);
-			wishspeed = 250.0f;
+			VectorScale(wishvel, pm_surf_wishspeed / wishspeed, wishvel);
+			wishspeed = pm_surf_wishspeed;
 		}
 	}
 	else {
@@ -3957,12 +4018,12 @@ static void PM_AirMove( void ) {
 
 #if _SPPHYSICS
 	if (moveStyle == MV_SP) {
-		accelerate = 4.0f;
+		accelerate = pm_sp_airaccelerate;
 
 		//SP Air Decel ?
 		if ((DotProduct(pm->ps->velocity, wishdir)) < 0.0f)
 		{//Encourage deceleration away from the current velocity
-			wishspeed *= 1.35f;//pm_airDecelRate
+			wishspeed *= pm_sp_airDecelRate;//pm_airDecelRate
 		}
 	}
 #endif
@@ -3978,11 +4039,11 @@ static void PM_AirMove( void ) {
 	}
 	// not on ground, so little effect on velocity
 	if (moveStyle == MV_QW) {
-		PM_AirAccelerate(wishdir, wishspeed, 0.7f);//pm_qw_airaccel
+		PM_AirAccelerate(wishdir, wishspeed, pm_qw_airaccelerate);//pm_qw_airaccel
 	} else if (moveStyle == MV_TRIBES) {
 		PM_AirAccelerateTribes(wishdir, wishspeed);//pm_qw_airaccel
 	} else if (moveStyle == MV_SURF) {
-		PM_CS_AirAccelerate(wishdir, wishspeed, 100.0f);
+		PM_CS_AirAccelerate(wishdir, wishspeed, pm_surf_airaccelerate);
 	}
 	else if (moveStyle == MV_CPM || moveStyle == MV_OCPM || moveStyle == MV_PJK || moveStyle == MV_WSW || moveStyle == MV_RJCPM || moveStyle == MV_SLICK || moveStyle == MV_BOTCPM)
 	{
@@ -3991,20 +4052,20 @@ static void PM_AirMove( void ) {
 
 		wishspeed2 = wishspeed;
 		if (DotProduct(pm->ps->velocity, wishdir) < 0)
-			accel = 2.5f;//cpm_pm_airstopaccelerate 
+			accel = pm_cpm_airstopaccelerate;
 		else
 			accel = pm_airaccelerate;
 
 		if (pm->ps->movementDir == 2 || pm->ps->movementDir == 6) {
 			if (moveStyle == MV_CPM || moveStyle == MV_OCPM || moveStyle == MV_PJK || moveStyle == MV_WSW || moveStyle == MV_RJCPM || moveStyle == MV_BOTCPM) {
-				if (wishspeed > 30.0f)//cpm_pm_wishspeed
-					wishspeed = 30.0f;	
-				accel = 70.0f;//cpm_pm_strafeaccelerate
+				if (wishspeed > pm_cpm_airstrafewishspeed)
+					wishspeed = pm_cpm_airstrafewishspeed;
+				accel = pm_cpm_airstrafeaccelerate;
 			}
-			else if (moveStyle == MV_SLICK) {
-				if (wishspeed > 30.0f)//cpm_pm_wishspeed
-					wishspeed = 30.0f;	
-				accel = 100.0f;//cpm_pm_strafeaccelerate - 100 in slick
+			if (moveStyle == MV_SLICK) {
+				if (wishspeed > pm_cpm_airstrafewishspeed)
+					wishspeed = pm_cpm_airstrafewishspeed;
+				accel = pm_slick_airstrafeaccelerate;
 			}
 		}
 
@@ -4070,13 +4131,13 @@ static void PM_DodgeMove(int forward, int right)
 
 	VectorCopy( dodgedir, pm->ps->velocity );
 
-	pm->ps->velocity[2] = DODGE_JUMP_SPEED; 
+	pm->ps->velocity[2] = DODGE_JUMP_SPEED;
 }
 
 static void PM_DashMove(void)
 {
 	vec3_t dashdir, view;
-	const int DASH_SPEED = pm->ps->speed * (1.9f / 1.28f); //475... ayy 
+	const int DASH_SPEED = pm->ps->speed * (1.9f / 1.28f); //475... ayy
 	static const int DASH_JUMP_SPEED = 280;
 	float xyspeed;
 
@@ -4130,8 +4191,9 @@ static void PM_OverDriveMove(void) {
 
 static void PM_ThrustMove(void)
 {
-	if (!pm->ps->stats[STAT_WJTIME] && (pm->cmd.buttons & BUTTON_FORCE_LIGHTNING) && !pm->ps->powerups[PW_BLUEFLAG] && !pm->ps->powerups[PW_REDFLAG] && !pm->ps->powerups[PW_NEUTRALFLAG]) {
+	if (!pm->ps->stats[STAT_WJTIME] && (pm->cmd.buttons & BUTTON_FORCE_LIGHTNING)) {
 		pm->ps->stats[STAT_WJTIME] = 800;
+		pm->ps->fd.forcePower = pm->ps->fd.forcePower * 0.25f;
 #ifdef _GAME
 		gentity_t *self = (gentity_t *)pm_entSelf;
 		G_PlayEffect(EFFECT_LANDING_SNOW, pm->ps->origin, pml.forward);//Should be spot on wall, and wallnormal, a better, predicted way to do this?
@@ -4161,13 +4223,11 @@ static void PM_ThrustMove(void)
 
 		strength *= pm->ps->fd.forcePower;
 
-		VectorMA(pm->ps->velocity, 35 * strength * pml.frametime, pml.forward, pm->ps->velocity); //fall off the faster we go?
+		VectorMA(pm->ps->velocity, 140 * strength * pml.frametime, pml.forward, pm->ps->velocity); //fall off the faster we go?
 
 		pm->ps->fd.forcePowersActive |= (1 << FP_SPEED);
 	}
-	else if (pm->ps->stats[STAT_WJTIME] > 300) { //This is messed up but it works. otherwise can't really modify fp as we go because deltatime and cant get more discrete than 1fp.
-		pm->ps->fd.forcePower = 0;
-		//pm->ps->stats[STAT_WJTIME] = 0;
+	else if (pm->ps->stats[STAT_WJTIME] > 300) { //cooldown
 	}
 	else {
 		pm->ps->fd.forcePowersActive &= ~(1 << FP_SPEED);
@@ -4177,7 +4237,7 @@ static void PM_ThrustMove(void)
 static void PM_BlinkMove(void) //Just blink for now
 {
 	const float BLINK_DURATION = 300;
-	const float BLINK_STRENGTH = 4200.0f;
+	const float BLINK_STRENGTH = 3500;
 	const int	FORCE_COST = 25;
 
 	//Todo - change bind from lightning? More restrictions? If keep as lightning, disregard actual lightning?
@@ -4242,7 +4302,7 @@ static void PM_CheckDash(void)
 	if (moveStyle != MV_WSW && moveStyle != MV_TRIBES) {
 		return;
 	}
-	
+
 	if (moveStyle == MV_TRIBES && (((pm->ps->velocity[0]*pm->ps->velocity[0] + pm->ps->velocity[1] *pm->ps->velocity[1]) > (pm->ps->speed * pm->ps->speed * 1.48f)) || (pm->ps->fd.forcePower < 25))) {
 		return;
 	}
@@ -4269,7 +4329,7 @@ static void PM_CheckDash(void)
 				PM_DodgeMove(1, 1);
 			else if (pm->cmd.rightmove < 0 && moveStyle != MV_TRIBES) //A
 				PM_DodgeMove(1, -1);
-			else 
+			else
 				PM_DodgeMove(1, 0);
 		}
 		else if (pm->cmd.forwardmove < 0 && moveStyle != MV_TRIBES) {//S
@@ -4320,7 +4380,7 @@ static void PlayerTouchWall(int nbTestDir, float maxZnormal, vec3_t *normal) //l
 
 		if(trace.fraction == 1)
 			continue; // no wall in this direction
-	
+
 		if(trace.surfaceFlags & (SURF_SKY))
 			continue;
 
@@ -4379,7 +4439,7 @@ static void PM_CheckWallJump( void )//loda fixme, wip
 	point[1] = pm->ps->origin[1];
 	point[2] = pm->ps->origin[2] - STEPSIZE;
 
-	// don't walljump if our height is smaller than a step 
+	// don't walljump if our height is smaller than a step
 	// unless the player is moving faster than dash speed and upwards
 	xyspeed[0] = pm->ps->velocity[0];
 	xyspeed[1] = pm->ps->velocity[1];
@@ -4388,7 +4448,7 @@ static void PM_CheckWallJump( void )//loda fixme, wip
 	hspeed = VectorLength(xyspeed);
 
 	pm->trace(&trace, pm->ps->origin, pm->mins, pm->maxs, point, pm->ps->clientNum, CONTENTS_SOLID);
-		
+
 	if((hspeed > DODGE_SPEED && pm->ps->velocity[2] > 8) || (trace.fraction == 1) || /*(!ISWALKABLEPLANE(&trace.plane)*/ !trace.startsolid)
 	{
 		float oldupvelocity = pm->ps->velocity[2];
@@ -4403,7 +4463,7 @@ static void PM_CheckWallJump( void )//loda fixme, wip
 		pm->ps->velocity[2] = 0;
 
 		//hspeed = VectorNormalize(xyspeed); //why
-		
+
 		PM_ClipVelocity( pm->ps->velocity, normal, pm->ps->velocity, 1.0005f );
 		VectorMA( pm->ps->velocity, WJ_BOUNCEFACTOR, normal, pm->ps->velocity );
 
@@ -4414,9 +4474,9 @@ static void PM_CheckWallJump( void )//loda fixme, wip
 
 		VectorScale( pm->ps->velocity, hspeed, pm->ps->velocity );
 		pm->ps->velocity[2] = ( oldupvelocity > WJ_UPSPEED ) ? oldupvelocity : WJ_UPSPEED; // jal: if we had a faster upwards speed, keep it
-				
+
 		pm->ps->stats[STAT_WJTIME] = WJ_DELAY;
-		
+
 		//PM_AddEvent( EV_FALL );
 #ifdef _GAME
 		G_PlayEffect( EFFECT_LANDING_SAND, trace.endpos, trace.plane.normal );//Should be spot on wall, and wallnormal, a better, predicted way to do this?
@@ -4646,7 +4706,7 @@ static void PM_WalkMove( void ) {
 	float		vel, realaccelerate = pm_accelerate, realduckscale = pm_duckScale;
 	qboolean	npcMovement = qfalse;
 	const int   moveStyle = PM_GetMovePhysics();
-	
+
 
 	if ( pm->waterlevel > 2 && DotProduct( pml.forward, pml.groundTrace.plane.normal ) > 0 ) {
 		// begin swimming
@@ -4669,26 +4729,26 @@ static void PM_WalkMove( void ) {
 	}
 
 	if (moveStyle == MV_CPM || moveStyle == MV_OCPM || moveStyle == MV_RJCPM || moveStyle == MV_BOTCPM)
-		realaccelerate = 15.0f;
+		realaccelerate = pm_cpm_accelerate;
 	else if (moveStyle == MV_Q3 || moveStyle == MV_RJQ3)
-		realduckscale = 0.25f;
+		realduckscale = pm_vq3_duckScale;
 	else if (moveStyle == MV_WSW) {
-		realaccelerate = 12.0f;
-		realduckscale = 0.3125f;
+		realaccelerate = pm_wsw_accelerate;
+		realduckscale = pm_wsw_duckScale;
 	}
 #if _SPPHYSICS
 	else if (moveStyle == MV_SP) {
-		realaccelerate = 12.0f;
+		realaccelerate = pm_sp_accelerate;
 	}
 #endif
 	else if (moveStyle == MV_SLICK) {
-		realaccelerate = 30.0f;
+		realaccelerate = pm_slick_accelerate;
 	}
 	else if (moveStyle == MV_TRIBES && (pm->cmd.buttons & BUTTON_DASH)) {
-		realaccelerate = 2.5f;
+		realaccelerate = pm_tribes_accelerate;
 	}
 	else if (moveStyle == MV_SURF) {
-		realaccelerate = 12.0f;
+		realaccelerate = pm_surf_accelerate;
 	}
 
 	PM_Friction ();
@@ -4764,9 +4824,9 @@ static void PM_WalkMove( void ) {
 	}
 
 	if (moveStyle == MV_SURF) {
-		if (wishspeed != 0 && (wishspeed > 250.0f)) {
-			VectorScale(wishvel, 250.0f / wishspeed, wishvel);
-			wishspeed = 250.0f;
+		if (wishspeed != 0 && (wishspeed > pm_surf_wishspeed)) {
+			VectorScale(wishvel, pm_surf_wishspeed / wishspeed, wishvel);
+			wishspeed = pm_surf_wishspeed;
 		}
 	}
 
@@ -4805,7 +4865,7 @@ static void PM_WalkMove( void ) {
 	{//We just ignore this with slick style since we area always slick, we dont need the flag to tell us that
 		accelerate = pm_airaccelerate; //this should be changed for QW and other stuff, but whatever, already done
 		if (moveStyle == MV_OCPM)
-			accelerate = 15.0f;
+			accelerate = pm_cpm_accelerate;
 		else
 			accelerate = pm_airaccelerate; //this should be changed for QW and other stuff, but whatever, already done
 	}
@@ -5029,8 +5089,8 @@ static int PM_TryRoll( void )
 #else
 	if (!(cgs.jcinfo & JAPRO_CINFO_ROLLCANCEL) || pm->ps->stats[STAT_RACEMODE]) {
 #endif
-		if ( BG_SaberInAttack( pm->ps->saberMove ) || BG_SaberInSpecialAttack( pm->ps->torsoAnim ) 
-			|| BG_SpinningSaberAnim( pm->ps->legsAnim ) 
+		if ( BG_SaberInAttack( pm->ps->saberMove ) || BG_SaberInSpecialAttack( pm->ps->torsoAnim )
+			|| BG_SpinningSaberAnim( pm->ps->legsAnim )
 			|| PM_SaberInStart( pm->ps->saberMove ) )
 		{//attacking or spinning (or, if player, starting an attack)
 			if ( PM_CanRollFromSoulCal( pm->ps ) )
@@ -5043,7 +5103,7 @@ static int PM_TryRoll( void )
 		}
 	}
 	else {
-		if ( BG_SaberInAttack( pm->ps->saberMove ) || BG_SaberInSpecialAttack( pm->ps->torsoAnim ) 
+		if ( BG_SaberInAttack( pm->ps->saberMove ) || BG_SaberInSpecialAttack( pm->ps->torsoAnim )
 			|| BG_SpinningSaberAnim( pm->ps->legsAnim ))
 		{//attacking or spinning (or, if player, starting an attack)
 			return 0;
@@ -5439,10 +5499,13 @@ static void PM_CrashLand(void) {
 			}
 			else
 			{
-				if (pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES && ((pm->cmd.buttons & BUTTON_DASH) || (pm->ps->clientNum >= MAX_CLIENTS && (pm->cmd.buttons & BUTTON_WALKING)))) {
-					if (delta_send > 150)
-						PM_AddEventWithParm(EV_FALL, 1);
+				if (pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES) {
+					//just do no fall dmg in tribes cuz we do impact dmg elsewhere?
 				}
+				//else if (pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES && ((pm->cmd.buttons & BUTTON_DASH) || (pm->ps->clientNum >= MAX_CLIENTS && (pm->cmd.buttons & BUTTON_WALKING)))) {
+				//	if (delta_send > 150)
+				//		PM_AddEventWithParm(EV_FALL, 1);
+				//}
 				else {
 					PM_AddEventWithParm(EV_FALL, delta_send);
 				}
@@ -5466,7 +5529,7 @@ static void PM_CrashLand(void) {
 	}
 
 	// make sure velocity resets so we don't bounce back up again in case we miss the clear elsewhere
-	if (pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES && ((pm->cmd.buttons & BUTTON_DASH) || (pm->ps->clientNum >= MAX_CLIENTS && (pm->cmd.buttons & BUTTON_WALKING)))) {
+	if (pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES && ((pm->cmd.buttons & BUTTON_DASH))) {
 	}
 	else {
 		pm->ps->velocity[2] = 0;
@@ -5760,13 +5823,13 @@ static void PM_GroundTrace( void ) {
 					float oldSpeed, newSpeed;
 
 					VectorCopy(pm->ps->velocity, oldVel);
-					oldSpeed = oldVel[0] * oldVel[0] + oldVel[1] * oldVel[1]; 
+					oldSpeed = oldVel[0] * oldVel[0] + oldVel[1] * oldVel[1];
 
 					PM_ClipVelocity( pm->ps->velocity, trace.plane.normal, clipped_velocity, OVERCLIP ); //WSW RAMPJUMP 1
 
 					VectorCopy(clipped_velocity, newVel);
 					newVel[2] = 0;
-					newSpeed = newVel[0] * newVel[0] + newVel[1] * newVel[1]; 
+					newSpeed = newVel[0] * newVel[0] + newVel[1] * newVel[1];
 
 					if (newSpeed > oldSpeed)
 						VectorCopy(clipped_velocity, pm->ps->velocity);
@@ -5774,7 +5837,7 @@ static void PM_GroundTrace( void ) {
 				else {
 					PM_ClipVelocity( pm->ps->velocity, trace.plane.normal, pm->ps->velocity, OVERCLIP ); //Not sure why wsw is acting weird here.. so i guess no speed ramps will still be a thing in wsw style :/
 				}
-/*				
+/*
 #ifdef _GAME
 				{
 					int i;
@@ -5787,9 +5850,9 @@ static void PM_GroundTrace( void ) {
 						if ((level.clients[i].sess.sessionTeam == TEAM_SPECTATOR) && (level.clients[i].ps.pm_flags & PMF_FOLLOW) && (level.clients[i].sess.spectatorClient == specEnt->client->ps.clientNum))
 							trap->SendServerCommand(i, "chat \"^0nospeed ramp fixed!\"");
 					}
-				}			
+				}
 #endif
-*/			
+*/
 			}
 
 #if 0
@@ -6169,7 +6232,7 @@ static void PM_CheckDuck (void)
 		{	// duck
 
 			//half-life/jasp crouch climb thing
-			if (pm->ps->groundEntityNum == ENTITYNUM_NONE && ((pm->ps->stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_CROUCHJUMP) || pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_SP)) {
+			if (pm->ps->groundEntityNum == ENTITYNUM_NONE && ((pm->ps->stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_CROUCHJUMP) || pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_SP || pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_SURF)) {
 				trace_t sptrace;
 				pm->maxs[2] = pm->ps->crouchheight;
 				pm->ps->viewheight = pm->ps->crouchheight + STANDARD_VIEWHEIGHT_OFFSET; //CROUCH_VIEWHEIGHT
@@ -6191,7 +6254,7 @@ static void PM_CheckDuck (void)
 		{	// stand up if possible
 			if (pm->ps->pm_flags & PMF_DUCKED)
 			{
-				if ((pm->ps->stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_CROUCHJUMP) || pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_SP) {
+				if ((pm->ps->stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_CROUCHJUMP) || pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_SP || pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_SURF) {
 					trace_t sptrace;
 					if (pm->ps->groundEntityNum == ENTITYNUM_NONE && PM_GroundDistance() >= (oldHeight - pm->maxs[2]) && pm->ps->velocity[2] >= 0) {
 						pm->maxs[2] = pm->ps->standheight;
@@ -6898,12 +6961,21 @@ int PM_LegsSlopeBackTransition(int desiredAnim)
 	return resultingAnim;
 }
 
+static qboolean BG_AreRunWalkAnimsFixed(void) {
+#if defined(_GAME)
+	return !!g_fixRunWalkAnims.integer;
+#elif defined(_CGAME)
+	const char *cs = CG_ConfigString(CS_LEGACY_FIXES);
+	const uint32_t legacyFixes = strtoul(cs, NULL, 0);
+	return !!(legacyFixes & (1 << LEGACYFIX_RUNWALKANIMS));
+#endif
+}
+
 /*
 ===============
 PM_Footsteps
 ===============
 */
-#define FixedRunAnim
 static void PM_Footsteps( void ) {
 	float		bobmove;
 	int			old;
@@ -6919,11 +6991,11 @@ static void PM_Footsteps( void ) {
 	}
 #endif
 
-	if ( (PM_InSaberAnim( (pm->ps->legsAnim) ) && !BG_SpinningSaberAnim( (pm->ps->legsAnim) )) 
-		|| (pm->ps->legsAnim) == BOTH_STAND1 
-		|| (pm->ps->legsAnim) == BOTH_STAND1TO2 
-		|| (pm->ps->legsAnim) == BOTH_STAND2TO1 
-		|| (pm->ps->legsAnim) == BOTH_STAND2 
+	if ( (PM_InSaberAnim( (pm->ps->legsAnim) ) && !BG_SpinningSaberAnim( (pm->ps->legsAnim) ))
+		|| (pm->ps->legsAnim) == BOTH_STAND1
+		|| (pm->ps->legsAnim) == BOTH_STAND1TO2
+		|| (pm->ps->legsAnim) == BOTH_STAND2TO1
+		|| (pm->ps->legsAnim) == BOTH_STAND2
 		|| (pm->ps->legsAnim) == BOTH_SABERFAST_STANCE
 		|| (pm->ps->legsAnim) == BOTH_SABERSLOW_STANCE
 		|| (pm->ps->legsAnim) == BOTH_BUTTON_HOLD
@@ -7009,11 +7081,9 @@ static void PM_Footsteps( void ) {
 				{
 					PM_ContinueLegsAnim( BOTH_CROUCH1IDLE );
 				}
-#ifdef FixedRunAnim
-				if ((pm->ps->saberInFlight) && (pm->ps->torsoAnim != BOTH_CROUCH1IDLE)) {
+				if (BG_AreRunWalkAnimsFixed() && (pm->ps->saberInFlight) && (pm->ps->torsoAnim != BOTH_CROUCH1IDLE)) {
 					PM_SetAnim(SETANIM_TORSO, BOTH_CROUCH1IDLE, setAnimFlags);
 				}
-#endif
 			} else {
 				if (pm->ps->weapon == WP_DISRUPTOR && pm->ps->zoomMode == 1)
 				{
@@ -7063,7 +7133,7 @@ static void PM_Footsteps( void ) {
 		bobmove = 0.5;	// ducked characters bob much faster
 
 //[JAPRO - Serverside + Clientside - Physics - Add roll types - Start]
-		
+
 		{
 			int fixRoll = GetFixRoll(pm->ps);
 			if (((fixRoll > 1 && (PM_RunningAnim(pm->ps->legsAnim) || PM_CanRollFromSoulCal(pm->ps))) ||
@@ -7132,11 +7202,9 @@ static void PM_Footsteps( void ) {
 				{
 					PM_ContinueLegsAnim( BOTH_CROUCH1WALKBACK );
 				}
-#ifdef FixedRunAnim
-				if ((pm->ps->saberInFlight) && (pm->ps->torsoAnim != BOTH_CROUCH1WALKBACK)) {
+				if (BG_AreRunWalkAnimsFixed() && (pm->ps->saberInFlight) && (pm->ps->torsoAnim != BOTH_CROUCH1WALKBACK)) {
 					PM_SetAnim(SETANIM_TORSO, BOTH_CROUCH1WALKBACK, setAnimFlags);
 				}
-#endif
 			}
 			else {
 				if ((pm->ps->legsAnim) != BOTH_CROUCH1WALK)
@@ -7147,11 +7215,9 @@ static void PM_Footsteps( void ) {
 				{
 					PM_ContinueLegsAnim( BOTH_CROUCH1WALK );
 				}
-#ifdef FixedRunAnim
-				if ((pm->ps->saberInFlight) && (pm->ps->torsoAnim != BOTH_CROUCH1WALK)) {
+				if (BG_AreRunWalkAnimsFixed() && (pm->ps->saberInFlight) && (pm->ps->torsoAnim != BOTH_CROUCH1WALK)) {
 					PM_SetAnim(SETANIM_TORSO, BOTH_CROUCH1WALK, setAnimFlags);
 				}
-#endif
 			}
 		}
 		else
@@ -7181,11 +7247,9 @@ static void PM_Footsteps( void ) {
 			{
 				PM_ContinueLegsAnim( BOTH_CROUCH1WALKBACK );
 			}
-#ifdef FixedRunAnim
-			if ((pm->ps->saberInFlight) && (pm->ps->torsoAnim != BOTH_CROUCH1WALKBACK)) {
+			if (BG_AreRunWalkAnimsFixed() && (pm->ps->saberInFlight) && (pm->ps->torsoAnim != BOTH_CROUCH1WALKBACK)) {
 				PM_SetAnim(SETANIM_TORSO, BOTH_CROUCH1WALKBACK, setAnimFlags);
 			}
-#endif
 		}
 		else
 		{
@@ -7197,11 +7261,9 @@ static void PM_Footsteps( void ) {
 			{
 				PM_ContinueLegsAnim( BOTH_CROUCH1WALK );
 			}
-#ifdef FixedRunAnim
-			if ((pm->ps->saberInFlight) && (pm->ps->torsoAnim != BOTH_CROUCH1WALK)) {
+			if (BG_AreRunWalkAnimsFixed() && (pm->ps->saberInFlight) && (pm->ps->torsoAnim != BOTH_CROUCH1WALK)) {
 				PM_SetAnim(SETANIM_TORSO, BOTH_CROUCH1WALK, setAnimFlags);
 			}
-#endif
 		}
 	}
 	else
@@ -7268,14 +7330,12 @@ static void PM_Footsteps( void ) {
 #endif
 			else if ( pm->ps->pm_flags & PMF_BACKWARDS_RUN )
 			{
-#ifdef FixedRunAnim
-				if( pm->ps->weapon != WP_SABER || pm->ps->saberInFlight )
+				if ( BG_AreRunWalkAnimsFixed() && (pm->ps->weapon != WP_SABER || pm->ps->saberInFlight) )
 				{
 					desiredAnim = BOTH_RUNBACK1;
 				}
 				else
 				{
-#endif
 				switch (pm->ps->fd.saberAnimLevel)
 					{
 					case SS_STAFF:
@@ -7367,20 +7427,16 @@ static void PM_Footsteps( void ) {
 						}
 						break;
 					}
-#ifdef FixedRunAnim
 				}
-#endif
 			}
 			else
 			{
-#ifdef FixedRunAnim					// FIXME: this doesn't break base compatibility at all, remove #ifndef
 				if ( pm->ps->weapon != WP_SABER || pm->ps->saberInFlight )
 				{
 					desiredAnim = BOTH_RUN1;
 				}
 				else
 				{
-#endif
 					switch (pm->ps->fd.saberAnimLevel)
 					{
 					case SS_STAFF:
@@ -7510,9 +7566,7 @@ static void PM_Footsteps( void ) {
 						}
 						break;
 					}
-#ifdef FixedRunAnim
 				}
-#endif
 			}
 		}
 		else
@@ -7520,14 +7574,12 @@ static void PM_Footsteps( void ) {
 			bobmove = 0.2f;	// walking bobs slow
 			if ( pm->ps->pm_flags & PMF_BACKWARDS_RUN )
 			{
-#ifdef FixedRunAnim // fixme, doesn't break base compat if enabled (I tested this to be sure)
-				if( pm->ps->weapon != WP_SABER || pm->ps->saberInFlight )
+				if(BG_AreRunWalkAnimsFixed() && (pm->ps->weapon != WP_SABER || pm->ps->saberInFlight ))
 				{
 					desiredAnim = BOTH_WALKBACK1;
 				}
 				else
 				{
-#endif
 					switch (pm->ps->fd.saberAnimLevel)
 					{
 					case SS_STAFF:
@@ -7569,9 +7621,7 @@ static void PM_Footsteps( void ) {
 						}
 						break;
 					}
-#ifdef FixedRunAnim
 				}
-#endif
 			}
 			else
 			{
@@ -7583,12 +7633,10 @@ static void PM_Footsteps( void ) {
 				{
 					desiredAnim = BOTH_WALK1;
 				}
-#ifdef FixedRunAnim
 				else if ( pm->ps->weapon != WP_SABER || pm->ps->saberInFlight )
 				{
 					desiredAnim = BOTH_WALK1;
 				}
-#endif
 				else
 				{
 					switch (pm->ps->fd.saberAnimLevel)
@@ -7649,12 +7697,9 @@ static void PM_Footsteps( void ) {
 				PM_ContinueLegsAnim(ires);
 			}
 
-#ifdef FixedRunAnim
-			if ((pm->ps->saberInFlight) && ((pm->ps->torsoAnim) != desiredAnim && ires == desiredAnim)) { //silly hack for predicted walking anims while disarmed
+			if (BG_AreRunWalkAnimsFixed() && (pm->ps->saberInFlight) && ((pm->ps->torsoAnim) != desiredAnim && ires == desiredAnim)) { //silly hack for predicted walking anims while disarmed
 				PM_SetAnim(SETANIM_TORSO, desiredAnim, setAnimFlags);
 			}
-#endif
-
 		}
 	}
 
@@ -7810,7 +7855,7 @@ void PM_BeginWeaponChange( int weapon ) {
 	if ((g_tweakWeapons.integer & WT_TRIBES) && !pm->ps->stats[STAT_RACEMODE]) {
 		int i;
 		for (i = 0; i < MAX_WEAPONS; i++) {
-			((gentity_t *)pm_entSelf)->client->specificWeaponTime[i] = 200;
+			((gentity_t *)pm_entSelf)->client->specificWeaponTime[i] += 50;
 		}
 	}
 #endif
@@ -7860,7 +7905,7 @@ void PM_FinishWeaponChange( void ) {
 	else if (!pm->ps->stats[STAT_RACEMODE] && (g_tweakWeapons.integer & WT_FAST_WEAPONSWITCH))
 		pm->ps->weaponTime += 25;
 	else
-		pm->ps->weaponTime += 250;
+		pm->ps->weaponTime += 50;
 #else
 		pm->ps->weaponTime += 250;
 #endif
@@ -7870,7 +7915,7 @@ void PM_FinishWeaponChange( void ) {
 		if ((g_tweakWeapons.integer & WT_TRIBES) && !pm->ps->stats[STAT_RACEMODE]) {
 			int i;
 			for (i = 0; i < MAX_WEAPONS; i++) {
-				((gentity_t *)pm_entSelf)->client->specificWeaponTime[i] = 250;
+				((gentity_t *)pm_entSelf)->client->specificWeaponTime[i] += 100;
 			}
 		}
 #endif
@@ -9240,9 +9285,11 @@ if (pm->ps->duelInProgress)
 	}
 #if _GAME
 #if _SPECIFICWEAPONTIME
-	if (g_tweakWeapons.integer & WT_TRIBES) {
-		if (((gentity_t *)pm_entSelf)->client->specificWeaponTime[pm->ps->weapon] > 0) {
-			((gentity_t *)pm_entSelf)->client->specificWeaponTime[pm->ps->weapon] -= pml.msec;
+	if (g_tweakWeapons.integer & WT_TRIBES) { //Bug where this doesnt get called if wp_saber is out? but maybe thats fine to limit nades if holding saber?
+		int i;
+		for (i = 0; i < MAX_WEAPONS; i++) {
+			if (((gentity_t *)pm_entSelf)->client->specificWeaponTime[i] > 0)
+				((gentity_t *)pm_entSelf)->client->specificWeaponTime[i] -= pml.msec;
 		}
 	}
 #endif
@@ -9321,8 +9368,8 @@ if (pm->ps->duelInProgress)
 			// enough energy to fire this weapon?
 			if (pm->ps->ammo[weaponData[pm->ps->weapon].ammoIndex] < weaponData[pm->ps->weapon].energyPerShot &&
 				pm->ps->ammo[weaponData[pm->ps->weapon].ammoIndex] < weaponData[pm->ps->weapon].altEnergyPerShot
-#ifdef _GAME 
-				&& (!(g_tweakWeapons.integer & WT_STAKE_GUN) || (pm->ps->weapon != WP_FLECHETTE)) //I guess we have to make the stake gun 
+#ifdef _GAME
+				&& (!(g_tweakWeapons.integer & WT_STAKE_GUN) || (pm->ps->weapon != WP_FLECHETTE)) //I guess we have to make the stake gun
 #endif
 				)
 			{ //the weapon is out of ammo essentially because it cannot fire primary or secondary, so do the switch
@@ -9368,28 +9415,26 @@ if (pm->ps->duelInProgress)
 			PM_BeginWeaponChange( pm->cmd.weapon );
 		}
 	}
-
-	if ( pm->ps->weaponTime > 0 ) {
+	
+#if _GAME
+#if _SPECIFICWEAPONTIME
+	if ((g_tweakWeapons.integer & WT_TRIBES) && !pm->ps->stats[STAT_RACEMODE])
+	{
+		if (((gentity_t *)pm_entSelf)->client->specificWeaponTime[pm->ps->weapon] > 0) {
+			if (pm->ps->weapon != pm->cmd.weapon) {
+				PM_FinishWeaponChange();
+			}
+			return;
+		}
+	}
+	else
+#endif
+#endif
+	if (pm->ps->weaponTime > 0) {
 		//This is the saddest hack we have seen yet
 		if (pm->ps->stats[STAT_RACEMODE] && pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_JETPACK && pm->ps->weapon == WP_DET_PACK && pm->ps->hasDetPackPlanted && /*!(pm->cmd.buttons & BUTTON_ATTACK) &&*/ pm->cmd.buttons & BUTTON_ALT_ATTACK) {
 		}
 		else {
-#if _GAME
-#if _SPECIFICWEAPONTIME
-			if ((g_tweakWeapons.integer & WT_TRIBES) && !pm->ps->stats[STAT_RACEMODE])
-			{
-				if (((gentity_t *)pm_entSelf)->client->specificWeaponTime[pm->ps->weapon] > 0) {
-					// change weapon if time
-					//Com_Printf("Weaponstate is %i and changing is %i\n", pm->ps->weaponstate, pm->ps->weapon != pm->cmd.weapon);
-					if (pm->ps->weapon != pm->cmd.weapon) {
-						PM_FinishWeaponChange();
-					}
-					return;
-				}
-			}
-			else
-#endif
-#endif
 			return;
 		}
 	}
@@ -10029,8 +10074,13 @@ if (pm->ps->duelInProgress)
 
 #if _GAME
 #if _SPECIFICWEAPONTIME
+
 	if ((g_tweakWeapons.integer & WT_TRIBES) && !pm->ps->stats[STAT_RACEMODE]) {
-		((gentity_t *)pm_entSelf)->client->specificWeaponTime[pm->ps->weapon] += addTime;
+		int i;
+		for (i = 0; i < MAX_WEAPONS; i++) {
+			((gentity_t *)pm_entSelf)->client->specificWeaponTime[i] = 800;
+		}
+		((gentity_t *)pm_entSelf)->client->specificWeaponTime[pm->ps->weapon] += addTime - 800;
 	}
 #endif
 #endif
@@ -10605,7 +10655,7 @@ void BG_CmdForRoll( playerState_t *ps, int anim, usercmd_t *pCmd )
 
 		/*
 #ifdef _GAME
-		if (g_fixRoll.integer > 2 && pCmd->forwardmove < 0) 
+		if (g_fixRoll.integer > 2 && pCmd->forwardmove < 0)
 			break;
 		pCmd->forwardmove = 127;
 		pCmd->rightmove = 0;
@@ -11064,13 +11114,13 @@ void BG_AdjustClientSpeed(playerState_t *ps, usercmd_t *cmd, int svTime)
 
 	if (!ps->stats[STAT_RACEMODE]) {
 		saber = BG_MySaber( ps->clientNum, 0 );
-		if ( saber 
+		if ( saber
 			&& saber->moveSpeedScale != 1.0f )
 		{
 			ps->speed *= saber->moveSpeedScale;
 		}
 		saber = BG_MySaber( ps->clientNum, 1 );
-		if ( saber 
+		if ( saber
 			&& saber->moveSpeedScale != 1.0f )
 		{
 			ps->speed *= saber->moveSpeedScale;
@@ -12178,7 +12228,7 @@ static QINLINE void PM_CmdForSaberMoves(usercmd_t *ucmd)
 							client = g_entities[clientNum].client;
 					}
 				}
-	
+
 				if (client && client->lastKickTime + 50 < level.time) //japro serverside flood protect on staff dfa, use the same debouncer as flipkick i guess
 #endif
 				{
@@ -13416,7 +13466,7 @@ void PmoveSingle (pmove_t *pmove) {
 			}
 			//Com_Printf("Setting jetpack\n");
 		}
-		else if (pm->cmd.upmove && pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES && (pm->cmd.buttons & BUTTON_DASH) && BG_CanJetpack(pm->ps)) { //Special skiing option for going up terrain
+		else if (pm->cmd.upmove > 0 && pm->ps->stats[STAT_MOVEMENTSTYLE] == MV_TRIBES && (pm->cmd.buttons & BUTTON_DASH) && BG_CanJetpack(pm->ps)) { //Special skiing option for going up terrain
 			if (!(pm->ps->eFlags & EF_JETPACK_ACTIVE)) {
 				pm->ps->stats[STAT_JUMPTIME] = 500;
 				pm->ps->eFlags |= EF_JETPACK_ACTIVE;
@@ -13563,7 +13613,7 @@ void PmoveSingle (pmove_t *pmove) {
 		//Jetpack gets shut off when close to ground in FM3 (<16)
 		//Jetpack upspeed is capped at 324, fallspeed is capped at -1200
 		//Grav should still affect jetters??
-		const int MAX_FALL_SPEED = -1200;
+		const int MAX_FALL_SPEED = -4000;
 		const int MAX_JETPACK_VEL_UP = 2000;
 		float gDist2 = gDist;
 		float scale = PM_CmdScale(&pm->cmd) / pm->ps->speed * 320.0f;
@@ -13578,33 +13628,64 @@ void PmoveSingle (pmove_t *pmove) {
 			//Probably need to do something here to give it 2 stages.  1: Low velocity accel boost which fades away as you start getting fast.
 			if (pm->ps->velocity[2] > 0 && pm->ps->velocity[2] < 250) {
 				float hackscale = 250.0f / pm->ps->velocity[2];
-				float hackscale2 = (pm->ps->velocity[0]*pm->ps->velocity[0] + pm->ps->velocity[1]*pm->ps->velocity[1]) / (700 * 700);
-				
-				if (hackscale2 < 1)
-					hackscale2 = 1;
 
-				hackscale /= hackscale2;
-
-				if (hackscale > 1.25f)
-					hackscale = 1.25f;
+				if (hackscale > 1.4f)
+					hackscale = 1.4f;
 				else if (hackscale < 1)
 					hackscale = 1;
 
 				pm->ps->velocity[2] += 425.0f * pml.frametime * upScale * hackscale;//was 18 with no grav
-			}
-			else if (pm->ps->velocity[2] < 0) {
-				float hackscale = 1.25f;
-				float hackscale2 = (pm->ps->velocity[0] * pm->ps->velocity[0] + pm->ps->velocity[1] * pm->ps->velocity[1]) / (700 * 700);
+
+#if 0
+				float hackscale = 250.0f / pm->ps->velocity[2];
+				float hackscale2 = (pm->ps->velocity[0]*pm->ps->velocity[0] + pm->ps->velocity[1]*pm->ps->velocity[1]) / (700 * 700);
 
 				if (hackscale2 < 1)
 					hackscale2 = 1;
 
 				hackscale /= hackscale2;
 
-				if (hackscale < 1)
+				if (hackscale > 1.4f)
+					hackscale = 1.4f;
+				else if (hackscale < 1)
 					hackscale = 1;
 
 				pm->ps->velocity[2] += 425.0f * pml.frametime * upScale * hackscale;//was 18 with no grav
+#endif
+			}
+			else if (pm->ps->velocity[2] < 0) {
+				//This is fucked.  Start at 1.25 and get higher based on Z speed.  Don't take XY into account..?
+				float hackscale = pm->ps->velocity[2] / -600;
+
+
+				if (hackscale < 1.4f)
+					hackscale = 1.4f;
+
+				if (hackscale > 4.0f)
+					hackscale = 4.0f;
+
+				//Com_Printf("Hackscale z is %.2f\n", hackscale);
+
+				pm->ps->velocity[2] += 425.0f * pml.frametime * upScale * hackscale;//was 18 with no grav
+#if 0
+				{
+
+					float hackscale = 1.25f;
+					float hackscale2 = (pm->ps->velocity[0] * pm->ps->velocity[0] + pm->ps->velocity[1] * pm->ps->velocity[1]) / (700 * 700);
+
+					if (hackscale2 < 1)
+						hackscale2 = 1;
+
+					hackscale /= hackscale2;
+
+					if (hackscale < 1)
+						hackscale = 1;
+
+					//Com_Printf("Hackscale z is %.2f\n", hackscale);
+
+					pm->ps->velocity[2] += 425.0f * pml.frametime * upScale * hackscale;//was 18 with no grav
+				}
+#endif
 			}
 			else if (pm->ps->velocity[2] > 800) {
 				float hackscale = 800.0f / pm->ps->velocity[2];
@@ -13629,6 +13710,62 @@ void PmoveSingle (pmove_t *pmove) {
 			//vec3_t forward;
 			//AngleVectors(pm->ps->viewangles, forward, NULL, NULL);
 
+			if (1) { //new shit
+				//Principles
+				//More jet xy strength the slower you are going and also more if you are going opposite
+				//air control should not let you strafe to gain speed
+				//We don't even need scale here since there is no way to XY jet without up or downjet already
+				//Get our wishdir, normalized e.g. (0.5 0.5) for going 45 degrees xy
+				//No need for [2] on wishdir, exlude that before or after math?
+				vec3_t wishvel;
+				vec3_t currentVelNormal;
+				float dot;
+				float xy_hackscale;
+				float speed;
+
+				//How fast are we going in the direction that we are trying to Jet?
+				//This simple single digit # is what we scale our hackscale on.  Negative and we upscale bigly.  Positive and we upscale the lower it is.  Past 500 or so we don't upscale (?).
+
+				wishvel[0] = pml.forward[0] * pm->cmd.forwardmove + pml.right[0] * pm->cmd.rightmove;
+				wishvel[1] = pml.forward[1] * pm->cmd.forwardmove + pml.right[1] * pm->cmd.rightmove;
+				wishvel[2] = 0;
+				VectorNormalize(wishvel);
+
+				//Com_Printf("Wishvel is [%.2f %.2f]\n", wishvel[0], wishvel[1]);
+
+				VectorCopy(pm->ps->velocity, currentVelNormal);
+				//VectorNormalize(currentVelNormal);
+				dot = DotProduct(currentVelNormal, wishvel);
+
+				//Com_Printf("Dotted vel is %.2f\n", dot);
+
+				speed = VectorLength(currentVelNormal);
+
+				if (dot < 0) {
+					xy_hackscale = 4; //-dot ? but dot is not normalized
+				}
+				else {
+					xy_hackscale = 800 / speed;
+				}
+
+				if (xy_hackscale < 1.2)
+					xy_hackscale = 1.2;
+				else if (xy_hackscale > 4)
+					xy_hackscale = 4;
+
+				//Com_Printf("Hackscalexy is %.2f\n", xy_hackscale);
+
+				//Why does this behave so weird between 0-500 speed? so slow
+
+				VectorMA(pm->ps->velocity, xy_hackscale*pml.frametime*100, wishvel, pm->ps->velocity);
+
+
+				//Calculate our strength.  More strength based on dotproduct.
+				//And more strenght at lower speeds.
+				//First
+
+			}
+			else
 			{ //use the proper way for siege
 
 				vec3_t		wishVelocity;
@@ -13738,10 +13875,10 @@ void PmoveSingle (pmove_t *pmove) {
 		}
 		*/
 
-		//if (gDist2 < 16 && pm->cmd.upmove < 0) {//** changed this so jetpack shuts off on ground
+		if (gDist2 < 16 && pm->cmd.upmove < 0) {//** changed this so jetpack shuts off on ground
 			//Sad hack, this stops sliding on ground with downjet
-			//pm->ps->eFlags &= ~EF_JETPACK_ACTIVE;
-		//}
+			pm->ps->eFlags &= ~EF_JETPACK_ACTIVE;
+		}
 
 	}
 
@@ -14002,11 +14139,11 @@ void PmoveSingle (pmove_t *pmove) {
                         else
                             optimalDeltaAngle = -6;
                     else {
-                        float realAccel = 1.0f;
+                        float realAccel = pm_airaccelerate;
                         if (moveStyle == MV_SP)
-                            realAccel = 4.0f;
+                            realAccel = pm_sp_airaccelerate;
                         else if (moveStyle == MV_SLICK)
-                            realAccel = 30.0f;
+                            realAccel = pm_slick_accelerate;
                         //jetpack. 1.4f ?
                         optimalDeltaAngle = (acos((double)((pm->ps->basespeed - (realAccel * pm->ps->basespeed * pml.frametime)) / realCurrentSpeed)) * (180.0f / M_PI) - 45.0f);
                         if (optimalDeltaAngle < 0 || optimalDeltaAngle > 360)
@@ -14191,7 +14328,7 @@ void PmoveSingle (pmove_t *pmove) {
 	//Wallbug fix end
 
 	if (pm->ps->persistant[PERS_TEAM] == TEAM_SPECTATOR) {
-		trap->SnapVector( pm->ps->velocity ); 
+		trap->SnapVector( pm->ps->velocity );
 	}
 	else {
 		if ((pm->ps->stats[STAT_RACEMODE] && (pm->ps->stats[STAT_MOVEMENTSTYLE] != MV_OCPM)) || (!pm->ps->stats[STAT_RACEMODE] && (pm->pmove_float > 1))) {//japro fix racemode fps
@@ -14206,7 +14343,7 @@ void PmoveSingle (pmove_t *pmove) {
 	#endif
 		else if (!pm->pmove_float) {
 			/*
-			bgEntity_t *veh;	
+			bgEntity_t *veh;
 			veh = pm_entSelf;
 
 			if (veh->m_pVehicle && veh->m_pVehicle->m_pPilot && veh->m_pVehicle->m_pPilot->playerState && veh->m_pVehicle->m_pPilot->playerState->stats[STAT_RACEMODE]) {
@@ -14216,7 +14353,7 @@ void PmoveSingle (pmove_t *pmove) {
 			trap->SnapVector( pm->ps->velocity ); // snap velocity to integer coordinates to save network bandwidth
 		}
 	}
-	
+
  	if (pm->ps->pm_type == PM_JETPACK || gPMDoSlowFall || BG_IsNewJetpacking(pm->ps))
 	{
 		pm->ps->gravity = savedGravity;
@@ -14262,7 +14399,7 @@ qboolean BG_InRollFixed( playerState_t *ps, int anim )
 		}
 		break;
 	}
-	
+
 	return qfalse;
 }
 

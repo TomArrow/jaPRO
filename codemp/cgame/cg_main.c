@@ -866,6 +866,10 @@ static void CG_RegisterSounds( void ) {
 		cgs.media.privateChatSound = trap->S_RegisterSound( "sound/movers/switches/button_15.mp3" );
 
 	cgs.media.landSound = trap->S_RegisterSound( "sound/player/land1.wav");
+	cgs.media.landSoundSki = trap->S_RegisterSound( "sound/player/ski_soft.wav");
+	cgs.media.fragSound = trap->S_RegisterSound( "sound/frag/frag.wav");
+	cgs.media.fragSoundMidair = trap->S_RegisterSound( "sound/frag/middy.wav");
+
 	cgs.media.fallSound = trap->S_RegisterSound( "sound/player/fallsplat.wav");
 
 	cgs.media.crackleSound = trap->S_RegisterSound( "sound/effects/energy_crackle.wav" );
@@ -876,6 +880,8 @@ static void CG_RegisterSounds( void ) {
 	cgs.media.hitSound3			= trap->S_RegisterSound( "sound/effects/hitsound3.wav" );
 	cgs.media.hitSound4			= trap->S_RegisterSound( "sound/effects/hitsound4.wav" );
 	cgs.media.hitTeamSound		= trap->S_RegisterSound( "sound/effects/hitsoundteam.wav" );
+	cgs.media.tribesJetSound	= trap->S_RegisterSound( "sound/effects/thrust.wav" );
+	cgs.media.tribesFastSound	= trap->S_RegisterSound( "sound/ambience/prototype/windmix1" ); //find a better sound for this
 
 	cgs.media.gibSound			= trap->S_RegisterSound( "sound/player/gibsplt1.wav" );
 	cgs.media.gibBounce1Sound	= trap->S_RegisterSound( "sound/player/gibimp1.wav" );
@@ -1291,6 +1297,7 @@ static void CG_RegisterGraphics( void ) {
 	cgs.effects.mShipDestDestroyed = trap->FX_RegisterEffect("effects/ships/dest_destroyed.efx");
 	cgs.effects.mShipDestBurning = trap->FX_RegisterEffect("effects/ships/dest_burning.efx");
 	cgs.effects.mBobaJet = trap->FX_RegisterEffect("effects/boba/jet.efx");
+	cgs.effects.mTribesJet = trap->FX_RegisterEffect("effects/tribes/jet.efx");
 
 
 	cgs.effects.itemCone = trap->FX_RegisterEffect("mp/itemcone.efx");
@@ -1615,6 +1622,10 @@ Ghoul2 Insert End
 	cgs.media.raceShader			= trap->R_RegisterShader("gfx/effects/raceShader");//japro
 	cgs.media.duelShader			= trap->R_RegisterShader("gfx/effects/duelShader");//japro
 
+	//japro ctf hud
+	cgs.media.flagHomeShader			= trap->R_RegisterShader("hud/ctf/jpflaghome");//japro
+	cgs.media.flagTakenShader			= trap->R_RegisterShader("hud/ctf/jpflagtaken");//japro
+
 	//cosmetics
 	//hats
 	cgs.media.cosmetics.afro = trap->R_RegisterModel("models/cosmetics/hats/afro.md3");
@@ -1903,6 +1914,9 @@ CG_ConfigString
 =================
 */
 const char *CG_ConfigString( int index ) {
+	// FIXME: don't read configstrings before initialisation
+	// assert( cgs.gameState.dataCount != 0 );
+
 	if ( index < 0 || index >= MAX_CONFIGSTRINGS ) {
 		trap->Error( ERR_DROP, "CG_ConfigString: bad index: %i", index );
 	}
@@ -2991,7 +3005,8 @@ Ghoul2 Insert End
 	CG_InitDisplayContext();
 	cgDC.Assets.qhSmallFont  = trap->R_RegisterFont("ocr_a");
 	cgDC.Assets.qhMediumFont = trap->R_RegisterFont("ergoec");
-	cgDC.Assets.qhBigFont = cgDC.Assets.qhMediumFont;
+	cgDC.Assets.qhBigFont =  trap->R_RegisterFont("anewhope");
+	cgDC.Assets.qhSmall2Font = trap->R_RegisterFont("arialnb");
 
 	memset( &cgs, 0, sizeof( cgs ) );
 	memset( cg_weapons, 0, sizeof(cg_weapons) );
@@ -3118,9 +3133,12 @@ Ghoul2 Insert End
 	cg.renderingThirdPerson = cg_thirdPerson.integer;
 
 	cg.weaponSelect = WP_BRYAR_PISTOL;
+	CG_SetFireMode(cg.weaponSelect);
 
 	cgs.redflag = cgs.blueflag = -1; // For compatibily, default to unset for
 	cgs.flagStatus = -1;
+	cgs.redFlagCarrier = cgs.blueFlagCarrier = NULL;
+	cgs.redFlagTime = cgs.blueFlagTime = 0;
 	// old servers
 
 	// get the rendering configuration from the client system
@@ -3224,6 +3242,7 @@ Ghoul2 Insert End
 	CG_ParseEntitiesFromString();
 
 	BG_FixSaberMoveData();
+	BG_FixWeaponAttackAnim();
 }
 
 //makes sure returned string is in localized format
@@ -3459,6 +3478,68 @@ void CG_PrevInventory_f(void)
 	{
 		cg.itemSelect = bg_itemlist[cg.snap->ps.stats[STAT_HOLDABLE_ITEM]].giTag;
 		cg.invenSelectTime = cg.time;
+	}
+}
+
+//bad, bad disgusting hack to use the first item that is selectable
+void CG_InvUseAvailable(void)
+{
+	if (cg.predictedPlayerState.pm_type == PM_SPECTATOR)
+	{
+		return;
+	}
+
+	if (cg.snap->ps.pm_flags & PMF_FOLLOW)
+	{
+		return;
+	}
+
+	for (int i = 0; i < HI_NUM_HOLDABLE; i++) {
+		if (i != HI_JETPACK && (cg.snap->ps.stats[STAT_HOLDABLE_ITEMS] & (1 << i))) {
+			cg.itemSelect = i;
+			break;
+		}
+	}
+
+	if (cg.itemSelect > 0)
+	{
+		cg.snap->ps.stats[STAT_HOLDABLE_ITEM] = BG_GetItemIndexByTag(cg.itemSelect, IT_HOLDABLE);
+	}
+
+	switch(cg.itemSelect)
+	{
+		case HI_SEEKER:
+			trap->SendConsoleCommand("use_seeker\n");
+			break;
+		case HI_SHIELD:
+			trap->SendConsoleCommand("use_field\n");
+			break;
+		case HI_MEDPAC:
+			trap->SendConsoleCommand("use_bacta\n");
+			break;
+		case HI_MEDPAC_BIG:
+			trap->SendConsoleCommand("use_bactabig\n");
+			break;
+		case HI_BINOCULARS:
+			trap->SendConsoleCommand("use_electrobinoculars\n");
+			break;
+		case HI_SENTRY_GUN:
+			trap->SendConsoleCommand("use_sentry\n");
+			break;
+		case HI_HEALTHDISP:
+			trap->SendConsoleCommand("use_healthdisp\n");
+			break;
+		case HI_AMMODISP:
+			trap->SendConsoleCommand("use_ammodisp\n");
+			break;
+		case HI_EWEB:
+			trap->SendConsoleCommand("use_eweb\n");
+			break;
+		case HI_CLOAK:
+			trap->SendConsoleCommand("use_cloak\n");
+			break;
+		default:
+			break;
 	}
 }
 

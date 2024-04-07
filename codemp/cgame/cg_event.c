@@ -270,6 +270,23 @@ static void CG_Obituary( entityState_t *ent ) {
         if (attacker == cg.snap->ps.clientNum) {
             char s[MAX_STRING_CHARS] = {0};
 
+			//tayst
+			{
+				centity_t* deadGuy = &cg_entities[target];
+				if(cg_killSounds.integer) {
+					if (((cg_killSounds.integer > 1) && (deadGuy->currentState.groundEntityNum == ENTITYNUM_NONE)) &&
+						(mod == MOD_ROCKET || mod == MOD_CONC || mod == MOD_BOWCASTER || mod == MOD_REPEATER_ALT ||
+						 mod == MOD_SABER)) { //middy
+						//Com_Printf("Midair sound!\n");
+						trap->S_StartSound(NULL, cg.snap->ps.clientNum, CHAN_LOCAL_SOUND, cgs.media.fragSoundMidair);
+					} else {
+						//Com_Printf("Non Midair sound!\n");
+						trap->S_StartSound(NULL, cg.snap->ps.clientNum, CHAN_LOCAL_SOUND, cgs.media.fragSound);
+					}
+				}
+			}
+			//tayst
+
             if (cg_killMessage.integer != 2 && cgs.gametype < GT_TEAM && cgs.gametype != GT_DUEL &&
                 cgs.gametype != GT_POWERDUEL) {
                 if (cgs.gametype == GT_JEDIMASTER &&
@@ -615,6 +632,7 @@ static void CG_ItemPickup( int itemNum ) {
 					cg.weaponSelectTime = cg.time;
 				}
 				cg.weaponSelect = bg_itemlist[itemNum].giTag;
+				CG_SetFireMode(cg.weaponSelect);
 			}
 		}
 		else if ( cg_autoSwitch.integer == 2)
@@ -627,6 +645,7 @@ static void CG_ItemPickup( int itemNum ) {
 					cg.weaponSelectTime = cg.time;
 				}
 				cg.weaponSelect = bg_itemlist[itemNum].giTag;
+				CG_SetFireMode(cg.weaponSelect);
 			}
 		}
 		/*
@@ -640,6 +659,7 @@ static void CG_ItemPickup( int itemNum ) {
 					cg.weaponSelectTime = cg.time;
 				}
 				cg.weaponSelect = bg_itemlist[itemNum].giTag;
+				CG_SetFireMode(cg.weaponSelect);
 			}
 		}
 		*/
@@ -898,6 +918,17 @@ void CG_GetCTFMessageEvent(entityState_t *es)
 		return;
 	}
 
+	if (teamIndex == TEAM_RED) {
+		if (es->eventParm == CTFMESSAGE_PLAYER_GOT_FLAG) {
+			cgs.blueFlagCarrier = ci;
+		}
+	}
+	else { //if (teamIndex == TEAM_BLUE) {
+		if (es->eventParm == CTFMESSAGE_PLAYER_GOT_FLAG) {
+			cgs.redFlagCarrier = ci;
+		}
+	}
+
 	CG_PrintCTFMessage(ci, teamName, es->eventParm);
 }
 
@@ -906,6 +937,21 @@ qboolean BG_InKnockDownOnly( int anim );
 void DoFall(centity_t *cent, entityState_t *es, int clientNum)
 {
 	int delta = es->eventParm;
+
+	if ( clientNum == cg.predictedPlayerState.clientNum )
+	{
+		// smooth landing z changes
+		cg.landChange = -delta;
+		if (cg.landChange > 32)
+		{
+			cg.landChange = 32;
+		}
+		if (cg.landChange < -32)
+		{
+			cg.landChange = -32;
+		}
+		cg.landTime = cg.time;
+	}
 
 	if (cent->currentState.eFlags & EF_DEAD)
 	{ //corpses crack into the ground ^_^
@@ -942,6 +988,10 @@ void DoFall(centity_t *cent, entityState_t *es, int clientNum)
 		trap->S_StartSound( NULL, cent->currentState.number, CHAN_VOICE,
 			CG_CustomSound( cent->currentState.number, "*land1.wav" ) );
 		cent->pe.painTime = cg.time;	// don't play a pain sound right after this
+	}
+	else if (delta == 1 && cgs.jcinfo2 & JAPRO_CINFO2_WTTRIBES)
+	{
+		trap->S_StartSound(NULL, es->number, CHAN_AUTO, cgs.media.landSoundSki);
 	}
 	else
 	{
@@ -2782,7 +2832,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 			break; //FF or NF Duel, no weapons so ignore this..
 
 		if (cgs.serverMod == SVMOD_JAPRO && cg_simulatedHitscan.integer && (cgs.jcinfo & JAPRO_CINFO_UNLAGGEDHITSCAN)) {
-			if (!cg.predictedPlayerState.stats[STAT_RACEMODE] && cent->currentState.eventParm == cg.predictedPlayerState.clientNum && cg.predictedPlayerState.persistant[PERS_TEAM] != TEAM_SPECTATOR)
+			if ((!cg.predictedPlayerState.stats[STAT_RACEMODE] || cg.predictedPlayerState.stats[STAT_MOVEMENTSTYLE] == MV_COOP_JKA) && cent->currentState.eventParm == cg.predictedPlayerState.clientNum && cg.predictedPlayerState.persistant[PERS_TEAM] != TEAM_SPECTATOR)
 				break;
 		}
             vec3_t start, end;
@@ -2820,7 +2870,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 			break; //FF or NF Duel, no weapons so ignore this..
 
 		if (cgs.serverMod == SVMOD_JAPRO && cg_simulatedHitscan.integer && (cgs.jcinfo & JAPRO_CINFO_UNLAGGEDHITSCAN)) {
-			if (!cg.predictedPlayerState.stats[STAT_RACEMODE] && cent->currentState.eventParm == cg.predictedPlayerState.clientNum && cg.predictedPlayerState.persistant[PERS_TEAM] != TEAM_SPECTATOR)
+			if ((!cg.predictedPlayerState.stats[STAT_RACEMODE] || cg.predictedPlayerState.stats[STAT_MOVEMENTSTYLE] == MV_COOP_JKA) && cent->currentState.eventParm == cg.predictedPlayerState.clientNum && cg.predictedPlayerState.persistant[PERS_TEAM] != TEAM_SPECTATOR)
 				break;
 		}
             int altTime;
@@ -3852,7 +3902,6 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 	//
 	// powerup events
 	//
-#ifdef BASE_COMPAT
 	case EV_POWERUP_QUAD:
 		DEBUGNAME("EV_POWERUP_QUAD");
 		if ( es->number == cg.snap->ps.clientNum ) {
@@ -3869,7 +3918,6 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		}
 		//trap->S_StartSound (NULL, es->number, CHAN_ITEM, cgs.media.protectSound );
 		break;
-#endif // BASE_COMPAT
 
 	case EV_FORCE_DRAINED:
 		DEBUGNAME("EV_FORCE_DRAINED");

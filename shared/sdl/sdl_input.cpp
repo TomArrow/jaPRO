@@ -256,6 +256,23 @@ static void IN_TranslateNumpad( SDL_Keysym *keysym, fakeAscii_t *key )
 
 /*
 ===============
+IN_ModTogglesConsole
+===============
+*/
+static qboolean IN_ModTogglesConsole( int mod ) {
+	switch (cl_consoleShiftRequirement->integer) {
+	case 0:
+		return qtrue;
+	case 2:
+		return (qboolean)!!(mod & KMOD_SHIFT);
+	case 1:
+	default:
+		return (qboolean)((mod & KMOD_SHIFT) || (Key_GetCatcher() & KEYCATCH_CONSOLE));
+	}
+}
+
+/*
+===============
 IN_TranslateSDLToJKKey
 ===============
 */
@@ -379,11 +396,7 @@ static fakeAscii_t IN_TranslateSDLToJKKey( SDL_Keysym *keysym, qboolean down ) {
 	{
 		if ( keysym->scancode == SDL_SCANCODE_GRAVE )
 		{
-			SDL_Keycode translated = SDL_GetKeyFromScancode( SDL_SCANCODE_GRAVE );
-
-			if ( (translated != SDLK_CARET) || (translated == SDLK_CARET && (keysym->mod & KMOD_SHIFT)) )
-			{
-				// Console keys can't be bound or generate characters
+			if ( IN_ModTogglesConsole(keysym->mod) ) {
 				key = A_CONSOLE;
 			}
 		}
@@ -619,9 +632,6 @@ void IN_Init( void *windowData )
 	in_joystick = Cvar_Get( "in_joystick", "0", CVAR_ARCHIVE_ND|CVAR_LATCH );
 
 	// mouse variables
-#ifdef MACOS_X
-	in_mouse = Cvar_Set( "in_mouse", "2" ); //"Raw Input" does not work on mac
-#endif
 	in_mouse = Cvar_Get( "in_mouse", "1", CVAR_ARCHIVE );
 	in_nograb = Cvar_Get( "in_nograb", "0", CVAR_ARCHIVE_ND );
 	in_mouserepeat = Cvar_Get("in_mouserepeat", "0", CVAR_ARCHIVE);
@@ -866,7 +876,7 @@ static void IN_ProcessEvents( int eventTime )
 						uint32_t utf32 = ConvertUTF8ToUTF32( c, &c );
 						if( utf32 != 0 )
 						{
-							if( IN_IsConsoleKey( A_NULL, utf32 ) )
+							if( IN_IsConsoleKey( A_NULL, utf32 ) && !cl_consoleUseScanCode->integer )
 							{
 								Sys_QueEvent( eventTime, SE_KEY, A_CONSOLE, qtrue, 0, NULL );
 								Sys_QueEvent( eventTime, SE_KEY, A_CONSOLE, qfalse, 0, NULL );
@@ -939,7 +949,7 @@ static void IN_ProcessEvents( int eventTime )
 						con_alert = qfalse;
 #endif
 						if (snd_mute_losefocus->integer)
-							SNDDMA_Activate(qfalse);
+							S_Activate(qfalse);
 						break;
 					}
 
@@ -952,7 +962,7 @@ static void IN_ProcessEvents( int eventTime )
 							cls.afkTime = cls.realtime;
 						}
 						if (snd_mute_losefocus->integer)
-							SNDDMA_Activate(qtrue);
+							S_Activate(qtrue);
 						break;
 					}
 				}

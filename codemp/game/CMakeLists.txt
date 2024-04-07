@@ -153,7 +153,7 @@ set(MPGameCommonFiles
 	"${MPDir}/qcommon/disablewarnings.h"
 	"${MPDir}/qcommon/q_shared.h"
 	"${MPDir}/qcommon/tags.h"
-	
+
 	${SharedCommonFiles}
 	)
 source_group("common" FILES ${MPGameCommonFiles})
@@ -221,17 +221,17 @@ endif()
 if(MakeApplicationBundles AND BuildMPEngine)
 	install(TARGETS ${MPGame}
 		LIBRARY
-		DESTINATION "${JKAInstallDir}/${MPEngine}.app/Contents/MacOS/EternalJK"
+		DESTINATION "${JKAInstallDir}/${MPEngine}.app/Contents/MacOS/taystjk"
 		COMPONENT ${JKAMPCoreComponent})
 elseif(WIN32)
 	install(TARGETS ${MPGame}
 		RUNTIME
-		DESTINATION "${JKAInstallDir}/EternalJK"
+		DESTINATION "${JKAInstallDir}/taystjk"
 		COMPONENT ${JKAMPCoreComponent})
 else()
 	install(TARGETS ${MPGame}
 		LIBRARY
-		DESTINATION "${JKAInstallDir}/EternalJK"
+		DESTINATION "${JKAInstallDir}/taystjk"
 		COMPONENT ${JKAMPCoreComponent})
 endif()
 
@@ -249,4 +249,5 @@ if(MPGameLibraries)
 	if (GIT_FOUND)
 		add_dependencies(${MPGame} GET_GIT_TAG_AND_HASH)
 	endif()
+	add_dependencies(${MPGame} Assets)
 endif(MPGameLibraries)

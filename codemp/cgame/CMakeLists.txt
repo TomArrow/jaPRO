@@ -96,6 +96,7 @@ set(MPCGameCgameFiles
 	"${MPDir}/cgame/hud_obituary.c"
 	"${MPDir}/cgame/hud_shared.c"
 	"${MPDir}/cgame/hud_strafehelper.c"
+	"${MPDir}/cgame/hud_tribes.c"
 	"${MPDir}/cgame/animtable.h"
 	"${MPDir}/cgame/cg_local.h"
 	"${MPDir}/cgame/cg_public.h"
@@ -103,7 +104,8 @@ set(MPCGameCgameFiles
 	"${MPDir}/cgame/fx_local.h"
 	"${MPDir}/cgame/hud_local.h"
 	"${MPDir}/cgame/hud_strafehelper.h"
-	)
+	"${MPDir}/cgame/hud_tribes.h"
+)
 source_group("cgame" FILES ${MPCGameCgameFiles})
 set(MPCGameFiles ${MPCGameFiles} ${MPCGameCgameFiles})
 
@@ -159,17 +161,17 @@ endif()
 if(MakeApplicationBundles AND BuildMPEngine)
 	install(TARGETS ${MPCGame}
 		LIBRARY
-		DESTINATION "${JKAInstallDir}/${MPEngine}.app/Contents/MacOS/EternalJK"
+		DESTINATION "${JKAInstallDir}/${MPEngine}.app/Contents/MacOS/taystjk"
 		COMPONENT ${JKAMPCoreComponent})
 elseif(WIN32)
 	install(TARGETS ${MPCGame}
 		RUNTIME
-		DESTINATION "${JKAInstallDir}/EternalJK"
+		DESTINATION "${JKAInstallDir}/taystjk"
 		COMPONENT ${JKAMPCoreComponent})
 else()
 	install(TARGETS ${MPCGame}
 		LIBRARY
-		DESTINATION "${JKAInstallDir}/EternalJK"
+		DESTINATION "${JKAInstallDir}/taystjk"
 		COMPONENT ${JKAMPCoreComponent})
 endif()
 
@@ -188,4 +190,5 @@ if(MPCGameLibraries)
 	if (GIT_FOUND)
 		add_dependencies(${MPCGame} GET_GIT_TAG_AND_HASH)
 	endif()
+	add_dependencies(${MPCGame} Assets)
 endif(MPCGameLibraries)

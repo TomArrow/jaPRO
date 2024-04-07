@@ -283,6 +283,9 @@ XDOCS_CVAR_DEF("cg_drawVote", "Displays votecalls in the upper left",
 	SETTING("1", "Callvotes are shown")
 )
 
+XDOCS_CVAR_DEF("cl_jk2FX", "Displays jk2 style fx",""
+)
+
 //Strafehelper
 
 
@@ -363,6 +366,12 @@ XDOCS_CVAR_DEF("cg_hitSounds", "Play a sound when you hit someone",
 	SETTING("2", "Play the hit sound from Legions: Overdrive") NL
 	SETTING("3", "Play the hit sound from Warsow") NL
 	SETTING("4", "Play the hit sound from Tribes: Ascend")
+)
+
+XDOCS_CVAR_DEF("cg_killSounds", "Play a sound when you kill someone",
+	SETTING("0", "Don't play the kill sound (Base behavior)") NL
+	SETTING("1", "Play the kill sound" ) NL
+	SETTING("2", "Play the kill sound + midair kill sound" )
 )
 
 XDOCS_CVAR_DEF("cg_raceSounds", "Play sound when race is started",
@@ -495,15 +504,47 @@ XDOCS_CVAR_DEF("cg_killfeedAlignment", "Align the killfeed",
 
 XDOCS_CVAR_DEF("cg_killfeedX", "Offset the killfeed's horizontal position from its current position",""
 )
-
 XDOCS_CVAR_DEF("cg_killfeedY", "Offset the killfeed's vertical position from its current position",""
 )
-
 XDOCS_CVAR_DEF("cg_killfeedIconSize", "Resize the killfeed",""
 )
 XDOCS_CVAR_DEF("cg_killfeedTextSize", "Resize the killfeed",""
 )
 XDOCS_CVAR_DEF("cg_killfeedColors", "Color the killfeed icons",""
+)
+
+//SnapHUD
+XDOCS_CVAR_DEF("cg_snapHud", "Enable/Disable the snap HUD",""
+)
+XDOCS_CVAR_DEF("cg_snapHudRgba1", "Color for single key press",""
+)
+XDOCS_CVAR_DEF("cg_snapHudRgba2", "Color for two keys pressed",""
+)
+XDOCS_CVAR_DEF("cg_snapHudY", "Vertical position",""
+)
+XDOCS_CVAR_DEF("cg_snapHudHeight", "Vertical height ",""
+)
+XDOCS_CVAR_DEF("cg_snapHudAuto", "Automatically detect best settings",""
+)
+XDOCS_CVAR_DEF("cg_snapHudDef", "",""
+)
+XDOCS_CVAR_DEF("cg_snapHudSpeed", "Basespeed for calculations (Leave default for auto)",""
+)
+XDOCS_CVAR_DEF("cg_snapHudFps", "FPS for calculations (Leave default for auto)",""
+)
+
+//PitchHUD
+XDOCS_CVAR_DEF("cg_pitchHud", "Enable/Disable the pitch HUD",""
+)
+XDOCS_CVAR_DEF("cg_pitchHud", "Set the pitch angle at which the bar is in the middle of the screen",""
+)
+XDOCS_CVAR_DEF("cg_pitchHudThickness", "Thickness",""
+)
+XDOCS_CVAR_DEF("cg_pitchHudX", "Horizontal position",""
+)
+XDOCS_CVAR_DEF("cg_pitchHudWidth", "Horizontal width",""
+)
+XDOCS_CVAR_DEF("cg_pitchHudRgba", "Color of the pitch HUD",""
 )
 
 //Work from above this line

@@ -390,7 +390,10 @@ void Team_FragBonuses(gentity_t *targ, gentity_t *inflictor, gentity_t *attacker
 	// did the attacker frag the flag carrier?
 	if (targ->client->ps.powerups[enemy_flag_pw]) {
 		attacker->client->pers.teamState.lastfraggedcarrier = level.time;
-		AddScore(attacker, targ->r.currentOrigin, CTF_FRAG_CARRIER_BONUS);
+		if (g_fixCTFScores.integer)
+			AddScore(attacker, targ->r.currentOrigin, 4);
+		else
+			AddScore(attacker, targ->r.currentOrigin, CTF_FRAG_CARRIER_BONUS);
 		attacker->client->pers.teamState.fragcarrier++;
 		if (g_fixCTFScores.integer)
 			attacker->client->ps.persistant[PERS_DEFEND_COUNT]++;
@@ -413,7 +416,10 @@ void Team_FragBonuses(gentity_t *targ, gentity_t *inflictor, gentity_t *attacker
 		!attacker->client->ps.powerups[flag_pw]) {
 		// attacker is on the same team as the flag carrier and
 		// fragged a guy who hurt our flag carrier
-		AddScore(attacker, targ->r.currentOrigin, CTF_CARRIER_DANGER_PROTECT_BONUS);
+		if (g_fixCTFScores.integer)
+			AddScore(attacker, targ->r.currentOrigin, 1);
+		else
+			AddScore(attacker, targ->r.currentOrigin, CTF_CARRIER_DANGER_PROTECT_BONUS);
 
 		attacker->client->pers.teamState.carrierdefense++;
 		targ->client->pers.teamState.lasthurtcarrier = 0;
@@ -428,7 +434,10 @@ void Team_FragBonuses(gentity_t *targ, gentity_t *inflictor, gentity_t *attacker
 	if (targ->client->pers.teamState.lasthurtcarrier &&
 		level.time - targ->client->pers.teamState.lasthurtcarrier < CTF_CARRIER_DANGER_PROTECT_TIMEOUT) {
 		// attacker is on the same team as the skull carrier and
-		AddScore(attacker, targ->r.currentOrigin, CTF_CARRIER_DANGER_PROTECT_BONUS);
+		if (g_fixCTFScores.integer)
+			AddScore(attacker, targ->r.currentOrigin, 1);
+		else
+			AddScore(attacker, targ->r.currentOrigin, CTF_CARRIER_DANGER_PROTECT_BONUS);
 
 		attacker->client->pers.teamState.carrierdefense++;
 		targ->client->pers.teamState.lasthurtcarrier = 0;
@@ -484,7 +493,10 @@ void Team_FragBonuses(gentity_t *targ, gentity_t *inflictor, gentity_t *attacker
 		attacker->client->sess.sessionTeam != targ->client->sess.sessionTeam) {
 
 		// we defended the base flag
-		AddScore(attacker, targ->r.currentOrigin, CTF_FLAG_DEFENSE_BONUS);
+		if (g_fixCTFScores.integer)
+			AddScore(attacker, targ->r.currentOrigin, 1);
+		else
+			AddScore(attacker, targ->r.currentOrigin, CTF_FLAG_DEFENSE_BONUS);
 		attacker->client->pers.teamState.basedefense++;
 
 		attacker->client->ps.persistant[PERS_DEFEND_COUNT]++;
@@ -502,7 +514,10 @@ void Team_FragBonuses(gentity_t *targ, gentity_t *inflictor, gentity_t *attacker
 			( VectorLength(v2) < CTF_ATTACKER_PROTECT_RADIUS &&
 				trap->InPVS(carrier->r.currentOrigin, attacker->r.currentOrigin ) ) ) &&
 			attacker->client->sess.sessionTeam != targ->client->sess.sessionTeam) {
-			AddScore(attacker, targ->r.currentOrigin, CTF_CARRIER_PROTECT_BONUS);
+			if (g_fixCTFScores.integer)
+				AddScore(attacker, targ->r.currentOrigin, 1);
+			else
+				AddScore(attacker, targ->r.currentOrigin, CTF_CARRIER_PROTECT_BONUS);
 			attacker->client->pers.teamState.carrierdefense++;
 
 			attacker->client->ps.persistant[PERS_DEFEND_COUNT]++;
@@ -732,6 +747,7 @@ void G_AddSimpleStat(char *username, int type);
 int Team_TouchOneFlagBase (gentity_t *ent, gentity_t *other, int team) {
 	// the flag is at home base.  if the player has the enemy
 	// flag, he's just won!
+	int points = CTF_CAPTURE_BONUS;
 
 
 	//We need to respawn the flag that we have on our back to midfield
@@ -759,9 +775,9 @@ int Team_TouchOneFlagBase (gentity_t *ent, gentity_t *other, int team) {
 
 	// other gets another 10 frag bonus
 	if (g_fixCTFScores.integer)
-		AddScore(other, ent->r.currentOrigin, 60);
-	else
-		AddScore(other, ent->r.currentOrigin, CTF_CAPTURE_BONUS);
+		points = 15;
+
+	AddScore(other, ent->r.currentOrigin, points);
 
 	if (cl->pers.stats.startTimeFlag) {//JAPRO SHITTY FLAG TIMER
 		const float time = (level.time - cl->pers.stats.startTimeFlag) / 1000.0f;
@@ -772,14 +788,17 @@ int Team_TouchOneFlagBase (gentity_t *ent, gentity_t *other, int team) {
 		else
 			average = cl->pers.stats.topSpeedFlag;
 
-		trap->SendServerCommand(-1, va("print \"%s^5 has captured the %s^5 flag in ^3%.2f^5 seconds with max of ^3%i^5 ups and average ^3%i^5 ups\n\"", cl->pers.netname, team == 2 ? "^1red" : "^4blue", time, (int)floorf(cl->pers.stats.topSpeedFlag + 0.5f), average));
+		trap->SendServerCommand(-1, va("print \"%s^5 has captured the %s^5 flag in ^3%.2f^5 seconds with max of ^3%i^5 ups and average ^3%i^5 ups (^3%i^5)\n\"", cl->pers.netname, team == 2 ? "^1red" : "^4blue", time, (int)floorf(cl->pers.stats.topSpeedFlag + 0.5f), average, points));
 		cl->pers.stats.startTimeFlag = 0;
 		cl->pers.stats.topSpeedFlag = 0;
 		cl->pers.stats.displacementFlag = 0;
 		cl->pers.stats.displacementFlagSamples = 0;
 	}
+	else if (g_fixCTFScores.integer) {
+		trap->SendServerCommand(-1, va("print \"%s^5 has captured the %s^5 flag (+^315^5)\n\"", cl->pers.netname, team == 2 ? "^1red" : "^4blue"));
+	}
 	else
-	PrintCTFMessage(other->s.number, team, CTFMESSAGE_PLAYER_CAPTURED_FLAG);
+		PrintCTFMessage(other->s.number, team, CTFMESSAGE_PLAYER_CAPTURED_FLAG);
 
 	#if _DEBUGCTFCRASH
 	G_SecurityLogPrintf("Team_TouchOurFlag function reached point z, Enemy Flag is %i\n", enemy_flag);
@@ -833,10 +852,51 @@ int Team_TouchOurFlag( gentity_t *ent, gentity_t *other, int team ) {
 		// hey, its not home.  return it by teleporting it back
 		//PrintMsg( NULL, "%s" S_COLOR_WHITE " returned the %s flag!\n",
 		//	cl->pers.netname, TeamName(team));
-		PrintCTFMessage(other->s.number, team, CTFMESSAGE_PLAYER_RETURNED_FLAG);
+		if (other->client && g_fixCTFScores.integer) {
+			float enemyDist, myDist, percent;
+			int points;
+			gentity_t *flag = NULL;
+			char		*enemyflag, *myflag;
+			if (team == TEAM_RED) {
+				enemyflag = "team_CTF_blueflag";
+				myflag = "team_CTF_redflag";
 
+			}
+			else if (team == TEAM_BLUE) {
+				enemyflag = "team_CTF_redflag";
+				myflag = "team_CTF_blueflag";
+			}
+			while ((flag = G_Find(flag, FOFS(classname), enemyflag)) != NULL) {
+				if (flag->s.origin[0] || flag->s.origin[1] || flag->s.origin[2]) { //How better to tell if this flag is at home?
+					enemyDist = Distance(flag->s.origin, ent->s.pos.trBase);
+				}
+				//Com_Printf("Found flag %s %.2f %.2f\n", classname, flag->s.origin[0], flag->s.origin[1]);
+			}
+			while ((flag = G_Find(flag, FOFS(classname), myflag)) != NULL) {
+				if (flag->s.origin[0] || flag->s.origin[1] || flag->s.origin[2]) { //How better to tell if this flag is at home?
+					myDist = Distance(flag->s.origin, ent->s.pos.trBase);
+				}
+				//Com_Printf("Found flag %s %.2f %.2f\n", classname, flag->s.origin[0], flag->s.origin[1]);
+			}
+			//Com_Printf("Touching enemy flag, it was %.0f away from our flag base.\n", points);
+			//Com_Printf("Enemy dist %.2f, My dist %.2f\n", enemyDist, myDist);
 
-		AddScore(other, ent->r.currentOrigin, CTF_RECOVERY_BONUS);
+			percent = (enemyDist + myDist) ? (myDist / ((enemyDist + myDist)) * 100) : 1;
+			if (percent < 10) {
+				trap->SendServerCommand(-1, va("print \"%s^5 has returned the %s^5 flag ^3<10^5 percent of the way to enemy base (+^30^5)\n\"", cl->pers.netname, team == 1 ? "^1red" : "^4blue"));
+			}
+			else {
+				points = (int)((CTF_RECOVERY_BONUS * percent*0.01f)+0.5f);
+				trap->SendServerCommand(-1, va("print \"%s^5 has returned the %s^5 flag ^3%.0f^5 percent of the way to enemy base (+^3%i^5)\n\"", cl->pers.netname, team == 1 ? "^1red" : "^4blue", percent, points));
+			}
+
+			AddScore(other, ent->r.currentOrigin, CTF_RECOVERY_BONUS);
+		}
+		else {
+			PrintCTFMessage(other->s.number, team, CTFMESSAGE_PLAYER_RETURNED_FLAG);
+			AddScore(other, ent->r.currentOrigin, CTF_RECOVERY_BONUS);
+		}
+
 		other->client->pers.teamState.flagrecovery++;
 		if (other->client->pers.userName[0])
 			G_AddSimpleStat(other->client->pers.userName, 5);
@@ -938,7 +998,7 @@ int Team_TouchOurFlag( gentity_t *ent, gentity_t *other, int team ) {
 
 	// other gets another 10 frag bonus
 	if (g_fixCTFScores.integer)
-		AddScore(other, ent->r.currentOrigin, 60);
+		AddScore(other, ent->r.currentOrigin, 15);
 	else
 		AddScore(other, ent->r.currentOrigin, CTF_CAPTURE_BONUS);
 
@@ -951,14 +1011,17 @@ int Team_TouchOurFlag( gentity_t *ent, gentity_t *other, int team ) {
 		else
 			average = cl->pers.stats.topSpeedFlag;
 
-		trap->SendServerCommand( -1, va("print \"%s^5 has captured the %s^5 flag in ^3%.2f^5 seconds with max of ^3%i^5 ups and average ^3%i^5 ups\n\"", cl->pers.netname, team == 2 ? "^1red" : "^4blue", time, (int)floorf(cl->pers.stats.topSpeedFlag + 0.5f), average));
+		trap->SendServerCommand( -1, va("print \"%s^5 has captured the %s^5 flag in ^3%.2f^5 seconds with max of ^3%i^5 ups and average ^3%i^5 ups (+^3%i^5)\n\"", cl->pers.netname, team == 2 ? "^1red" : "^4blue", time, (int)floorf(cl->pers.stats.topSpeedFlag + 0.5f), average, g_fixCTFScores.integer ? 15 : CTF_CAPTURE_BONUS));
 		cl->pers.stats.startTimeFlag = 0;
 		cl->pers.stats.topSpeedFlag = 0;
 		cl->pers.stats.displacementFlag = 0;
 		cl->pers.stats.displacementFlagSamples = 0;
 	}
+	else if (g_fixCTFScores.integer) {
+		trap->SendServerCommand(-1, va("print \"%s^5 has captured the %s^5 flag (+^315^5)\n\"", cl->pers.netname, team == 2 ? "^1red" : "^4blue"));
+	}
 	else
-		PrintCTFMessage(other->s.number, team, CTFMESSAGE_PLAYER_CAPTURED_FLAG); 
+		PrintCTFMessage(other->s.number, team, CTFMESSAGE_PLAYER_CAPTURED_FLAG);  //How show score for capping midfielded flag?
 
 #if _DEBUGCTFCRASH
 	G_SecurityLogPrintf("Team_TouchOurFlag function reached point d, Enemy Flag is %i\n", enemy_flag);
@@ -982,7 +1045,10 @@ int Team_TouchOurFlag( gentity_t *ent, gentity_t *other, int team ) {
 			// award extra points for capture assists
 			if (player->client->pers.teamState.lastreturnedflag +
 				CTF_RETURN_FLAG_ASSIST_TIMEOUT > level.time) {
-				AddScore (player, ent->r.currentOrigin, CTF_RETURN_FLAG_ASSIST_BONUS);
+				if (g_fixCTFScores.integer)
+					AddScore(player, ent->r.currentOrigin, 3);
+				else
+					AddScore (player, ent->r.currentOrigin, CTF_RETURN_FLAG_ASSIST_BONUS);
 				other->client->pers.teamState.assists++;
 
 				player->client->ps.persistant[PERS_ASSIST_COUNT]++;
@@ -991,7 +1057,10 @@ int Team_TouchOurFlag( gentity_t *ent, gentity_t *other, int team ) {
 			}
 			if (player->client->pers.teamState.lastfraggedcarrier +
 				CTF_FRAG_CARRIER_ASSIST_TIMEOUT > level.time) {
-				AddScore(player, ent->r.currentOrigin, CTF_FRAG_CARRIER_ASSIST_BONUS);
+				if (g_fixCTFScores.integer)
+					AddScore(player, ent->r.currentOrigin, 3);
+				else
+					AddScore(player, ent->r.currentOrigin, CTF_FRAG_CARRIER_ASSIST_BONUS);
 				other->client->pers.teamState.assists++;
 				player->client->ps.persistant[PERS_ASSIST_COUNT]++;
 				player->client->rewardTime = level.time + REWARD_SPRITE_TIME;
@@ -1021,6 +1090,7 @@ int Team_TouchEnemyFlag( gentity_t *ent, gentity_t *other, int team ) {
 	int			touch[MAX_GENTITIES];
 	gentity_t*	enemy;
 	float		enemyDist, dist;
+	int points = 0;
 
 #if _DEBUGCTFCRASH
 	G_SecurityLogPrintf("Team_TouchEnemyFlag called \n");
@@ -1085,7 +1155,41 @@ int Team_TouchEnemyFlag( gentity_t *ent, gentity_t *other, int team ) {
 		}
 	}
 	else {
-		PrintCTFMessage(other->s.number, team, CTFMESSAGE_PLAYER_GOT_FLAG);
+		if (g_fixCTFScores.integer) {
+			float speed = VectorLength(other->client->ps.velocity);
+			int points = 0;
+			if (speed > 1000)
+				points = 1;
+			if (speed > 2000)
+				points = 2;
+
+			if (team == TEAM_RED) {
+				if (teamgame.blueStatus == FLAG_ATBASE && teamgame.redStatus == FLAG_ATBASE)
+					trap->SendServerCommand(-1, va("print \"%s ^5grabbed the ^1red^5 flag at ^3%.0f^5 ups (+^3%i^5)\n\"", other->client->pers.netname, speed, points));
+				else if (teamgame.blueStatus != FLAG_ATBASE) {
+					points += 1;
+					trap->SendServerCommand(-1, va("print \"%s ^5e-grabbed the ^1red^5 flag at ^3%.0f^5 ups (+^3%i^5)\n\"", other->client->pers.netname, speed, points));
+				}
+				else
+					trap->SendServerCommand(-1, va("print \"%s ^5grabbed the ^1red^5 flag\n\"", other->client->pers.netname));
+			}
+			else if (team == TEAM_BLUE) {
+				if (teamgame.redStatus == FLAG_ATBASE && teamgame.blueStatus == FLAG_ATBASE)
+					trap->SendServerCommand(-1, va("print \"%s ^5grabbed the ^4blue^5 flag at ^3%.0f^5 ups (+^3%i^5)\n\"", other->client->pers.netname, speed, points));
+				else if (teamgame.redStatus != FLAG_ATBASE) {
+					points += 1;
+					trap->SendServerCommand(-1, va("print \"%s ^5e-grabbed the ^4blue^5 flag at ^3%.0f^5 ups (+^3%i^5)\n\"", other->client->pers.netname, speed, points));
+				}
+				else
+					trap->SendServerCommand(-1, va("print \"%s ^5grabbed the ^4blue^5 flag\n\"", other->client->pers.netname));
+			}
+			else {
+				PrintCTFMessage(other->s.number, team, CTFMESSAGE_PLAYER_GOT_FLAG);
+			}
+		}
+		else {
+			PrintCTFMessage(other->s.number, team, CTFMESSAGE_PLAYER_GOT_FLAG);
+		}
 	}
 	if (team == TEAM_RED)
 		cl->ps.powerups[PW_REDFLAG] = INT_MAX; // flags never expire
@@ -1109,14 +1213,16 @@ int Team_TouchEnemyFlag( gentity_t *ent, gentity_t *other, int team ) {
 		cl->pers.stats.startTimeFlag = 0;
 
 	if (g_fixCTFScores.integer) {
-		if ((team == TEAM_RED && teamgame.redStatus == FLAG_ATBASE && teamgame.blueStatus != FLAG_ATBASE) || 
-			(team == TEAM_BLUE && teamgame.blueStatus == FLAG_ATBASE && teamgame.redStatus != FLAG_ATBASE)) { //Flag was "egrabbed".
-			AddScore(other, ent->r.currentOrigin, 5);
+		if (points) {
+			AddScore(other, ent->r.currentOrigin, points);
 		}
 	}
 	else if (!g_allowFlagThrow.integer && (g_neutralFlag.integer != 2)) {
 		AddScore(other, ent->r.currentOrigin, CTF_FLAG_BONUS);
 	}
+
+	// Increase the team's score
+	//AddTeamScore(ent->s.pos.trBase, other->client->sess.sessionTeam, 1, qtrue); //wtf why?
 
 	Team_SetFlagStatus( team, FLAG_TAKEN );
 
@@ -1351,8 +1457,9 @@ SelectCTFSpawnPoint
 
 ============
 */
-gentity_t *SelectCTFSpawnPoint ( team_t team, int teamstate, vec3_t origin, vec3_t angles, qboolean isbot ) {
+gentity_t *SelectCTFSpawnPoint ( team_t team, int teamstate, vec3_t origin, vec3_t angles, qboolean isbot, gclient_t *client) {
 	gentity_t	*spot;
+	qboolean caprouteOverride = qfalse;
 
 	spot = SelectRandomTeamSpawnPoint ( teamstate, team, -1 );
 
@@ -1360,9 +1467,52 @@ gentity_t *SelectCTFSpawnPoint ( team_t team, int teamstate, vec3_t origin, vec3
 		return SelectSpawnPoint( vec3_origin, origin, angles, team, isbot );
 	}
 
-	VectorCopy (spot->s.origin, origin);
-	origin[2] += 9;
-	VectorCopy (spot->s.angles, angles);
+	if (isbot && g_tribesMode.integer) { //Need to do a better check for if we want to make them a capper bot, pass in isCapperBot?  client model? netname?
+		const int MAX_ROUTES_PER_TEAM = 6;
+		int i;
+		if (team == TEAM_RED) {
+			int numRedRoutes = 0;
+			for (i = 0; i < MAX_ROUTES_PER_TEAM; i++) {
+				if (redRouteList[i].length > 0)
+					numRedRoutes++;
+				else break;
+			}
+			if (numRedRoutes) {
+				int randomPick = Q_irand(1, numRedRoutes);//to array #
+				origin[0] = (int)(redRouteList[randomPick-1].pos[0][0]);
+				origin[1] = (int)(redRouteList[randomPick-1].pos[0][1]);
+				origin[2] = (int)(redRouteList[randomPick-1].pos[0][2]);
+				caprouteOverride = qtrue;
+				if (client)
+					client->pers.activeCapRoute = randomPick;
+			}
+
+
+		}
+		else if (team == TEAM_BLUE) {
+			int numBlueRoutes = 0;
+			for (i = 0; i < MAX_ROUTES_PER_TEAM; i++) {
+				if (blueRouteList[i].length > 0)
+					numBlueRoutes++;
+				else break;
+			}
+			if (numBlueRoutes) {
+				int randomPick = Q_irand(1, numBlueRoutes);//to array #
+				origin[0] = (int)(blueRouteList[randomPick-1].pos[0][0]);
+				origin[1] = (int)(blueRouteList[randomPick-1].pos[0][1]);
+				origin[2] = (int)(blueRouteList[randomPick-1].pos[0][2]);
+				caprouteOverride = qtrue;
+				if (client)
+					client->pers.activeCapRoute = randomPick;
+			}
+		}
+	}
+	
+	if (!caprouteOverride) {
+		VectorCopy(spot->s.origin, origin);
+		origin[2] += 9;
+		VectorCopy(spot->s.angles, angles);
+	}
 
 	return spot;
 }

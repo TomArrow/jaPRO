@@ -1257,7 +1257,7 @@ qboolean ValidRaceSettings(int restrictions, gentity_t *player)
 
 	style = player->client->sess.movementStyle;
 
-	if (style == MV_OCPM || style == MV_SURF)
+	if (style == MV_OCPM)
 		return qfalse;//temp
 
 	if (player->client->sess.accountFlags & JAPRO_ACCOUNTFLAG_NORACE)
@@ -1630,10 +1630,10 @@ void TimerStart(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO 
 
 }
 
-void PrintRaceTime(char *username, char *playername, char *message, char *style, int topspeed, int average, char *timeStr, int clientNum, int season_newRank, qboolean spb, int global_newRank, qboolean loggedin, qboolean valid, int season_oldRank, int global_oldRank, float addedScore, int awesomenoise);
+void PrintRaceTime(char *username, char *playername, char *message, char *style, int topspeed, int average, char *timeStr, int clientNum, int season_newRank, qboolean spb, int global_newRank, qboolean loggedin, qboolean valid, int season_oldRank, int global_oldRank, float addedScore, int awesomenoise, int worldrecordnoise);
 void IntegerToRaceName(int style, char *styleString, size_t styleStringSize);
 void TimeToString(int duration_ms, char *timeStr, size_t strSize);
-void G_AddRaceTime(char *account, char *courseName, int duration_ms, int style, int topspeed, int average, int clientNum, int awesomenoise); //should this be extern?
+void G_AddRaceTime(char *account, char *courseName, int duration_ms, int style, int topspeed, int average, int clientNum, int awesomenoise, int worldrecordnoise); //should this be extern?
 void TimerStop(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO Timers
 	if (!player->client)
 		return;
@@ -1674,7 +1674,7 @@ void TimerStop(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO T
 
 		//Com_Printf("Flag: %i, Objective %i, player objectives %i\n", restrictions, trigger->objective, player->client->pers.stats.checkpoints);
 		//If player has MORe checkpoints than the end trigger requires, that also fails.  Fix this?
-		if (trigger->spawnflags & (1 << 7) && (trigger->objective & player->client->pers.stats.checkpoints) != trigger->objective) {//spawnflags 128 is required checkpoints.  
+		if (trigger->spawnflags & (1 << 7) && (trigger->objective & player->client->pers.stats.checkpoints) != trigger->objective) {//spawnflags 128 is required checkpoints.
 			if (time > 2000 && (player->client->lastKickTime < level.time)) {//sad hack to avoid spamming people who just start run(trigger on opposite side of start)
 				trap->SendServerCommand(player - g_entities, "cp \"^3Warning: you are missing some required checkpoints!\n\n\n\n\n\n\n\n\n\n\""); //Print the checkpoint(s) its missing?
 				player->client->lastKickTime = level.time + 1000;
@@ -1767,13 +1767,13 @@ void TimerStop(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO T
 		Q_StripColor(playerName);
 
 		if (!valid) {
-			PrintRaceTime(NULL, playerName, trigger->message, styleStr, (int)(player->client->pers.stats.topSpeed + 0.5f), average, timeStr, player->client->ps.clientNum, qfalse, qfalse, qfalse, qfalse, qfalse, 0, 0, 0, 0);
+			PrintRaceTime(NULL, playerName, trigger->message, styleStr, (int)(player->client->pers.stats.topSpeed + 0.5f), average, timeStr, player->client->ps.clientNum, qfalse, qfalse, qfalse, qfalse, qfalse, 0, 0, 0, 0, 0);
 			//How do we tell if we are the 2nd one..unless end timer does not reset for duelers
 			//
 			if (coopFinished) {
 				Q_strncpyz(playerName, duelAgainst->client->pers.netname, sizeof(playerName));
 				Q_StripColor(playerName);
-				PrintRaceTime(NULL, playerName, trigger->message, styleStr, 0, 0, timeStr, duelAgainst->client->ps.clientNum, qfalse, qfalse, qfalse, qfalse, qfalse, 0, 0, 0, 0);
+				PrintRaceTime(NULL, playerName, trigger->message, styleStr, 0, 0, timeStr, duelAgainst->client->ps.clientNum, qfalse, qfalse, qfalse, qfalse, qfalse, 0, 0, 0, 0, 0);
 			}
 		}
 		else {
@@ -1784,17 +1784,17 @@ void TimerStop(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO T
 			if (p)
 				*p = 0;
 			if (player->client->pers.userName[0] && (!coopFinished || (coopFinished && duelAgainst->client->pers.userName[0]))) { //omg
-				G_AddRaceTime(player->client->pers.userName, trigger->message, (int)(time * 1000), player->client->ps.stats[STAT_MOVEMENTSTYLE], (int)(player->client->pers.stats.topSpeed + 0.5f), average, player->client->ps.clientNum, trigger->awesomenoise_index);
+				G_AddRaceTime(player->client->pers.userName, trigger->message, (int)(time * 1000), player->client->ps.stats[STAT_MOVEMENTSTYLE], (int)(player->client->pers.stats.topSpeed + 0.5f), average, player->client->ps.clientNum, trigger->awesomenoise_index, trigger->worldrecordnoise_index);
 				if (coopFinished) {
-					G_AddRaceTime(duelAgainst->client->pers.userName, trigger->message, (int)(time * 1000), duelAgainst->client->ps.stats[STAT_MOVEMENTSTYLE], 0, 0, duelAgainst->client->ps.clientNum, trigger->awesomenoise_index);
+					G_AddRaceTime(duelAgainst->client->pers.userName, trigger->message, (int)(time * 1000), duelAgainst->client->ps.stats[STAT_MOVEMENTSTYLE], 0, 0, duelAgainst->client->ps.clientNum, trigger->awesomenoise_index, trigger->worldrecordnoise_index);
 				}
 			}
 			else {
-				PrintRaceTime(NULL, playerName, trigger->message, styleStr, (int)(player->client->pers.stats.topSpeed + 0.5f), average, timeStr, player->client->ps.clientNum, qfalse, qfalse, qfalse, qfalse, qtrue, 0, 0, 0, 0);
+				PrintRaceTime(NULL, playerName, trigger->message, styleStr, (int)(player->client->pers.stats.topSpeed + 0.5f), average, timeStr, player->client->ps.clientNum, qfalse, qfalse, qfalse, qfalse, qtrue, 0, 0, 0, 0, 0);
 				if (coopFinished) {
 					Q_strncpyz(playerName, duelAgainst->client->pers.netname, sizeof(playerName));
 					Q_StripColor(playerName);
-					PrintRaceTime(NULL, playerName, trigger->message, styleStr, 0, 0, timeStr, duelAgainst->client->ps.clientNum, qfalse, qfalse, qfalse, qfalse, qtrue, 0, 0, 0, 0);
+					PrintRaceTime(NULL, playerName, trigger->message, styleStr, 0, 0, timeStr, duelAgainst->client->ps.clientNum, qfalse, qfalse, qfalse, qfalse, qtrue, 0, 0, 0, 0, 0);
 				}
 			}
 		}
@@ -2086,6 +2086,18 @@ void Use_target_restrict_off( gentity_t *trigger, gentity_t *other, gentity_t *p
 	}
 }
 
+void FreePersonalSpeaker(gentity_t *speaker) {
+	gentity_t *player = NULL;
+
+	player = &g_entities[speaker->r.singleClient];
+
+	if (player && player->speakerEntity)
+		player->speakerEntity = 0;
+
+	G_FreeEntity(speaker);
+}
+
+qboolean NPC_UpdateAngles(qboolean doPitch, qboolean doYaw);
 void NewPush(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO Timers
 	float scale;
 
@@ -2103,9 +2115,9 @@ void NewPush(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO Tim
 			return;
 	}
 
-	if (trigger->genericValue1 && (trigger->genericValue1 & (1 << player->client->sess.movementStyle))) {
+	if (trigger->genericValue1 && !(trigger->genericValue1 & (1 << player->client->sess.movementStyle))) {
+		return;
 	}
-	else return;
 
 	if (player->client->sess.raceMode) {
 		if (trigger->spawnflags & 32 && player->client->ps.groundEntityNum == ENTITYNUM_NONE) { //Spawnflags 4 deadstops them if they are traveling in this direction... sad hack to let people retroactively fix maps without barriers
@@ -2149,13 +2161,202 @@ void NewPush(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO Tim
 		}
 	}
 
+	if (trigger->spawnflags & 512) {
+			gentity_t	*hit = NULL;
+			gentity_t *speaker = NULL;
+			float dist1 = 99999, tempdist, ang1 = -1, ang2 = -1, dist2 = 99999;
+			vec3_t pos1, pos2;
+			int sequence = 0;
+
+			while ((hit = G_Find(hit, FOFS(targetname), trigger->target)) != NULL) {
+				if (hit != trigger) {
+					tempdist = Distance(player->client->ps.origin, hit->s.origin); //Todo, see if we can distancesquared instead, but then the perc will be wrong later
+					if (tempdist < dist1) {
+						ang1 = hit->s.angles[1];
+						dist1 = tempdist;
+						sequence = hit->count;
+						VectorCopy(hit->s.origin, pos1);
+					}
+					/*
+					else if (tempdist < dist2) {
+						ang2 = hit->s.angles[1];
+						dist2 = tempdist;
+						VectorCopy(hit->s.origin, pos2);
+					}
+					*/
+				}
+			}
+
+			if (1) {
+				if (player->s.number < MAX_CLIENTS) {
+					if (!player->speakerEntity) {
+						speaker = G_Spawn(qfalse); //Ok... dont keep spawning them every frame. Spawn one if needed and then a use field on the client to keep track of their 'speaker' and move it around with the? Deleting after 30s to get re-spawned if needed.
+						player->speakerEntity = speaker->s.number;
+						trap->LinkEntity((sharedEntity_t *)speaker);
+						//Com_Printf("Creating speaker\n");
+					}
+					else {
+						speaker = &g_entities[player->speakerEntity];
+						//Com_Printf("Using existing speaker\n");
+						//trap->LinkEntity((sharedEntity_t *)speaker);
+					}
+				}
+				if (1) {
+
+					/*if (pm->waterlevel) {//we are in the water, make the speaker on us i guess..otherwise there are some transition issues when right next to the points.  FIXME?
+						VectorCopy(player->client->ps.origin, speaker->s.origin);
+					}
+					else*/ {
+
+						vec3_t prevLoc;
+						vec3_t nextLoc;
+						float ang2tempa, ang2tempb, tempdist2a, tempdist2b;
+						float updateDistance;
+
+						//Com_Printf("Searching for spot adjacent to %i", sequence);
+						while ((hit = G_Find(hit, FOFS(targetname), trigger->target)) != NULL) {
+							if (hit->count == sequence - 1) {
+								//Com_Printf("Found prev\n");
+								VectorCopy(hit->s.origin, prevLoc);
+								ang2tempa = hit->s.angles[1];
+							}
+							else if (hit->count == sequence + 1) {
+								//Com_Printf("Found next\n");
+								VectorCopy(hit->s.origin, nextLoc);
+								ang2tempb = hit->s.angles[1];
+							}
+						}
+
+						tempdist2a = Distance(prevLoc, player->client->ps.origin);
+						tempdist2b = Distance(prevLoc, player->client->ps.origin);
+						if (tempdist2a < tempdist) { //check dist to us? or the other one?
+							//N+1 is closer than n-1, use it
+							VectorCopy(nextLoc, pos2);
+							ang2 = ang2tempa;
+							dist2 = tempdist2a;
+						}
+						else {
+							VectorCopy(prevLoc, pos2);
+							ang2 = ang2tempb;
+							dist2 = tempdist2b;
+						}
+
+
+						if (speaker) {
+							//Com_Printf("Prev loc is %.0f %.0f %.0f  and Next Loc is %.2f %.2f %.2f\n", prevLoc[0], prevLoc[1], prevLoc[2], nextLoc[0], nextLoc[1], nextLoc[2]);
+							vec3_t AB = { pos2[0] - pos1[0], pos2[1] - pos1[1], pos2[2] - pos1[2] };
+							vec3_t AC = { player->client->ps.origin[0] - pos1[0], player->client->ps.origin[1] - pos1[1], player->client->ps.origin[2] - pos1[2] };
+							vec3_t diff;
+							float dotProduct = AC[0] * AB[0] + AC[1] * AB[1] + AC[2] * AB[2];//dot product of AC and AB
+							float magnitudeSquared = AB[0] * AB[0] + AB[1] * AB[1] + AB[2] * AB[2];//quared magnitude of AB
+							float t = dotProduct / magnitudeSquared;
+
+							// coordinates of the closest point D on AB
+							speaker->s.origin[0] = pos1[0] + t * AB[0];
+							speaker->s.origin[1] = pos1[1] + t * AB[1];
+							speaker->s.origin[2] = pos1[2] + t * AB[2];
+
+
+							//sad hack, but move the speaker so its scaled closer to us to effectively give the sound a larger range.
+							VectorSubtract(player->client->ps.origin, speaker->s.origin, diff);
+							VectorScale(diff, 0.7f, diff);
+							VectorAdd(speaker->s.origin, diff, speaker->s.origin);
+
+
+							updateDistance = Distance(speaker->s.origin, speaker->s.pos.trBase);
+							if (updateDistance > 8 && speaker->nextthink) { //Too abrupt of a change, smooth it, also dont do this for brand new speakers?
+								vec3_t updateDiff;
+								float updateScaler = updateDistance / 8;
+								//Com_Printf("Too big a change %.2f [%.2f x to  %.2f x]\n", updateDistance, speaker->s.origin[0], speaker->s.pos.trBase[0]);
+								VectorSubtract(speaker->s.origin, speaker->s.pos.trBase, updateDiff); //Get diff vector between current and last pos.
+
+								if (updateDistance < 256)
+									VectorScale(updateDiff, 1 / updateScaler, updateDiff); //Scale update diff down.
+								else  if (updateDistance < 512)
+									VectorScale(updateDiff, 4 / updateScaler, updateDiff); //Scale update diff down.
+								else  if (updateDistance < 1024)
+									VectorScale(updateDiff, 8 / updateScaler, updateDiff); //Scale update diff down.
+								else  if (updateDistance < 2048)
+									VectorScale(updateDiff, 16 / updateScaler, updateDiff); //Scale update diff down.
+								else  if (updateDistance < 4096)
+									VectorScale(updateDiff, 32 / updateScaler, updateDiff); //Scale update diff down.
+								//need to make this an actual formula so you can't "outrun" the smoothing
+
+								VectorAdd(speaker->s.pos.trBase, updateDiff, speaker->s.origin); //Add diff to original origin
+							}
+						}
+
+					}
+
+				if (speaker) {
+					VectorCopy(speaker->s.origin, speaker->s.pos.trBase);
+
+					//Com_Printf("Speaker point point is %.0f %.0f %.0f noise is %i num %i\n", speaker->s.origin[0], speaker->s.origin[1], speaker->s.origin[2], trigger->noise_index, player->s.number);
+
+					//Com_Printf("Playing sound\n");
+					speaker->classname = "target_speaker";
+					speaker->s.loopSound = trigger->noise_index;	// start it
+					speaker->s.loopIsSoundset = qfalse;
+					speaker->s.trickedentindex = 0;
+					speaker->r.svFlags |= SVF_SINGLECLIENT;
+					speaker->r.svFlags |= SVF_BROADCAST; //For some reason not having this be SVF_BROADCAST does not let the speaker play properly (even though the previous debug print shows no isses) on certain (far away from middle?) points on map.  Even when PVS disabled. Distancecull based?  Does this combine with singleclient?
+					speaker->r.singleClient = player->s.number;
+
+					//remove itself after 30s, it will then re-spawn if needed
+					speaker->think = FreePersonalSpeaker;
+					speaker->nextthink = level.time + 30000;
+				}
+				}
+			}
+
+			//How do I do this 3 more times.  Really just speakerentity1,2,3 and repeat it all? has to be a better way.  Do i even need to now that im moving the speaker closer to myself?
+
+			//Todo.  Spawn 3 speakers.  One at midpoint (currently done) and one at each endpoint ? Or One a set disatnce away on either side of midpoint? To give it feeling of not coming from a single point but from the whole river.
+			//Todo, find out how to make them louder or less falloff or more radius
+			//Ok, I have to also adjust the origin of the speaker to not be the center of the river (a point between A and B) but rather a point between me and the river to accomodate how quiet/little range these speakers have.  That way i can get the illusion of a loud river whos sound carries a long way.  Idk the math for this.
+			//Find actual spots.  Find distance from player to actual spots.  Compare that dist to "loudness" of river (i guess we can assume a value now but make it configurable later).  Diff the vector between player and the sound spot.  Add a scaled (based on inverse distance?) diff of that to the sound spot bringing it closer to player.
+
+			
+
+			if (player->waterlevel && ang1 != -1 && ang2 != -1) {
+				vec3_t pushangle = { 0 };
+				vec3_t pushdir;
+				float interpAngle;
+				float perc = dist1 / (dist1 + dist2);
+				float strength = trigger->speed;
+
+				interpAngle = LerpAngle(ang1, ang2, perc);
+				//Com_Printf("Interp angle is %.2f because ang1 is %.1f and ang2 is %.2f\n", interpAngle, ang1, ang2);
+
+				if (player->s.eType == ET_NPC) {
+					strength *= 4.0f;
+				}
+
+				pushangle[1] = interpAngle;
+				AngleVectors(pushangle, pushdir, NULL, NULL);
+				if (pm->waterlevel == 3)
+					strength *= 0.021;
+				else if (pm->waterlevel == 2)
+					strength *= 0.01;
+				else if (pm->waterlevel == 1)
+					strength *= 0.005;
+				VectorMA(player->client->ps.velocity, strength, pushdir, player->client->ps.velocity); //Todo, let target_position's determine speed instead of the trigger so we can have different speeds at different parts of river?
+
+				if (player->s.eType == ET_NPC) {
+					//This uses turnspeed
+					player->NPC->desiredYaw = vectoyaw(player->client->ps.velocity);
+					NPC_UpdateAngles(qfalse, qtrue);
+				}
+			}
+	}
+
 	if (player->client->lastBounceTime > level.time - 500)
 		return;
 
 	scale = trigger->speed ? trigger->speed : 2.0f; //Check for bounds? scale can be negative, that means "bounce".
 	player->client->lastBounceTime = level.time;
 
-	if (trigger->noise_index) 
+	if (trigger->noise_index && !(trigger->spawnflags & 512))
 		G_Sound(player, CHAN_AUTO, trigger->noise_index);
 
 	if (trigger->spawnflags & 1) {
@@ -2268,6 +2469,12 @@ void SP_trigger_timer_stop( gentity_t *self )
 			self->awesomenoise_index = G_SoundIndex(s);
 		else
 			self->awesomenoise_index = 0;
+	}
+	if (G_SpawnString("worldrecordnoise", "", &s)) {
+		if (s && s[0])
+			self->worldrecordnoise_index = G_SoundIndex(s);
+		else
+			self->worldrecordnoise_index = 0;
 	}
 	if (G_SpawnString("objective", "", &s)) { //why is this actually needed
 		if (s && s[0])
