@@ -168,6 +168,8 @@ typedef struct clientActive_s {
 		char			fs_game[MAX_QPATH];
 	} discord;
 #endif
+
+	qboolean		mapChangeAnnounced;
 } clientActive_t;
 
 extern	clientActive_t		cl;

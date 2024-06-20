@@ -1040,7 +1040,7 @@ void CL_SetCGameTime( void ) {
 		cl.serverTime = clc.timeDemoBaseTime + clc.timeDemoFrames * 50;
 	}
 
-	while ( cl.serverTime >= cl.snap.serverTime ) {
+	while ( cl.serverTime >= cl.snap.serverTime || (cl.mapChangeAnnounced && (cl.snap.serverTime- cl.serverTime) > 10000) ) {
 		// feed another messag, which should change
 		// the contents of cl.snap
 		CL_ReadDemoMessage();

@@ -934,6 +934,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 			CL_ParseDownload( msg );
 			break;
 		case svc_mapchange:
+			cl.mapChangeAnnounced = qtrue;
 			CL_KillDownload();
 			if ( cls.cgameStarted )
 				CGVM_MapChange();
