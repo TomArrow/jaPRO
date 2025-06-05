@@ -165,6 +165,8 @@ cvar_t	*r_directedScale;
 cvar_t	*r_debugLight;
 cvar_t	*r_debugSort;
 
+cvar_t	*r_imageLoadLowMem;
+
 cvar_t	*r_marksOnTriangleMeshes;
 
 cvar_t	*r_aspectCorrectFonts;
@@ -1741,6 +1743,7 @@ void R_Register( void )
 	cl_ratioFix							= ri.Cvar_Get( "cl_ratioFix",						"1",						CVAR_ARCHIVE, "" );
 	r_maxpolys							= ri.Cvar_Get( "r_maxpolys",						XSTRING( DEFAULT_MAX_POLYS ),		CVAR_NONE, "" );
 	r_maxpolyverts						= ri.Cvar_Get( "r_maxpolyverts",					XSTRING( DEFAULT_MAX_POLYVERTS ),	CVAR_NONE, "" );
+	r_imageLoadLowMem					= ri.Cvar_Get( "r_imageLoadLowMem",					"0",	CVAR_ARCHIVE, "" );
 /*
 Ghoul2 Insert Start
 */

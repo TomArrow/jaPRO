@@ -183,6 +183,7 @@ cvar_t	*r_singleShader;
 cvar_t	*r_roundImagesDown;
 cvar_t	*r_colorMipLevels;
 cvar_t	*r_picmip;
+cvar_t	*r_imageLoadLowMem;
 cvar_t	*r_showtris;
 cvar_t	*r_showsky;
 cvar_t	*r_shownormals;
@@ -1488,6 +1489,7 @@ void R_Register( void )
 	r_debugWeather						= ri.Cvar_Get( "r_debugWeather",			"0",		CVAR_ARCHIVE, "" );
 
 	r_picmip = ri.Cvar_Get ("r_picmip", "0", CVAR_ARCHIVE | CVAR_LATCH, "" );
+	r_imageLoadLowMem = ri.Cvar_Get ("r_imageLoadLowMem", "0", CVAR_ARCHIVE, "" );
 	ri.Cvar_CheckRange( r_picmip, 0, 16, qtrue );
     r_smartpicmip						= ri.Cvar_Get( "r_smartpicmip", "1", CVAR_ARCHIVE_ND|CVAR_LATCH, "Applies r_picmip setting to map textures only." );
     r_roundImagesDown = ri.Cvar_Get ("r_roundImagesDown", "1", CVAR_ARCHIVE | CVAR_LATCH, "" );

@@ -2224,6 +2224,10 @@ done:
 		Hunk_FreeTempMemory( scaledBuffer );
 	if ( resampledBuffer != 0 )
 		Hunk_FreeTempMemory( resampledBuffer );
+
+	if (r_imageLoadLowMem->integer) { // try to see if the driver will free up the RAM used to cache while sending to CPU. slower probably but might use less RAM?
+		qglFinish();
+	}
 }
 
 
