@@ -767,6 +767,10 @@ done:
 		qglTexParameterf(uiTarget, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
 		qglTexParameterf(uiTarget, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
 	}
+	
+	if (r_imageLoadLowMem->integer) { // try to see if the driver will free up the RAM used to cache while sending to CPU. slower probably but might use less RAM?
+		qglFinish();
+	}
 
 	GL_CheckErrors();
 }

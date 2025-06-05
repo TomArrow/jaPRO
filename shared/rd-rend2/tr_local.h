@@ -239,6 +239,8 @@ extern cvar_t	*r_lockpvs;
 extern cvar_t	*r_noportals;
 extern cvar_t	*r_portalOnly;
 
+extern cvar_t	*r_imageLoadLowMem;
+
 extern cvar_t	*r_subdivisions;
 extern cvar_t	*r_lodCurveError;
 
