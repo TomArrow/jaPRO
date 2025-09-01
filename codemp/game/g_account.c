@@ -7313,6 +7313,13 @@ void InitGameAccountStuff( void ) { //Called every mapload , move the create tab
 		G_ErrorPrint("ERROR: SQL Create Failed (InitGameAccountStuff 5)", s);
 	CALL_SQLITE (finalize(stmt));
 
+	sql = "CREATE TABLE IF NOT EXISTS LocalSecretCourses(coursename VARCHAR(40) PRIMARY KEY, secret_until INTEGER, created_at INTEGER)";
+	CALL_SQLITE(prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL));
+	s = sqlite3_step(stmt);
+	if (s != SQLITE_DONE)
+		G_ErrorPrint("ERROR: SQL Create Failed (InitGameAccountStuff 5)", s);
+	CALL_SQLITE(finalize(stmt));
+
 #if _ELORANKING
 	/*
 	sql = "CREATE TABLE IF NOT EXISTS DuelRanks(id INTEGER PRIMARY KEY, username VARCHAR(16), type UNSIGNED SMALLINT, rank DECIMAL(6,2), TSSUM DECIMAL(9,2), count UNSIGNED INTEGER)"; //We only need like 2 decimal precision here so how do that in sqlite C? --todo
@@ -7579,3 +7586,171 @@ void AddRunToWebServer(RaceRecord_t record)
 
 } 
 #endif
+
+// global variables used throughout
+secretCourse_t g_secretCourses[MAX_SECRET_COURSES];
+int g_numSecretCourses = 0;
+
+void SC_CleanupSecretCourses(void)
+{
+	sqlite3 *db;
+	char *sql;
+	time_t currentTime;
+
+	time(&currentTime);
+
+	CALL_SQLITE(open(LOCAL_DB_PATH, &db));
+
+	sql = "DELETE FROM LocalSecretCourses WHERE secret_until < ?";
+	sqlite3_stmt *stmt;
+	CALL_SQLITE(prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL));
+	CALL_SQLITE(bind_int64(stmt, 1, (sqlite3_int64)currentTime));
+
+	int result = sqlite3_step(stmt);
+	if (result != SQLITE_DONE)
+	{
+		G_ErrorPrint("ERROR: Failed to cleanup secret courses", result);
+	}
+
+	CALL_SQLITE(finalize(stmt));
+	CALL_SQLITE(close(db));
+}
+
+void SC_LoadSecretCourses(void)
+{
+	sqlite3 *db;
+	char *sql;
+	sqlite3_stmt *stmt;
+	int s;
+	time_t currentTime;
+
+	// Reset the array
+	g_numSecretCourses = 0;
+	memset(g_secretCourses, 0, sizeof(g_secretCourses));
+
+	time(&currentTime);
+
+	CALL_SQLITE(open(LOCAL_DB_PATH, &db));
+
+	sql = "SELECT coursename, secret_until FROM LocalSecretCourses WHERE secret_until > ? ORDER BY coursename";
+	CALL_SQLITE(prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL));
+	CALL_SQLITE(bind_int64(stmt, 1, (sqlite3_int64)currentTime));
+
+	while (g_numSecretCourses < MAX_SECRET_COURSES)
+	{
+		s = sqlite3_step(stmt);
+		if (s == SQLITE_ROW)
+		{
+			Q_strncpyz(g_secretCourses[g_numSecretCourses].coursename,
+					   (const char *)sqlite3_column_text(stmt, 0),
+					   sizeof(g_secretCourses[g_numSecretCourses].coursename));
+			g_secretCourses[g_numSecretCourses].secret_until = (time_t)sqlite3_column_int64(stmt, 1);
+			g_numSecretCourses++;
+		}
+		else if (s == SQLITE_DONE)
+		{
+			break;
+		}
+		else
+		{
+			G_ErrorPrint("ERROR: Failed to load secret courses", s);
+			break;
+		}
+	}
+
+	CALL_SQLITE(finalize(stmt));
+	CALL_SQLITE(close(db));
+
+	trap->Print("Loaded %d secret courses into memory\n", g_numSecretCourses);
+}
+
+qboolean SC_IsTimeSecret(const char *coursename)
+{
+	time_t currentTime;
+	int i;
+
+	if (!coursename || !g_numSecretCourses)
+	{
+		return qfalse;
+	}
+
+	time(&currentTime);
+
+	for (i = 0; i < g_numSecretCourses; i++)
+	{
+		if (!Q_stricmp(g_secretCourses[i].coursename, coursename))
+		{
+			return (currentTime < g_secretCourses[i].secret_until) ? qtrue : qfalse;
+		}
+	}
+
+	return qfalse;
+}
+
+void SC_AddSecretCourse(const char *coursename, time_t secret_until)
+{
+	sqlite3 *db;
+	char *sql;
+	sqlite3_stmt *stmt;
+	time_t currentTime;
+	int result;
+
+	if (!coursename || !*coursename)
+	{
+		return;
+	}
+
+	time(&currentTime);
+
+	CALL_SQLITE(open(LOCAL_DB_PATH, &db));
+
+	// Use INSERT OR REPLACE to handle duplicates
+	sql = "INSERT OR REPLACE INTO LocalSecretCourses (coursename, secret_until, created_at) VALUES (?, ?, ?)";
+	CALL_SQLITE(prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL));
+	CALL_SQLITE(bind_text(stmt, 1, coursename, -1, SQLITE_STATIC));
+	CALL_SQLITE(bind_int64(stmt, 2, (sqlite3_int64)secret_until));
+	CALL_SQLITE(bind_int64(stmt, 3, (sqlite3_int64)currentTime));
+
+	result = sqlite3_step(stmt);
+	if (result != SQLITE_DONE)
+	{
+		G_ErrorPrint("ERROR: Failed to add secret course", result);
+	}
+
+	CALL_SQLITE(finalize(stmt));
+	CALL_SQLITE(close(db));
+
+	// Reload the memory array to reflect the change
+	SC_LoadSecretCourses();
+}
+
+void SC_RemoveSecretCourse(const char *coursename)
+{
+	sqlite3 *db;
+	char *sql;
+	sqlite3_stmt *stmt;
+	int result;
+
+	if (!coursename || !*coursename)
+	{
+		return;
+	}
+
+	CALL_SQLITE(open(LOCAL_DB_PATH, &db));
+
+	sql = "DELETE FROM LocalSecretCourses WHERE coursename = ?";
+	CALL_SQLITE(prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL));
+	CALL_SQLITE(bind_text(stmt, 1, coursename, -1, SQLITE_STATIC));
+
+	result = sqlite3_step(stmt);
+	if (result != SQLITE_DONE)
+	{
+		G_ErrorPrint("ERROR: Failed to remove secret course", result);
+	}
+
+	CALL_SQLITE(finalize(stmt));
+	CALL_SQLITE(close(db));
+
+	// Reload the memory array to reflect the change
+	SC_LoadSecretCourses();
+}

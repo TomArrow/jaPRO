@@ -2083,3 +2083,21 @@ void G_RegisterCvars( void );
 void G_UpdateCvars( void );
 
 extern gameImport_t *trap;
+
+typedef struct secretCourse_s
+{
+	char coursename[40];
+	time_t secret_until;
+} secretCourse_t;
+
+#define MAX_SECRET_COURSES 64
+
+extern secretCourse_t g_secretCourses[MAX_SECRET_COURSES];
+extern int g_numSecretCourses;
+
+// shak todo: revise if these rly need to be here
+void SC_CleanupSecretCourses(void);
+void SC_LoadSecretCourses(void);
+qboolean SC_IsTimeSecret(const char *coursename);
+void SC_AddSecretCourse(const char *coursename, time_t secret_until);
+void SC_RemoveSecretCourse(const char *coursename);
