@@ -7754,3 +7754,195 @@ void SC_RemoveSecretCourse(const char *coursename)
 	// Reload the memory array to reflect the change
 	SC_LoadSecretCourses();
 }
+
+// SC Admin commands
+void SC_Cmd_AddSecret_f(gentity_t *ent) {
+    char partialCourseName[40] = {0}, fullCourseName[40] = {0};
+    char timeValueStr[16] = {0}, timeTypeStr[16] = {0};
+    int timeValue;
+    time_t currentTime, secretUntil;
+    sqlite3 *db;
+    char *sql;
+    sqlite3_stmt *stmt;
+    int s;
+    const int args = trap->Argc();
+
+    // Permission check, use grantadmin flag for now
+    if (!G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_GRANTADMIN, qfalse, qfalse, "addsecretcourse")) {
+        return;
+    }
+
+    if (args != 4) {
+        trap->SendServerCommand(ent - g_entities, 
+            "print \"Usage: /addsecretcourse <coursename> <time_value> <time_type>\n"
+            "Time types: day(s), week(s)\n"
+            "Examples: /addsecretcourse t2_trip 7 days, /addsecretcourse academy 1 week\n\"");
+        return;
+    }
+
+    trap->Argv(1, partialCourseName, sizeof(partialCourseName));
+    trap->Argv(2, timeValueStr, sizeof(timeValueStr));
+    trap->Argv(3, timeTypeStr, sizeof(timeTypeStr));
+
+    // Parse time value
+    timeValue = atoi(timeValueStr);
+    if (timeValue <= 0) {
+        trap->SendServerCommand(ent - g_entities, "print \"Error: Time value must be a positive number.\n\"");
+        return;
+    }
+
+    // Parse time type and calculate seconds
+    Q_strlwr(timeTypeStr);
+    int secondsMultiplier = 0;
+    
+    if (!Q_stricmp(timeTypeStr, "day") || !Q_stricmp(timeTypeStr, "days")) {
+        secondsMultiplier = 86400; // 24 * 60 * 60
+    } else if (!Q_stricmp(timeTypeStr, "week") || !Q_stricmp(timeTypeStr, "weeks")) {
+        secondsMultiplier = 604800; // 7 * 24 * 60 * 60
+    } else {
+        trap->SendServerCommand(ent - g_entities, 
+            "print \"Error: Invalid time type. Use 'day(s)' or 'week(s)'.\n\"");
+        return;
+    }
+
+    // Clean the partial course name
+    Q_strlwr(partialCourseName);
+    Q_CleanStr(partialCourseName);
+    Q_strstrip(partialCourseName, " ", "");
+    Q_strstrip(partialCourseName, "&", " ");
+
+    // Find full course name from database (similar to rtop logic)
+    CALL_SQLITE(open(LOCAL_DB_PATH, &db));
+
+    sql = "SELECT DISTINCT(coursename) FROM LocalRun WHERE instr(coursename, ?) > 0 ORDER BY entries DESC LIMIT 1";
+    CALL_SQLITE(prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL));
+    CALL_SQLITE(bind_text(stmt, 1, partialCourseName, -1, SQLITE_STATIC));
+    
+    s = sqlite3_step(stmt);
+    if (s == SQLITE_ROW) {
+        Q_strncpyz(fullCourseName, (char *)sqlite3_column_text(stmt, 0), sizeof(fullCourseName));
+    } else if (s == SQLITE_DONE) {
+        trap->SendServerCommand(ent - g_entities, 
+            va("print \"Error: No course found matching '%s'.\n\"", partialCourseName));
+        CALL_SQLITE(finalize(stmt));
+        CALL_SQLITE(close(db));
+        return;
+    } else {
+        G_ErrorPrint("ERROR: SQL Select Failed (SC_Cmd_AddSecret_f)", s);
+        CALL_SQLITE(finalize(stmt));
+        CALL_SQLITE(close(db));
+        return;
+    }
+    CALL_SQLITE(finalize(stmt));
+    CALL_SQLITE(close(db));
+
+    // Calculate secret until timestamp
+    time(&currentTime);
+    secretUntil = currentTime + (timeValue * secondsMultiplier);
+
+    // Add to database
+    SC_AddSecretCourse(fullCourseName, secretUntil);
+
+    // Success message
+    char timeStr[64];
+    struct tm *timeinfo = localtime(&secretUntil);
+    strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", timeinfo);
+    
+    trap->SendServerCommand(ent - g_entities, 
+        va("print \"Secret course added: ^3%s^7 - Hidden until %s\n\"", fullCourseName, timeStr));
+}
+
+void SC_Cmd_RemoveSecret_f(gentity_t *ent) {
+    char partialCourseName[40] = {0}, fullCourseName[40] = {0};
+    sqlite3 *db;
+    char *sql;
+    sqlite3_stmt *stmt;
+    int s;
+    const int args = trap->Argc();
+
+    // Permission check
+    if (!G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_GRANTADMIN, qfalse, qfalse, "removesecretcourse")) {
+        return;
+    }
+
+    if (args != 2) {
+        trap->SendServerCommand(ent - g_entities, 
+            "print \"Usage: /removesecretcourse <coursename>\n\"");
+        return;
+    }
+
+    trap->Argv(1, partialCourseName, sizeof(partialCourseName));
+
+    // Clean the partial course name
+    Q_strlwr(partialCourseName);
+    Q_CleanStr(partialCourseName);
+    Q_strstrip(partialCourseName, " ", "");
+    Q_strstrip(partialCourseName, "&", " ");
+
+    // Find full course name from secret courses table
+    CALL_SQLITE(open(LOCAL_DB_PATH, &db));
+
+    sql = "SELECT coursename FROM LocalSecretCourses WHERE instr(coursename, ?) > 0 LIMIT 1";
+    CALL_SQLITE(prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL));
+    CALL_SQLITE(bind_text(stmt, 1, partialCourseName, -1, SQLITE_STATIC));
+    
+    s = sqlite3_step(stmt);
+    if (s == SQLITE_ROW) {
+        Q_strncpyz(fullCourseName, (char *)sqlite3_column_text(stmt, 0), sizeof(fullCourseName));
+    } else if (s == SQLITE_DONE) {
+        trap->SendServerCommand(ent - g_entities, 
+            va("print \"Error: No secret course found matching '%s'.\n\"", partialCourseName));
+        CALL_SQLITE(finalize(stmt));
+        CALL_SQLITE(close(db));
+        return;
+    } else {
+        G_ErrorPrint("ERROR: SQL Select Failed (SC_Cmd_RemoveSecret_f)", s);
+        CALL_SQLITE(finalize(stmt));
+        CALL_SQLITE(close(db));
+        return;
+    }
+    CALL_SQLITE(finalize(stmt));
+    CALL_SQLITE(close(db));
+
+    // Remove from database
+    SC_RemoveSecretCourse(fullCourseName);
+
+    trap->SendServerCommand(ent - g_entities, 
+        va("print \"Secret course removed: ^3%s^7\n\"", fullCourseName));
+}
+
+void SC_Cmd_ListSecret_f(gentity_t *ent) {
+    char msg[1024] = {0};
+    char timeStr[64];
+    time_t currentTime;
+    int i;
+
+    // Permission check
+    if (!G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_GRANTADMIN, qfalse, qfalse, "listsecretcourses")) {
+        return;
+    }
+
+    time(&currentTime);
+
+    if (g_numSecretCourses == 0) {
+        trap->SendServerCommand(ent - g_entities, "print \"No secret courses currently active.\n\"");
+        return;
+    }
+
+    trap->SendServerCommand(ent - g_entities, 
+        "print \"Active Secret Courses:\n    ^5Course Name                        Secret Until\n\"");
+
+    for (i = 0; i < g_numSecretCourses; i++) {
+        struct tm *timeinfo = localtime(&g_secretCourses[i].secret_until);
+        strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", timeinfo);
+        
+        char *tmpMsg = va("^3%-35s ^7%s\n", g_secretCourses[i].coursename, timeStr);
+        if (strlen(msg) + strlen(tmpMsg) >= sizeof(msg)) {
+            trap->SendServerCommand(ent - g_entities, va("print \"%s\"", msg));
+            msg[0] = '\0';
+        }
+        Q_strcat(msg, sizeof(msg), tmpMsg);
+    }
+    
+    trap->SendServerCommand(ent - g_entities, va("print \"%s\"", msg));
+}

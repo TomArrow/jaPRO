@@ -8862,10 +8862,14 @@ void Cmd_Trace_f(gentity_t* ent);
 void Cmd_Nearby_f(gentity_t* ent);
 void Cmd_InvalidateRace_f(gentity_t* ent);
 void Cmd_Haste_f(gentity_t* ent);
+void SC_Cmd_AddSecret_f(gentity_t *ent);
+void SC_Cmd_RemoveSecret_f(gentity_t *ent);
+void SC_Cmd_ListSecret_f(gentity_t *ent);
 
 /* This array MUST be sorted correctly by alphabetical name field */
 command_t commands[] = {
 	{ "addbot",				Cmd_AddBot_f,				0 },
+	{ "addsecretcourse",	SC_Cmd_AddSecret_f,			0 }, //SC
 	{ "amban",				Cmd_Amban_f,				0 },
 	{ "ambeg",				Cmd_EmoteBeg_f,				CMD_NOINTERMISSION|CMD_ALIVE },//EMOTE
 	{ "ambeg2",				Cmd_EmoteBeg2_f,			CMD_NOINTERMISSION|CMD_ALIVE },//EMOTE
@@ -8994,6 +8998,8 @@ command_t commands[] = {
 
 	{ "levelshot",			Cmd_LevelShot_f,			CMD_CHEAT|CMD_ALIVE|CMD_NOINTERMISSION },
 
+	{ "listsecretcourses",	SC_Cmd_ListSecret_f,		0 },
+
 	{ "login",				Cmd_ACLogin_f,				CMD_NOINTERMISSION },
 	{ "logout",				Cmd_ACLogout_f,				CMD_NOINTERMISSION },
 
@@ -9024,6 +9030,8 @@ command_t commands[] = {
 	//{ "rCompare",			Cmd_DFCompare_f,			CMD_NOINTERMISSION },
 
 	{ "register",			Cmd_ACRegister_f,			CMD_NOINTERMISSION },
+	
+	{ "removesecretcourse",	SC_Cmd_RemoveSecret_f,  	0 }, //SC
 
 	{ "rfind",				Cmd_DFFind_f,				CMD_NOINTERMISSION },
 	{ "rhardest",			Cmd_DFHardest_f,			CMD_NOINTERMISSION },
