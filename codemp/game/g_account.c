@@ -7817,16 +7817,14 @@ void SC_Cmd_AddSecret_f(gentity_t *ent) {
     sql = "SELECT DISTINCT(coursename) FROM LocalRun WHERE instr(coursename, ?) > 0 ORDER BY entries DESC LIMIT 1";
     CALL_SQLITE(prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL));
     CALL_SQLITE(bind_text(stmt, 1, partialCourseName, -1, SQLITE_STATIC));
-    
+
     s = sqlite3_step(stmt);
     if (s == SQLITE_ROW) {
         Q_strncpyz(fullCourseName, (char *)sqlite3_column_text(stmt, 0), sizeof(fullCourseName));
     } else if (s == SQLITE_DONE) {
+		Q_strncpyz(fullCourseName, partialCourseName, sizeof(fullCourseName));
         trap->SendServerCommand(ent - g_entities, 
-            va("print \"Error: No course found matching '%s'.\n\"", partialCourseName));
-        CALL_SQLITE(finalize(stmt));
-        CALL_SQLITE(close(db));
-        return;
+            va("print \"Notice: No matching course for partial coursename, adding course as typed: '%s'\n\"", partialCourseName));
     } else {
         G_ErrorPrint("ERROR: SQL Select Failed (SC_Cmd_AddSecret_f)", s);
         CALL_SQLITE(finalize(stmt));
@@ -7844,10 +7842,9 @@ void SC_Cmd_AddSecret_f(gentity_t *ent) {
     SC_AddSecretCourse(fullCourseName, secretUntil);
 
     // Success message
-    char timeStr[64];
+	char timeStr[64];
     struct tm *timeinfo = localtime(&secretUntil);
     strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", timeinfo);
-    
     trap->SendServerCommand(ent - g_entities, 
         va("print \"Secret course added: ^3%s^7 - Hidden until %s\n\"", fullCourseName, timeStr));
 }
