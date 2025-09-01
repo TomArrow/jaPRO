@@ -8998,7 +8998,7 @@ command_t commands[] = {
 
 	{ "levelshot",			Cmd_LevelShot_f,			CMD_CHEAT|CMD_ALIVE|CMD_NOINTERMISSION },
 
-	{ "listsecretcourses",	SC_Cmd_ListSecret_f,		0 },
+	{ "secretcourses",		SC_Cmd_ListSecret_f,		0 },
 
 	{ "login",				Cmd_ACLogin_f,				CMD_NOINTERMISSION },
 	{ "logout",				Cmd_ACLogout_f,				CMD_NOINTERMISSION },
@@ -9030,7 +9030,7 @@ command_t commands[] = {
 	//{ "rCompare",			Cmd_DFCompare_f,			CMD_NOINTERMISSION },
 
 	{ "register",			Cmd_ACRegister_f,			CMD_NOINTERMISSION },
-	
+
 	{ "removesecretcourse",	SC_Cmd_RemoveSecret_f,  	0 }, //SC
 
 	{ "rfind",				Cmd_DFFind_f,				CMD_NOINTERMISSION },

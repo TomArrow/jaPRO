@@ -7915,7 +7915,7 @@ void SC_Cmd_ListSecret_f(gentity_t *ent) {
     int i;
 
     // Permission check
-    if (!G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_GRANTADMIN, qfalse, qfalse, "listsecretcourses")) {
+    if (!G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_GRANTADMIN, qfalse, qtrue, "secretcourses")) {
         return;
     }
 
