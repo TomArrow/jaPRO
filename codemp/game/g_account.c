@@ -1662,7 +1662,7 @@ void PrintRaceTime(char *username, char *playername, char *message, char *style,
     
     // blank out time if course is secret
     if (SC_IsTimeSecret(coursename)) {
-        Q_strncpyz(timeStr, "^6SECRET", sizeof(timeStr));
+        Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
     }
 
 	trap->SendServerCommand( -1, va("print \"%s in ^3%-12s^%i max:^3%-10i^%i avg:^3%-10i^%i style:^3%-10s^%i by ^%i%s %s^7\n\"",
@@ -5650,7 +5650,7 @@ void Cmd_DFFind_f(gentity_t *ent) {
 				if (!SC_IsTimeSecret( fullCourseName )) {
 					TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr));
 				} else {
-					Q_strncpyz(timeStr, "^6SECRET", sizeof(timeStr));
+					Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
 				}
 				
 				getDateTime(sqlite3_column_int(stmt, 4), dateStr, sizeof(dateStr));
@@ -6224,7 +6224,7 @@ void Cmd_DFRecent_f(gentity_t *ent) {
 				if (!SC_IsTimeSecret( sqlite3_column_text(stmt, 1) )) {
 					TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr));
 				} else {
-					Q_strncpyz(timeStr, "^6SECRET", sizeof(timeStr));
+					Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
 				}
 				
 				getDateTime(sqlite3_column_int(stmt, 5), dateStr, sizeof(dateStr));
@@ -6447,10 +6447,13 @@ void Cmd_DFTop10_f(gentity_t *ent) {
 			if (s == SQLITE_ROW) {
 				char *tmpMsg = NULL;
 				// blank out time if course is secret
-				if (!SC_IsTimeSecret( fullCourseName )) {
+				Com_Printf("shak debug - ent->client->pers.userName: %s\n", ent->client->pers.userName);
+				Com_Printf("shak debug - sqlite3_column_text(stmt, 0): %s\n", sqlite3_column_text(stmt, 0));
+				Com_Printf("shak debug - (!Q_stricmp(ent->client->pers.userName, sqlite3_column_text(stmt, 0)): %i\n", !Q_stricmp(ent->client->pers.userName, sqlite3_column_text(stmt, 0)));
+				if (!SC_IsTimeSecret( fullCourseName ) || !Q_stricmp(ent->client->pers.userName, sqlite3_column_text(stmt, 0))) {
 					TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr));
 				} else {
-					Q_strncpyz(timeStr, "^6SECRET", sizeof(timeStr));
+					Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
 				}
 				
 				getDateTime(sqlite3_column_int(stmt, 4), dateStr, sizeof(dateStr));
@@ -7976,12 +7979,11 @@ void SC_Cmd_ListSecret_f(gentity_t *ent) {
         return;
     }
 
-    trap->SendServerCommand(ent - g_entities, 
-        "print \"Active Secret Courses:\n    ^5Course Name                        Secret Until\n\"");
+    trap->SendServerCommand(ent - g_entities, "print \"Active Secret Courses:\n    ^5Course Name                        Secret Until\n\"");
 
     for (i = 0; i < g_numSecretCourses; i++) {
-        struct tm *timeinfo = localtime(&g_secretCourses[i].secret_until);
-        strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", timeinfo);
+        struct tm *timeInfo = localtime(&g_secretCourses[i].secret_until);
+        strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", timeInfo);
         
         char *tmpMsg = va("^3%-35s ^7%s\n", g_secretCourses[i].coursename, timeStr);
         if (strlen(msg) + strlen(tmpMsg) >= sizeof(msg)) {
@@ -7991,5 +7993,10 @@ void SC_Cmd_ListSecret_f(gentity_t *ent) {
         Q_strcat(msg, sizeof(msg), tmpMsg);
     }
     
-    trap->SendServerCommand(ent - g_entities, va("print \"%s\"", msg));
+    trap->SendServerCommand(ent - g_entities, va("print \"%s\n\"", msg));
+
+	struct tm *serverTimeInfo = localtime(&currentTime);
+	strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", serverTimeInfo);
+
+	trap->SendServerCommand(ent - g_entities, va("print \"Current server time: %s\"", timeStr));
 }
