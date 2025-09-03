@@ -1554,6 +1554,7 @@ void TimeToString(int duration_ms, char *timeStr, size_t strSize) {
 void PrintRaceTime(char *username, char *playername, char *message, char *style, int topspeed, int average, char *timeStr, int clientNum, int season_newRank, qboolean spb, int global_newRank, qboolean loggedin, qboolean valid, int season_oldRank, int global_oldRank, float addedScore, int awesomenoise, int worldrecordnoise) {
 	int nameColor, color;
 	char awardString[28] = {0}, messageStr[64] = {0}, nameStr[32] = {0};
+	char info[1024] = {0}, coursename[40] = {0};
 
 	//Com_Printf("SOldrank %i SNewrank %i GOldrank %i GNewrank %i Addscore %.1f\n", season_oldRank, season_newRank, global_oldRank, global_newRank, addedScore);
 
@@ -1645,6 +1646,24 @@ void PrintRaceTime(char *username, char *playername, char *message, char *style,
 		}
 
 	}
+
+	// construct full coursename (same logic as G_AddRaceTime) - maybe extract to function and use in G_AddRaceTime and here (and wherever else?)
+    trap->GetServerinfo(info, sizeof(info));
+    Q_strncpyz(coursename, Info_ValueForKey(info, "mapname"), sizeof(coursename));
+    
+    if (message) {
+        Q_strlwr(message);
+        Q_CleanStr(message);
+        Q_strcat(coursename, sizeof(coursename), va(" (%s)", message));
+    }
+    
+    Q_strlwr(coursename);
+    Q_CleanStr(coursename);
+    
+    // blank out time if course is secret
+    if (SC_IsTimeSecret(coursename)) {
+        Q_strncpyz(timeStr, "^6SECRET", sizeof(timeStr));
+    }
 
 	trap->SendServerCommand( -1, va("print \"%s in ^3%-12s^%i max:^3%-10i^%i avg:^3%-10i^%i style:^3%-10s^%i by ^%i%s %s^7\n\"",
 				messageStr, timeStr, color, topspeed, color, average, color, style, color, nameColor, nameStr, awardString));
@@ -4622,7 +4641,14 @@ void Cmd_AccountStats_f(gentity_t *ent) { //Should i bother to cache player stat
 				if (s == SQLITE_ROW) {
 					char *tmpMsg = NULL;
 					IntegerToRaceName(sqlite3_column_int(stmt, 1), styleStr, sizeof(styleStr));
-					TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr));
+
+					// blank out time if course is secret
+					if (!SC_IsTimeSecret( sqlite3_column_text(stmt, 0) )) {
+						TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr));
+					} else {
+						Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
+					}
+
 					getDateTime(sqlite3_column_int(stmt, 5), dateStr, sizeof(dateStr));
 
 					//If rank == 0, put "Season rank: season_rank".  Else put "Rank: rank"
@@ -5620,7 +5646,13 @@ void Cmd_DFFind_f(gentity_t *ent) {
 			s = sqlite3_step(stmt);
 			if (s == SQLITE_ROW) {
 				char *tmpMsg = NULL;
-				TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr));
+				// blank out time if course is secret
+				if (!SC_IsTimeSecret( fullCourseName )) {
+					TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr));
+				} else {
+					Q_strncpyz(timeStr, "^6SECRET", sizeof(timeStr));
+				}
+				
 				getDateTime(sqlite3_column_int(stmt, 4), dateStr, sizeof(dateStr));
 				if (rawtime - sqlite3_column_int(stmt, 4) < 60*60*24) { //Today
 					Com_sprintf(dateStrColored, sizeof(dateStrColored), "^2%s^7", dateStr);
@@ -6188,7 +6220,13 @@ void Cmd_DFRecent_f(gentity_t *ent) {
 			s = sqlite3_step(stmt);
 			if (s == SQLITE_ROW) {
 				char *tmpMsg = NULL;
-				TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr));
+				// blank out time if course is secret
+				if (!SC_IsTimeSecret( sqlite3_column_text(stmt, 1) )) {
+					TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr));
+				} else {
+					Q_strncpyz(timeStr, "^6SECRET", sizeof(timeStr));
+				}
+				
 				getDateTime(sqlite3_column_int(stmt, 5), dateStr, sizeof(dateStr));
 				IntegerToRaceName(sqlite3_column_int(stmt, 2), styleStr, sizeof(styleStr));
 
@@ -6408,7 +6446,13 @@ void Cmd_DFTop10_f(gentity_t *ent) {
 			s = sqlite3_step(stmt);
 			if (s == SQLITE_ROW) {
 				char *tmpMsg = NULL;
-				TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr));
+				// blank out time if course is secret
+				if (!SC_IsTimeSecret( fullCourseName )) {
+					TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr));
+				} else {
+					Q_strncpyz(timeStr, "^6SECRET", sizeof(timeStr));
+				}
+				
 				getDateTime(sqlite3_column_int(stmt, 4), dateStr, sizeof(dateStr));
 				if (rawtime - sqlite3_column_int(stmt, 4) < 60*60*24) { //Today
 					Com_sprintf(dateStrColored, sizeof(dateStrColored), "^2%s^7", dateStr);
@@ -6798,7 +6842,13 @@ void Cmd_DFTodo_f(gentity_t *ent) {
 				IntegerToRaceName(sqlite3_column_int(stmt, 1), styleStr, sizeof(styleStr));
 				if (sqlite3_column_int(stmt, 5)) {
 					Q_strncpyz(rankStr, va("%i", sqlite3_column_int(stmt, 2)), sizeof(rankStr));
-					TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr));
+					
+					// blank out time if course is secret
+					if (!SC_IsTimeSecret( sqlite3_column_text(stmt, 0) )) {
+						TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr));
+					} else {
+						Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
+					}
 					getDateTime(sqlite3_column_int(stmt, 5), dateStr, sizeof(dateStr)); 
 				}
 				else {
