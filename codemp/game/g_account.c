@@ -2076,6 +2076,8 @@ void G_AddRaceTime(char *username, char *message, int duration_ms, int style, in
 				Com_sprintf(cl->pers.oldDemoName, sizeof(cl->pers.oldDemoName), "%s", cl->pers.userName);
 				if (style == MV_SIEGE) //Give siege demos a hidden demoname
 					Com_sprintf(cl->pers.demoName, sizeof(cl->pers.demoName), "hidden/%s/%s-%s-%s", cl->pers.userName, cl->pers.userName, mapCourse, styleString); //TODO, change this to %s/%s-%s-%s so its puts in individual players folder
+				else if (SC_IsTimeSecret(coursename)) //Give secretcourse demos a secret demoname
+					Com_sprintf(cl->pers.demoName, sizeof(cl->pers.demoName), "secret/%s/%s-%s-%s", cl->pers.userName, cl->pers.userName, mapCourse, styleString);
 				else
 					Com_sprintf(cl->pers.demoName, sizeof(cl->pers.demoName), "%s/%s-%s-%s", cl->pers.userName, cl->pers.userName, mapCourse, styleString); //TODO, change this to %s/%s-%s-%s so its puts in individual players folder
 			}
@@ -6447,9 +6449,6 @@ void Cmd_DFTop10_f(gentity_t *ent) {
 			if (s == SQLITE_ROW) {
 				char *tmpMsg = NULL;
 				// blank out time if course is secret
-				Com_Printf("shak debug - ent->client->pers.userName: %s\n", ent->client->pers.userName);
-				Com_Printf("shak debug - sqlite3_column_text(stmt, 0): %s\n", sqlite3_column_text(stmt, 0));
-				Com_Printf("shak debug - (!Q_stricmp(ent->client->pers.userName, sqlite3_column_text(stmt, 0)): %i\n", !Q_stricmp(ent->client->pers.userName, sqlite3_column_text(stmt, 0)));
 				if (!SC_IsTimeSecret( fullCourseName ) || !Q_stricmp(ent->client->pers.userName, sqlite3_column_text(stmt, 0))) {
 					TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr));
 				} else {
