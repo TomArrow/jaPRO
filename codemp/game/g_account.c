@@ -4645,7 +4645,7 @@ void Cmd_AccountStats_f(gentity_t *ent) { //Should i bother to cache player stat
 					IntegerToRaceName(sqlite3_column_int(stmt, 1), styleStr, sizeof(styleStr));
 
 					// blank out time if course is secret
-					if (!SC_IsTimeSecret( sqlite3_column_text(stmt, 0) )) {
+					if (!SC_IsTimeSecret( (char*)sqlite3_column_text(stmt, 0) )) {
 						TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr));
 					} else {
 						Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
@@ -6223,7 +6223,7 @@ void Cmd_DFRecent_f(gentity_t *ent) {
 			if (s == SQLITE_ROW) {
 				char *tmpMsg = NULL;
 				// blank out time if course is secret
-				if (!SC_IsTimeSecret( sqlite3_column_text(stmt, 1) )) {
+				if (!SC_IsTimeSecret( (char*)sqlite3_column_text(stmt, 1) )) {
 					TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr));
 				} else {
 					Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
@@ -6449,7 +6449,7 @@ void Cmd_DFTop10_f(gentity_t *ent) {
 			if (s == SQLITE_ROW) {
 				char *tmpMsg = NULL;
 				// blank out time if course is secret
-				if (!SC_IsTimeSecret( fullCourseName ) || !Q_stricmp(ent->client->pers.userName, sqlite3_column_text(stmt, 0))) {
+				if (!SC_IsTimeSecret( fullCourseName ) || !Q_stricmp(ent->client->pers.userName, (char*)sqlite3_column_text(stmt, 0))) {
 					TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr));
 				} else {
 					Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
@@ -6846,7 +6846,7 @@ void Cmd_DFTodo_f(gentity_t *ent) {
 					Q_strncpyz(rankStr, va("%i", sqlite3_column_int(stmt, 2)), sizeof(rankStr));
 					
 					// blank out time if course is secret
-					if (!SC_IsTimeSecret( sqlite3_column_text(stmt, 0) )) {
+					if (!SC_IsTimeSecret( (char*)sqlite3_column_text(stmt, 0) )) {
 						TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr));
 					} else {
 						Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
