@@ -422,7 +422,7 @@ void G_InitGame( int levelTime, int randomSeed, int restart ) {
 	G_SpawnCapRoutesFromCFG();
 	G_SpawnCosmeticUnlocks();
 	InitGameAccountStuff();
-	SC_CleanupSecretCourses(); // maybe suboptimal to do every mapload but shouldn't be too expensive?
+	// SC_CleanupSecretCourses(); // maybe suboptimal to do every mapload but shouldn't be too expensive?
 	SC_LoadSecretCourses();
 	SetGametypeFuncSolids();
 
@@ -3571,6 +3571,12 @@ void G_RunFrame( int levelTime ) {
 			trap->Print("Auto quitting server (up %i days)\n", levelTime / 1000 / 60 / 60 / 24);
 			trap->SendConsoleCommand(EXEC_APPEND, "quit\n");
 		}
+	}
+
+	static int lastSecretCleanup = 0;
+	if (level.time - lastSecretCleanup > 5 * 60 * 1000) { // Every 5 mins
+		SC_CleanupSecretCourses();
+		lastSecretCleanup = level.time;
 	}
 
 	if (level.gametype == GT_SIEGE &&
