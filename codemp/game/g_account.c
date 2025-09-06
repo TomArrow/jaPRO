@@ -7639,33 +7639,59 @@ void AddRunToWebServer(RaceRecord_t record)
 } 
 #endif
 
-// global variables used throughout
 secretCourse_t g_secretCourses[MAX_SECRET_COURSES];
 int g_numSecretCourses = 0;
 
-void SC_CleanupSecretCourses(void)
-{
-	sqlite3 *db;
-	char *sql;
-	time_t currentTime;
-
-	time(&currentTime);
-
-	CALL_SQLITE(open(LOCAL_DB_PATH, &db));
-
-	sql = "DELETE FROM LocalSecretCourses WHERE secret_until < ?";
-	sqlite3_stmt *stmt;
-	CALL_SQLITE(prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL));
-	CALL_SQLITE(bind_int64(stmt, 1, (sqlite3_int64)currentTime));
-
-	int result = sqlite3_step(stmt);
-	if (result != SQLITE_DONE)
-	{
-		G_ErrorPrint("ERROR: Failed to cleanup secret courses", result);
-	}
+void SC_LogExpiredSecretCourse(const char *coursename) {
+    sqlite3 *db;
+    char *sql;
+    sqlite3_stmt *stmt;
+    int s, rank = 1;
+    char logMsg[2048] = {0};
+    
+    CALL_SQLITE(open(LOCAL_DB_PATH, &db));
+    
+    // Get top 10 runs for this course
+    sql = "SELECT username, MIN(duration_ms) AS duration, topspeed, average "
+          "FROM LocalRun WHERE coursename = ? AND invalid = 0 "
+          "GROUP BY username ORDER BY duration ASC";
+          
+    CALL_SQLITE(prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL));
+    CALL_SQLITE(bind_text(stmt, 1, coursename, -1, SQLITE_STATIC));
+    
+    Com_sprintf(logMsg, sizeof(logMsg), "SECRET COURSE EXPIRED - Final standings for %s:\n", coursename);
+    
+    while ((s = sqlite3_step(stmt)) == SQLITE_ROW) {
+        char timeStr[32];
+        TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr));
+        
+        Q_strcat(logMsg, sizeof(logMsg), va("%d. %s - %s\n", 
+            rank, 
+            sqlite3_column_text(stmt, 0), 
+            timeStr));
+        rank++;
+    }
 
 	CALL_SQLITE(finalize(stmt));
-	CALL_SQLITE(close(db));
+    CALL_SQLITE(close(db));
+    
+    // Log to server console
+    trap->Print("%s", logMsg);
+}
+
+void SC_CleanupSecretCourses(void) {
+    time_t currentTime;
+    int i;
+    
+    time(&currentTime);
+    
+    // Check each secret course in memory
+    for (i = 0; i < g_numSecretCourses; i++) {
+        if (currentTime >= g_secretCourses[i].secret_until) {
+            SC_LogExpiredSecretCourse(g_secretCourses[i].coursename);
+            SC_RemoveSecretCourse(g_secretCourses[i].coursename);
+        }
+    }
 }
 
 void SC_LoadSecretCourses(void)
@@ -7827,8 +7853,8 @@ void SC_Cmd_AddSecret_f(gentity_t *ent) {
     if (args != 4) {
         trap->SendServerCommand(ent - g_entities, 
             "print \"Usage: /addsecretcourse <coursename> <time_value> <time_type>\n"
-            "Time types: day(s), week(s)\n"
-            "Examples: /addsecretcourse t2_trip 7 days, /addsecretcourse academy 1 week\n\"");
+            "Time types: hour(s), day(s), week(s)\n"
+            "Examples: /addsecretcourse dash1 7 days, /addsecretcourse a-mountain 1 week\n\"");
         return;
     }
 
@@ -7848,12 +7874,14 @@ void SC_Cmd_AddSecret_f(gentity_t *ent) {
     int secondsMultiplier = 0;
     
     if (!Q_stricmp(timeTypeStr, "day") || !Q_stricmp(timeTypeStr, "days")) {
-        secondsMultiplier = 86400; // 24 * 60 * 60
+        secondsMultiplier = 24 * 60 * 60; // day in seconds
     } else if (!Q_stricmp(timeTypeStr, "week") || !Q_stricmp(timeTypeStr, "weeks")) {
-        secondsMultiplier = 604800; // 7 * 24 * 60 * 60
+        secondsMultiplier = 7 * 24 * 60 * 60; // week in seconds
+    } else if (!Q_stricmp(timeTypeStr, "hour") || !Q_stricmp(timeTypeStr, "hours")) {
+        secondsMultiplier = 60 * 60; // hour in seconds
     } else {
         trap->SendServerCommand(ent - g_entities, 
-            "print \"Error: Invalid time type. Use 'day(s)' or 'week(s)'.\n\"");
+            "print \"Error: Invalid time type. Use 'hour(s)' 'day(s)' or 'week(s)'.\n\"");
         return;
     }
 
