@@ -7648,16 +7648,18 @@ void SC_LogExpiredSecretCourse(const char *coursename) {
     sqlite3_stmt *stmt;
     int s, rank = 1;
     char logMsg[2048] = {0};
+	int style = 1; //jka style only for now
     
     CALL_SQLITE(open(LOCAL_DB_PATH, &db));
     
     // Get top 10 runs for this course
     sql = "SELECT username, MIN(duration_ms) AS duration, topspeed, average "
-          "FROM LocalRun WHERE coursename = ? AND invalid = 0 "
+          "FROM LocalRun WHERE coursename = ? AND style = ? AND invalid = 0 "
           "GROUP BY username ORDER BY duration ASC";
           
     CALL_SQLITE(prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL));
     CALL_SQLITE(bind_text(stmt, 1, coursename, -1, SQLITE_STATIC));
+	CALL_SQLITE(bind_int(stmt, 2, style));
     
     Com_sprintf(logMsg, sizeof(logMsg), "SECRET COURSE EXPIRED - Final standings for %s:\n", coursename);
     
@@ -7888,7 +7890,6 @@ void SC_Cmd_AddSecret_f(gentity_t *ent) {
     // Clean the partial course name
     Q_strlwr(partialCourseName);
     Q_CleanStr(partialCourseName);
-    Q_strstrip(partialCourseName, " ", "");
     Q_strstrip(partialCourseName, "&", " ");
 
     // Find full course name from database (similar to rtop logic)
@@ -7953,7 +7954,6 @@ void SC_Cmd_RemoveSecret_f(gentity_t *ent) {
     // Clean the partial course name
     Q_strlwr(partialCourseName);
     Q_CleanStr(partialCourseName);
-    Q_strstrip(partialCourseName, " ", "");
     Q_strstrip(partialCourseName, "&", " ");
 
     // Find full course name from secret courses table
@@ -8025,5 +8025,5 @@ void SC_Cmd_ListSecret_f(gentity_t *ent) {
 	struct tm *serverTimeInfo = localtime(&currentTime);
 	strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", serverTimeInfo);
 
-	trap->SendServerCommand(ent - g_entities, va("print \"Current server time: %s\"", timeStr));
+	trap->SendServerCommand(ent - g_entities, va("print \"Current server time: %s\n\"", timeStr));
 }
