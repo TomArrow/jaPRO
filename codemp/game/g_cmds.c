@@ -5838,6 +5838,10 @@ void Cmd_Aminfo_f(gentity_t *ent)
 		Q_strcat(buf, sizeof(buf), "amRun");
 	trap->SendServerCommand(ent-g_entities, va("print \"%s\n\"", buf));
 
+	Q_strncpyz(buf, "   ^3SecretCourse commands: ", sizeof(buf));
+	Q_strcat(buf, sizeof(buf), "secretCourses ");
+	trap->SendServerCommand(ent-g_entities, va("print \"%s\n\"", buf));
+
 	Q_strncpyz(buf, "   ^3Admin commands: ", sizeof(buf));
 	if (!(ent->client->sess.accountFlags)) //fixme.. idk
 		Q_strcat(buf, sizeof(buf), "you are not an administrator on this server.\n");
@@ -5862,6 +5866,9 @@ void Cmd_Aminfo_f(gentity_t *ent)
 			Q_strcat(buf, sizeof(buf), "amTele ");
 		if (G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_GRANTADMIN, qfalse, qfalse, NULL))
 			Q_strcat(buf, sizeof(buf), "amGrantAdmin ");
+			// Secret course add/remove check on amgrantadmin flag, maybe move later
+			Q_strcat(buf, sizeof(buf), "addSecretCourse ");
+			Q_strcat(buf, sizeof(buf), "removeSecretCourse ");
 		if (G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_CHANGEMAP, qfalse, qfalse, NULL))
 			Q_strcat(buf, sizeof(buf), "amMap ");
 		if (G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_LISTMAPS, qfalse, qfalse, NULL))
