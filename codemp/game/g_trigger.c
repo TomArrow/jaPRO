@@ -1729,14 +1729,22 @@ void TimerStop(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO T
 
 		multi_trigger(trigger, player);
 
+		char fullCourseName[40];
+		SC_ConstructFullCourseName(fullCourseName, sizeof(fullCourseName), trigger->message);
+
 		if (trigger->noise_index) //Still play this always? Or handle this later..
 			G_Sound(player, CHAN_AUTO, trigger->noise_index);
 		if (ValidRaceSettings(trigger->spawnflags, player)) {
-			valid = qtrue;
-			if (player->client->pers.userName[0])
-				Q_strncpyz(c, S_COLOR_CYAN, sizeof(c));
-			else
-				Q_strncpyz(c, S_COLOR_GREEN, sizeof(c));
+			if (SC_IsTimeSecret(fullCourseName) && !player->client->pers.noFollow && (g_allowNoFollow.integer > 4)){//player finished secretcourse without /hide, g_allowNoFollow.integer cvar min. 5 //shak todo: check if 5 is sufficient
+				//valid stays qfalse, time won't be logged
+				trap->SendServerCommand(player - g_entities, "cp \"^3Warning: enable /hide to participate on a\nSecret Course!\n\n\n\n\n\n\n\n\n\n\""); //Print the checkpoint(s) its missing?
+			}else {
+				valid = qtrue;
+				if (player->client->pers.userName[0])
+					Q_strncpyz(c, S_COLOR_CYAN, sizeof(c));
+				else
+					Q_strncpyz(c, S_COLOR_GREEN, sizeof(c));
+			}
 		}
 
 		if (diffLag > 0) {//Should this be more trusting..?.. -20? -30?
