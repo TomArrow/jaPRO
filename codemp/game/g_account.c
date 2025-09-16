@@ -1551,10 +1551,10 @@ void TimeToString(int duration_ms, char *timeStr, size_t strSize) {
 	}
 }
 
+void SC_ConstructFullCourseName(char *fullCourseName, size_t bufferSize, const char *message);
 void PrintRaceTime(char *username, char *playername, char *message, char *style, int topspeed, int average, char *timeStr, int clientNum, int season_newRank, qboolean spb, int global_newRank, qboolean loggedin, qboolean valid, int season_oldRank, int global_oldRank, float addedScore, int awesomenoise, int worldrecordnoise) {
 	int nameColor, color;
 	char awardString[28] = {0}, messageStr[64] = {0}, nameStr[32] = {0};
-	char info[1024] = {0}, coursename[40] = {0};
 
 	//Com_Printf("SOldrank %i SNewrank %i GOldrank %i GNewrank %i Addscore %.1f\n", season_oldRank, season_newRank, global_oldRank, global_newRank, addedScore);
 
@@ -1647,21 +1647,13 @@ void PrintRaceTime(char *username, char *playername, char *message, char *style,
 
 	}
 
-	// construct full coursename (same logic as G_AddRaceTime) - maybe extract to function and use in G_AddRaceTime and here (and wherever else?)
-    trap->GetServerinfo(info, sizeof(info));
-    Q_strncpyz(coursename, Info_ValueForKey(info, "mapname"), sizeof(coursename));
+	// construct full coursename for SC check
+	char fullCourseName[40] = {0};
     
-    if (message) {
-        Q_strlwr(message);
-        Q_CleanStr(message);
-        Q_strcat(coursename, sizeof(coursename), va(" (%s)", message));
-    }
-    
-    Q_strlwr(coursename);
-    Q_CleanStr(coursename);
+	SC_ConstructFullCourseName(fullCourseName, sizeof(fullCourseName), message);
     
     // blank out time if course is secret
-    if (SC_IsTimeSecret(coursename)) {
+    if (SC_IsTimeSecret(fullCourseName)) {
         Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
     }
 
@@ -8026,4 +8018,25 @@ void SC_Cmd_ListSecret_f(gentity_t *ent) {
 	strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", serverTimeInfo);
 
 	trap->SendServerCommand(ent - g_entities, va("print \"Current server time: %s\n\"", timeStr));
+}
+
+void SC_ConstructFullCourseName(char *fullCourseName, size_t bufferSize, const char *message) {
+    char info[1024] = {0};
+    
+    if (!fullCourseName || bufferSize == 0) {
+        return;
+    }
+    
+    // Get mapname from serverinfo
+    trap->GetServerinfo(info, sizeof(info));
+    Q_strncpyz(fullCourseName, Info_ValueForKey(info, "mapname"), bufferSize);
+    
+    // Append message if provided
+    if (message && message[0]) {
+        Q_strcat(fullCourseName, bufferSize, va(" (%s)", message));
+    }
+    
+    // Clean the full course name
+    Q_strlwr(fullCourseName);
+    Q_CleanStr(fullCourseName);
 }

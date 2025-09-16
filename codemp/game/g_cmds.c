@@ -5864,11 +5864,12 @@ void Cmd_Aminfo_f(gentity_t *ent)
 			Q_strcat(buf, sizeof(buf), "Noclip ");
 		if (G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_ADMINTELE, qfalse, qfalse, NULL))
 			Q_strcat(buf, sizeof(buf), "amTele ");
-		if (G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_GRANTADMIN, qfalse, qfalse, NULL))
+		if (G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_GRANTADMIN, qfalse, qfalse, NULL)) {
 			Q_strcat(buf, sizeof(buf), "amGrantAdmin ");
 			// Secret course add/remove check on amgrantadmin flag, maybe move later
 			Q_strcat(buf, sizeof(buf), "addSecretCourse ");
 			Q_strcat(buf, sizeof(buf), "removeSecretCourse ");
+		}
 		if (G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_CHANGEMAP, qfalse, qfalse, NULL))
 			Q_strcat(buf, sizeof(buf), "amMap ");
 		if (G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_LISTMAPS, qfalse, qfalse, NULL))
