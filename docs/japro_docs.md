@@ -76,7 +76,7 @@
 	g_fullAdminPass		""
 	g_juniorAdminMsg	""
 	g_fullAdminMsg		""
-	g_allowNoFollow		0	//Allow players to hide themselves and not be spectated/seen in racemode.
+	g_allowNoFollow		0	//Allow players to hide themselves and not be spectated/seen in racemode. If set to 5, players will be forced to use /hide to record a run on a secret course.
 
 #### Other Gameplay 
 	g_flipKickDamageScale	1	
@@ -323,6 +323,7 @@
 	register	
 	rocketchange		
 	say_team_mod		
+	secretCourses
 	serverconfig	
 	showNet	
 	spot		
@@ -379,7 +380,9 @@
 	amban	
 	amforceteam	
 	amfreeze	
-	amgrantadmin	
+	amgrantadmin
+	addsecretcourse			// Make a course secret for the specified duration (X week/day/hour). If the course has recorded runs already then partial coursename will be matched. Otherwise specifying full coursename ("mapname (coursename)" format) is supported.
+	removesecretcourse		// Secret Course admin commands are tied to the grantadmin permission
 	aminfo	
 	amkick	
 	amkillvote	

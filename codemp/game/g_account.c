@@ -1654,6 +1654,9 @@ void PrintRaceTime(char *username, char *playername, char *message, char *style,
     
     // blank out time if course is secret
     if (SC_IsTimeSecret(fullCourseName)) {
+		// char privateTimeStr[32];
+		// Q_strncpyz(privateTimeStr, timeStr, sizeof(privateTimeStr));
+		trap->SendServerCommand(clientNum, va("cp \"Your time: %s\n\n\n\n\n\n\n\n\n\n\"", timeStr));
         Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
     }
 
@@ -7634,43 +7637,74 @@ void AddRunToWebServer(RaceRecord_t record)
 secretCourse_t g_secretCourses[MAX_SECRET_COURSES];
 int g_numSecretCourses = 0;
 
+
+
 void SC_LogExpiredSecretCourse(const char *coursename) {
     sqlite3 *db;
     char *sql;
     sqlite3_stmt *stmt;
     int s, rank = 1;
     char logMsg[2048] = {0};
-	int style = 1; //jka style only for now
+    char jsonMsg[4096] = {0}; // Larger buffer for JSON
+    int style = 1; // jka style only for now
+	char styleString[32];
+	IntegerToRaceName(style, styleString, sizeof(styleString));
+
+    time_t currentTime;
+    time(&currentTime);
     
     CALL_SQLITE(open(LOCAL_DB_PATH, &db));
     
-    // Get top 10 runs for this course
     sql = "SELECT username, MIN(duration_ms) AS duration, topspeed, average "
           "FROM LocalRun WHERE coursename = ? AND style = ? AND invalid = 0 "
           "GROUP BY username ORDER BY duration ASC";
           
     CALL_SQLITE(prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL));
     CALL_SQLITE(bind_text(stmt, 1, coursename, -1, SQLITE_STATIC));
-	CALL_SQLITE(bind_int(stmt, 2, style));
+    CALL_SQLITE(bind_int(stmt, 2, style));
     
+    // Initialize messages
     Com_sprintf(logMsg, sizeof(logMsg), "SECRET COURSE EXPIRED - Final standings for %s:\n", coursename);
+    Com_sprintf(jsonMsg, sizeof(jsonMsg), 
+        "{\"event\":\"secret_course_expired\",\"coursename\":\"%s\",\"style\":\"%s\",\"expired_at\":%d,\"standings\":[", 
+        coursename, styleString, (int)currentTime);
+    
+    qboolean firstEntry = qtrue;
     
     while ((s = sqlite3_step(stmt)) == SQLITE_ROW) {
         char timeStr[32];
-        TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr));
+        const char *username = (const char*)sqlite3_column_text(stmt, 0);
+        int duration = sqlite3_column_int(stmt, 1);
+        int topspeed = sqlite3_column_int(stmt, 2);
+        int average = sqlite3_column_int(stmt, 3);
         
-        Q_strcat(logMsg, sizeof(logMsg), va("%d. %s - %s\n", 
-            rank, 
-            sqlite3_column_text(stmt, 0), 
-            timeStr));
+        TimeToString(duration, timeStr, sizeof(timeStr));
+        
+        // Add to display message
+        Q_strcat(logMsg, sizeof(logMsg), va("%d. %s - %s\n", rank, username, timeStr));
+        
+        // Add to JSON (with comma separator for entries after the first)
+        if (!firstEntry) {
+            Q_strcat(jsonMsg, sizeof(jsonMsg), ",");
+        }
+        
+        Q_strcat(jsonMsg, sizeof(jsonMsg), va(
+            "{\"rank\":%d,\"username\":\"%s\",\"duration_ms\":%d,\"time_str\":\"%s\",\"topspeed\":%d,\"average\":%d}",
+            rank, username, duration, timeStr, topspeed, average));
+        
+        firstEntry = qfalse;
         rank++;
     }
-
-	CALL_SQLITE(finalize(stmt));
-    CALL_SQLITE(close(db));
     
-    // Log to server console
-    trap->Print("%s", logMsg);
+    // Close JSON array and object
+    Q_strcat(jsonMsg, sizeof(jsonMsg), "]}");
+    
+    CALL_SQLITE(finalize(stmt));
+    CALL_SQLITE(close(db));
+
+    // Log to server console and print to players
+    trap->SendServerCommand(-1, va("print \"%s\"", logMsg));
+    trap->Print("--SCLOG-START--%s--SCLOG-END--\n", jsonMsg);
 }
 
 void SC_CleanupSecretCourses(void) {
@@ -7704,7 +7738,7 @@ void SC_LoadSecretCourses(void)
 
 	CALL_SQLITE(open(LOCAL_DB_PATH, &db));
 
-	sql = "SELECT coursename, secret_until FROM LocalSecretCourses WHERE secret_until > ? ORDER BY coursename";
+	sql = "SELECT coursename, secret_until FROM LocalSecretCourses WHERE secret_until > ? ORDER BY secret_until ASC";
 	CALL_SQLITE(prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL));
 	CALL_SQLITE(bind_int64(stmt, 1, (sqlite3_int64)currentTime));
 
@@ -7733,7 +7767,7 @@ void SC_LoadSecretCourses(void)
 	CALL_SQLITE(finalize(stmt));
 	CALL_SQLITE(close(db));
 
-	trap->Print("Loaded %d secret courses into memory\n", g_numSecretCourses);
+	trap->Print("Loaded %d secret courses\n", g_numSecretCourses);
 }
 
 qboolean SC_IsTimeSecret(const char *coursename)
@@ -7794,6 +7828,7 @@ void SC_AddSecretCourse(const char *coursename, time_t secret_until)
 
 	// Reload the memory array to reflect the change
 	SC_LoadSecretCourses();
+	trap->Print("--SCLOG-START-- COURSE_ADDED: %s | %d --SCLOG-END--\n", coursename, secret_until);
 }
 
 void SC_RemoveSecretCourse(const char *coursename)
@@ -7822,6 +7857,8 @@ void SC_RemoveSecretCourse(const char *coursename)
 
 	CALL_SQLITE(finalize(stmt));
 	CALL_SQLITE(close(db));
+
+	trap->Print("--SCLOG-START-- COURSE_REMOVED: %s --SCLOG-END--\n", coursename);
 
 	// Reload the memory array to reflect the change
 	SC_LoadSecretCourses();
@@ -7873,7 +7910,9 @@ void SC_Cmd_AddSecret_f(gentity_t *ent) {
         secondsMultiplier = 7 * 24 * 60 * 60; // week in seconds
     } else if (!Q_stricmp(timeTypeStr, "hour") || !Q_stricmp(timeTypeStr, "hours")) {
         secondsMultiplier = 60 * 60; // hour in seconds
-    } else {
+    } else if (!Q_stricmp(timeTypeStr, "sec")) {
+		secondsMultiplier = 1;
+	} else {
         trap->SendServerCommand(ent - g_entities, 
             "print \"Error: Invalid time type. Use 'hour(s)' 'day(s)' or 'week(s)'.\n\"");
         return;
@@ -7984,6 +8023,7 @@ void SC_Cmd_ListSecret_f(gentity_t *ent) {
     char msg[1024] = {0};
     char timeStr[64];
     time_t currentTime;
+	struct tm *serverTimeInfo = localtime(&currentTime);
     int i;
 
     // Permission check
@@ -7998,23 +8038,66 @@ void SC_Cmd_ListSecret_f(gentity_t *ent) {
         return;
     }
 
+	// int hoursLeftToFirstExpiry;
+
     trap->SendServerCommand(ent - g_entities, "print \"Active Secret Courses:\n    ^5Course Name                        Secret Until\n\"");
 
     for (i = 0; i < g_numSecretCourses; i++) {
-        struct tm *timeInfo = localtime(&g_secretCourses[i].secret_until);
-        strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", timeInfo);
-        
-        char *tmpMsg = va("^3%-35s ^7%s\n", g_secretCourses[i].coursename, timeStr);
-        if (strlen(msg) + strlen(tmpMsg) >= sizeof(msg)) {
-            trap->SendServerCommand(ent - g_entities, va("print \"%s\"", msg));
-            msg[0] = '\0';
-        }
-        Q_strcat(msg, sizeof(msg), tmpMsg);
-    }
+		struct tm *timeInfo = localtime(&g_secretCourses[i].secret_until);
+		strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", timeInfo);
+		if (i == 0 && g_secretCourses[i].secret_until - currentTime < 24*60*60) {
+			//23 hours 26 minutes left || 1 minute 36 seconds left || 59 seconds left
+			int timeDiff = g_secretCourses[i].secret_until - currentTime;
+			int hoursLeft = timeDiff/60/60;
+			int minsLeft = (timeDiff - hoursLeft*60*60)/60;
+			int secsLeft = timeDiff - (hoursLeft*60*60 + minsLeft*60);
+			char hourStr[16], minStr[16], secStr[16];
+			char timeLeftStr[64];
+		
+			if (hoursLeft > 1) {
+				Q_strncpyz(hourStr, "hours", sizeof(hourStr));
+			}else {
+				Q_strncpyz(hourStr, "hour", sizeof(hourStr));
+			}
+			if (minsLeft > 1) {
+				Q_strncpyz(minStr, "minutes", sizeof(minStr));
+			}else {
+				Q_strncpyz(minStr, "minute", sizeof(minStr));
+			}
+			if (secsLeft > 1) {
+				Q_strncpyz(secStr, "seconds", sizeof(secStr));
+			}else {
+				Q_strncpyz(secStr, "second", sizeof(secStr));
+			}
+			
+			if (hoursLeft > 0 && minsLeft > 0) {
+				Com_sprintf(timeLeftStr, sizeof(timeLeftStr), "%d %s %d %s left", 
+						hoursLeft, hourStr, minsLeft, minStr);
+			} else if (hoursLeft > 0) {
+				Com_sprintf(timeLeftStr, sizeof(timeLeftStr), "%d %s left", hoursLeft, hourStr);
+			} else if (minsLeft > 0 && secsLeft > 0) {
+				Com_sprintf(timeLeftStr, sizeof(timeLeftStr), "%d %s %d %s left", 
+						minsLeft, minStr, secsLeft, secStr);
+			} else if (minsLeft > 0) {
+				Com_sprintf(timeLeftStr, sizeof(timeLeftStr), "%d %s left", minsLeft, minStr);
+			} else {
+				Com_sprintf(timeLeftStr, sizeof(timeLeftStr), "%d %s left", secsLeft, secStr);
+			}
+			
+			Q_strcat(timeStr, sizeof(timeStr), va(" - %s", timeLeftStr));
+		}
+	
+		char *tmpMsg = va("^3%-35s ^7%s\n", g_secretCourses[i].coursename, timeStr);
+		if (strlen(msg) + strlen(tmpMsg) >= sizeof(msg)) {
+			trap->SendServerCommand(ent - g_entities, va("print \"%s\"", msg));
+			msg[0] = '\0';
+		}
+		Q_strcat(msg, sizeof(msg), tmpMsg);
+	}
     
     trap->SendServerCommand(ent - g_entities, va("print \"%s\n\"", msg));
 
-	struct tm *serverTimeInfo = localtime(&currentTime);
+	
 	strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", serverTimeInfo);
 
 	trap->SendServerCommand(ent - g_entities, va("print \"Current server time: %s\n\"", timeStr));

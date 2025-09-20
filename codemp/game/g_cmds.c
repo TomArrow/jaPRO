@@ -9007,6 +9007,7 @@ command_t commands[] = {
 	{ "levelshot",			Cmd_LevelShot_f,			CMD_CHEAT|CMD_ALIVE|CMD_NOINTERMISSION },
 
 	{ "secretcourses",		SC_Cmd_ListSecret_f,		0 },
+	{ "sc",					SC_Cmd_ListSecret_f,		0 },
 
 	{ "login",				Cmd_ACLogin_f,				CMD_NOINTERMISSION },
 	{ "logout",				Cmd_ACLogout_f,				CMD_NOINTERMISSION },

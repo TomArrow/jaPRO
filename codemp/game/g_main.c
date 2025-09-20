@@ -3574,7 +3574,7 @@ void G_RunFrame( int levelTime ) {
 	}
 
 	static int lastSecretCleanup = 0;
-	if (level.time - lastSecretCleanup > 5 * 60 * 1000) { // Every 5 mins
+	if (level.time - lastSecretCleanup > 1 * 60 * 1000) { // x mins
 		SC_CleanupSecretCourses();
 		lastSecretCleanup = level.time;
 	}
