@@ -7717,7 +7717,7 @@ void SC_CleanupSecretCourses(void) {
     for (i = 0; i < g_numSecretCourses; i++) {
         if (currentTime >= g_secretCourses[i].secret_until) {
             SC_LogExpiredSecretCourse(g_secretCourses[i].coursename);
-            SC_RemoveSecretCourse(g_secretCourses[i].coursename);
+            SC_RemoveSecretCourse(g_secretCourses[i].coursename, qtrue);
         }
     }
 }
@@ -7831,7 +7831,7 @@ void SC_AddSecretCourse(const char *coursename, time_t secret_until)
 	trap->Print("--SCLOG-START-- COURSE_ADDED: %s | %d --SCLOG-END--\n", coursename, secret_until);
 }
 
-void SC_RemoveSecretCourse(const char *coursename)
+void SC_RemoveSecretCourse(const char *coursename, qboolean suppressSCLog)
 {
 	sqlite3 *db;
 	char *sql;
@@ -7858,7 +7858,9 @@ void SC_RemoveSecretCourse(const char *coursename)
 	CALL_SQLITE(finalize(stmt));
 	CALL_SQLITE(close(db));
 
-	trap->Print("--SCLOG-START-- COURSE_REMOVED: %s --SCLOG-END--\n", coursename);
+	if (!suppressSCLog) {
+		trap->Print("--SCLOG-START-- COURSE_REMOVED: %s --SCLOG-END--\n", coursename);
+	}
 
 	// Reload the memory array to reflect the change
 	SC_LoadSecretCourses();
@@ -8013,32 +8015,33 @@ void SC_Cmd_RemoveSecret_f(gentity_t *ent) {
     CALL_SQLITE(close(db));
 
     // Remove from database
-    SC_RemoveSecretCourse(fullCourseName);
+    SC_RemoveSecretCourse(fullCourseName, qfalse);
 
     trap->SendServerCommand(ent - g_entities, 
         va("print \"Secret course removed: ^3%s^7\n\"", fullCourseName));
 }
 
 void SC_Cmd_ListSecret_f(gentity_t *ent) {
-    char msg[1024] = {0};
-    char timeStr[64];
-    time_t currentTime;
-	struct tm *serverTimeInfo = localtime(&currentTime);
-    int i;
-
     // Permission check
     if (!G_AdminAllowed(ent, JAPRO_ACCOUNTFLAG_A_GRANTADMIN, qfalse, qtrue, "secretcourses")) {
         return;
     }
-
-    time(&currentTime);
 
     if (g_numSecretCourses == 0) {
         trap->SendServerCommand(ent - g_entities, "print \"No secret courses currently active.\n\"");
         return;
     }
 
-	// int hoursLeftToFirstExpiry;
+	char msg[1024] = {0};
+    char timeStr[64];
+    time_t currentTime;
+    int i;
+
+	time(&currentTime);
+
+	int timeDiff, hoursLeft, minsLeft, secsLeft;
+	char hourStr[16], minStr[16], secStr[16];
+	char timeLeftStr[64];
 
     trap->SendServerCommand(ent - g_entities, "print \"Active Secret Courses:\n    ^5Course Name                        Secret Until\n\"");
 
@@ -8047,12 +8050,10 @@ void SC_Cmd_ListSecret_f(gentity_t *ent) {
 		strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", timeInfo);
 		if (i == 0 && g_secretCourses[i].secret_until - currentTime < 24*60*60) {
 			//23 hours 26 minutes left || 1 minute 36 seconds left || 59 seconds left
-			int timeDiff = g_secretCourses[i].secret_until - currentTime;
-			int hoursLeft = timeDiff/60/60;
-			int minsLeft = (timeDiff - hoursLeft*60*60)/60;
-			int secsLeft = timeDiff - (hoursLeft*60*60 + minsLeft*60);
-			char hourStr[16], minStr[16], secStr[16];
-			char timeLeftStr[64];
+			timeDiff = g_secretCourses[i].secret_until - currentTime;
+			hoursLeft = timeDiff/60/60;
+			minsLeft = (timeDiff - hoursLeft*60*60)/60;
+			secsLeft = timeDiff - (hoursLeft*60*60 + minsLeft*60);
 		
 			if (hoursLeft > 1) {
 				Q_strncpyz(hourStr, "hours", sizeof(hourStr));
@@ -8070,7 +8071,9 @@ void SC_Cmd_ListSecret_f(gentity_t *ent) {
 				Q_strncpyz(secStr, "second", sizeof(secStr));
 			}
 			
-			if (hoursLeft > 0 && minsLeft > 0) {
+			if (secsLeft < 0) {
+			    Q_strncpyz(timeLeftStr, "Any second now...", sizeof(timeLeftStr));
+			} else if (hoursLeft > 0 && minsLeft > 0) {
 				Com_sprintf(timeLeftStr, sizeof(timeLeftStr), "%d %s %d %s left", 
 						hoursLeft, hourStr, minsLeft, minStr);
 			} else if (hoursLeft > 0) {
@@ -8097,7 +8100,7 @@ void SC_Cmd_ListSecret_f(gentity_t *ent) {
     
     trap->SendServerCommand(ent - g_entities, va("print \"%s\n\"", msg));
 
-	
+	struct tm *serverTimeInfo = localtime(&currentTime);
 	strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", serverTimeInfo);
 
 	trap->SendServerCommand(ent - g_entities, va("print \"Current server time: %s\n\"", timeStr));

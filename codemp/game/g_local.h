@@ -2100,5 +2100,5 @@ void SC_CleanupSecretCourses(void);
 void SC_LoadSecretCourses(void);
 qboolean SC_IsTimeSecret(const char *coursename);
 void SC_AddSecretCourse(const char *coursename, time_t secret_until);
-void SC_RemoveSecretCourse(const char *coursename);
+void SC_RemoveSecretCourse(const char *coursename, qboolean suppressSCLog);
 void SC_ConstructFullCourseName(char *fullCourseName, size_t bufferSize, const char *message);
