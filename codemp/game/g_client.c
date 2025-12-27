@@ -2397,6 +2397,35 @@ qboolean ClientUserinfoChanged( int clientNum ) { //I think anything treated as 
 	else
 		client->pers.noDuelTele = qfalse;
 
+	// Check for illegal plugin changes during active run
+	if (client->pers.stats.startTime > 0) {  // Timer is active
+		int currentPlugins = atoi(s);
+		int pluginsAtStart = client->pers.stats.pluginsAtStart;
+
+		// Define illegal-to-toggle plugins
+		const int illegalPlugins = JAPRO_PLUGIN_BHOP | JAPRO_PLUGIN_NOROLL | JAPRO_PLUGIN_NOCART;
+
+		// Check if any illegal plugins changed state
+		int changedPlugins = currentPlugins ^ pluginsAtStart;
+		if (changedPlugins & illegalPlugins) {
+			// Determine which specific plugin(s) changed
+			char pluginNames[128] = "";
+			if (changedPlugins & JAPRO_PLUGIN_BHOP)
+				Q_strcat(pluginNames, sizeof(pluginNames), "BHOP ");
+			if (changedPlugins & JAPRO_PLUGIN_NOROLL)
+				Q_strcat(pluginNames, sizeof(pluginNames), "NOROLL ");
+			if (changedPlugins & JAPRO_PLUGIN_NOCART)
+				Q_strcat(pluginNames, sizeof(pluginNames), "NOCART ");
+
+			// Send warning message
+			trap->SendServerCommand(ent - g_entities,
+				va("cp \"Timer reset!\n^3Plugin changed: %s\"", pluginNames));
+
+			// Reset timer
+			ResetPlayerTimers(ent, qfalse);
+		}
+	}
+
 	s = Info_ValueForKey( userinfo, "rate" );
 	client->pers.rate = atoi(s);
 	if (client->pers.rate > 90000)
@@ -2486,6 +2515,18 @@ qboolean ClientUserinfoChanged( int clientNum ) { //I think anything treated as 
 		client->pers.maxFPS = 1000;
 	else if (client->pers.maxFPS < 0)
 		client->pers.maxFPS = 0;
+
+	// Check for maxFPS change during active run
+	if (client->pers.stats.startTime > 0) {  // Timer is active
+		if (client->pers.maxFPS != client->pers.stats.maxFpsAtStart) {
+			// maxFPS changed mid-run - reset timer
+			trap->SendServerCommand(ent - g_entities,
+				va("cp \"Timer reset!\n^3maxFPS changed: %i -> %i\"",
+					client->pers.stats.maxFpsAtStart, client->pers.maxFPS));
+
+			ResetPlayerTimers(ent, qfalse);
+		}
+	}
 
 //JAPRO - Serverside - Get Clients Mod version, if any - End
 

@@ -769,6 +769,8 @@ static QINLINE void ResetSpecificPlayerTimers(gentity_t* ent, qboolean print) {
 	ent->client->pers.stats.topSpeedFlag = 0;
 	ent->client->pers.stats.displacementFlag = 0;
 	ent->client->pers.stats.displacementFlagSamples = 0;
+	ent->client->pers.stats.pluginsAtStart = 0;  // Clear plugin snapshot
+	ent->client->pers.stats.maxFpsAtStart = 0;   // Clear maxFPS snapshot
 	ent->client->ps.stats[STAT_JUMPTIME] = 0;
 	ent->client->ps.stats[STAT_WJTIME] = 0;
 	ent->client->ps.fd.forceRageRecoveryTime = 0;

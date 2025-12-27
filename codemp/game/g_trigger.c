@@ -1437,6 +1437,8 @@ static QINLINE int GetTimeMS() {
 void G_UpdatePlaytime(int null, char *username, int seconds );
 void TimerStart(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO Timers
 	int lessTime;
+	char userinfo[MAX_INFO_STRING];
+	char *s;
 
 	if (!player->client)
 		return;
@@ -1568,13 +1570,21 @@ void TimerStart(gentity_t *trigger, gentity_t *player, trace_t *trace) {//JAPRO 
 
 	lessTime = InterpolateTouchTime(player, trigger);
 
-	player->client->pers.stats.startLevelTime = level.time; //Should this use trap milliseconds instead.. 
+	player->client->pers.stats.startLevelTime = level.time; //Should this use trap milliseconds instead..
 	player->client->pers.stats.startTime = GetTimeMS() - lessTime;
 	player->client->pers.stats.topSpeed = 0;
 	player->client->pers.stats.displacement = 0;
 	player->client->pers.stats.displacementSamples = 0;
 	player->client->pers.stats.checkpoints = 0;
 	player->client->pers.stats.courseID = trigger->courseID;
+
+	// Snapshot plugin state at timer start for mid-run change detection
+	trap->GetUserinfo(player - g_entities, userinfo, sizeof(userinfo));
+	s = Info_ValueForKey(userinfo, "cp_pluginDisable");
+	player->client->pers.stats.pluginsAtStart = atoi(s);
+
+	// Snapshot maxFPS at timer start for mid-run change detection
+	player->client->pers.stats.maxFpsAtStart = player->client->pers.maxFPS;
 
 	if (player->client->ps.stats[STAT_RESTRICTIONS] & JAPRO_RESTRICT_ALLOWTELES) { //Reset their telemark on map start if this is the case
 		player->client->pers.telemarkOrigin[0] = 0;

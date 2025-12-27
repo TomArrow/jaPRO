@@ -790,6 +790,8 @@ typedef struct {//JAPRO - Serverside - Stats
 	short lowestHP;
 	int checkpoints;
 	int courseID;
+	int pluginsAtStart;  // cp_pluginDisable bitmask snapshot at timer start
+	int maxFpsAtStart;   // maxFPS value snapshot at timer start
 } stats_t;
 
 // client data that stays across multiple respawns, but is cleared
@@ -1571,6 +1573,7 @@ void Cmd_SaberAttackCycle_f(gentity_t *ent);
 int G_ItemUsable(playerState_t *ps, int forcedUse);
 void Cmd_ToggleSaber_f(gentity_t *ent);
 void Cmd_EngageDuel_f(gentity_t *ent, int dueltype);
+void ResetPlayerTimers(gentity_t *ent, qboolean print);
 
 //
 // g_items.c
