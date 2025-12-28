@@ -7707,16 +7707,201 @@ void SC_LogExpiredSecretCourse(const char *coursename) {
     trap->Print("--SCLOG-START--%s--SCLOG-END--\n", jsonMsg);
 }
 
+// Extract coursename from demo filename
+// Filename format: {username}-{coursename}-{style}.dm_26
+static void SC_ExtractCoursenameFromDemo(const char *filename, const char *username, char *outCoursename, size_t outSize) {
+    const char *start, *end;
+    size_t usernameLen, coursenameLen;
+
+    if (!filename || !username || !outCoursename || outSize == 0) {
+        if (outCoursename && outSize > 0) {
+            outCoursename[0] = '\0';
+        }
+        return;
+    }
+
+    usernameLen = strlen(username);
+
+    // Find start of coursename (after "username-")
+    if (Q_stricmpn(filename, username, usernameLen) != 0 || filename[usernameLen] != '-') {
+        outCoursename[0] = '\0';
+        return;
+    }
+
+    start = filename + usernameLen + 1; // Skip "username-"
+
+    // Find end of coursename (last '-' before ".dm_")
+    end = strrchr(start, '-');
+    if (!end || end == start) {
+        outCoursename[0] = '\0';
+        return;
+    }
+
+    // Extract coursename
+    coursenameLen = end - start;
+    if (coursenameLen >= outSize) {
+        coursenameLen = outSize - 1;
+    }
+
+    Q_strncpyz(outCoursename, start, coursenameLen + 1);
+}
+
+// Copy a demo file from source to destination
+static qboolean SC_CopyDemoFile(const char *sourcePath, const char *destPath) {
+    fileHandle_t sourceHandle, destHandle;
+    int fLen;
+    static char buffer[10 * 1024 * 1024]; // 10MB buffer (static to avoid stack overflow)
+
+    if (!sourcePath || !destPath) {
+        return qfalse;
+    }
+
+    // Open source file for reading
+    fLen = trap->FS_Open(sourcePath, &sourceHandle, FS_READ);
+    if (!sourceHandle || fLen <= 0) {
+        trap->Print("SC_Archive: ERROR - Failed to open source file: %s\n", sourcePath);
+        return qfalse;
+    }
+
+    // Check if file is too large
+    if (fLen > sizeof(buffer)) {
+        trap->FS_Close(sourceHandle);
+        trap->Print("SC_Archive: ERROR - File too large (%d bytes): %s\n", fLen, sourcePath);
+        return qfalse;
+    }
+
+    // Read entire file into buffer
+    if (trap->FS_Read(buffer, fLen, sourceHandle) != fLen) {
+        trap->FS_Close(sourceHandle);
+        trap->Print("SC_Archive: ERROR - Failed to read source file: %s\n", sourcePath);
+        return qfalse;
+    }
+
+    trap->FS_Close(sourceHandle);
+
+    // Open destination file for writing
+    trap->FS_Open(destPath, &destHandle, FS_WRITE);
+    if (!destHandle) {
+        trap->Print("SC_Archive: ERROR - Failed to open destination file: %s\n", destPath);
+        return qfalse;
+    }
+
+    // Write buffer to destination
+    if (trap->FS_Write(buffer, fLen, destHandle) != fLen) {
+        trap->FS_Close(destHandle);
+        trap->Print("SC_Archive: ERROR - Failed to write destination file: %s\n", destPath);
+        return qfalse;
+    }
+
+    trap->FS_Close(destHandle);
+
+    return qtrue;
+}
+
+// Archive demos for an expired secret course
+static void SC_ArchiveExpiredCourseDemos(const char *coursename) {
+    char cleanedCourseName[40];
+    char dirBuffer[16384];
+    char fileBuffer[65536];
+    char demoExt[16];
+    int numDirs, numFiles, totalArchived = 0;
+    char *dirname, *filename;
+    int i, j;
+
+    if (!coursename || !coursename[0]) {
+        return;
+    }
+
+    // Clean the coursename for filename matching (same process as demo recording)
+    Q_strncpyz(cleanedCourseName, coursename, sizeof(cleanedCourseName));
+    StripWhitespace(cleanedCourseName);
+    Q_strstrip(cleanedCourseName, "\n\r;:.?*<>|\\/\"", NULL);
+
+    trap->Print("SC_Archive: Archiving demos for expired course: %s (cleaned: %s)\n", coursename, cleanedCourseName);
+
+    // Build demo extension string (hardcoded protocol version 26)
+    Com_sprintf(demoExt, sizeof(demoExt), ".dm_26");
+
+    // Get list of user directories in demos/races/secret/
+    numDirs = trap->FS_GetFileList("demos/races/secret", "/", dirBuffer, sizeof(dirBuffer));
+
+    if (numDirs == 0) {
+        trap->Print("SC_Archive: No user directories found in demos/races/secret/\n");
+        return;
+    }
+
+    trap->Print("SC_Archive: Found %d user directories\n", numDirs);
+
+    // Iterate through each username directory
+    dirname = dirBuffer;
+    for (i = 0; i < numDirs; i++) {
+        // Skip "." and ".." entries
+        if (Q_stricmp(dirname, ".") == 0 || Q_stricmp(dirname, "..") == 0) {
+            dirname += strlen(dirname) + 1;
+            continue;
+        }
+
+        // Get list of demo files in this user's directory
+        char userDemoPath[MAX_QPATH];
+        char userExpiredPath[256];
+        Com_sprintf(userDemoPath, sizeof(userDemoPath), "demos/races/secret/%s", dirname);
+        Com_sprintf(userExpiredPath, sizeof(userExpiredPath), "demos/races/expired_secret/%s", dirname);
+
+        numFiles = trap->FS_GetFileList(userDemoPath, demoExt, fileBuffer, sizeof(fileBuffer));
+
+        // Iterate through each demo file
+        filename = fileBuffer;
+        for (j = 0; j < numFiles; j++) {
+            char extractedCoursename[40];
+
+            // Extract coursename from filename
+            SC_ExtractCoursenameFromDemo(filename, dirname, extractedCoursename, sizeof(extractedCoursename));
+
+            // Check if this demo matches the expired course
+            if (extractedCoursename[0] && Q_stricmp(extractedCoursename, cleanedCourseName) == 0) {
+                char sourcePath[256];
+                char destPath[256];
+
+                // Note: FS_GetFileList returns filenames WITH extension when extension filter is used
+                Com_sprintf(sourcePath, sizeof(sourcePath), "%s/%s", userDemoPath, filename);
+                Com_sprintf(destPath, sizeof(destPath), "demos/races/expired_secret/%s/%s", dirname, filename);
+
+                // Copy the file
+                if (SC_CopyDemoFile(sourcePath, destPath)) {
+                    trap->Print("SC_Archive: Copied %s to expired_secret/%s/%s\n", filename, dirname, filename);
+                    totalArchived++;
+
+                    // TODO: once 100% works, enable file deletion from /secret
+                    /*
+                    fileHandle_t deleteHandle;
+                    if (trap->FS_Open(sourcePath, &deleteHandle, FS_WRITE)) {
+                        trap->FS_Close(deleteHandle);
+                        trap->Print("SC_Archive: Moved (deleted original) %s\n", filename);
+                    }
+                    */
+                }
+            }
+
+            filename += strlen(filename) + 1; // Move to next filename
+        }
+
+        dirname += strlen(dirname) + 1; // Move to next directory name
+    }
+
+    trap->Print("SC_Archive: Completed archival for %s (%d demos archived)\n", coursename, totalArchived);
+}
+
 void SC_CleanupSecretCourses(void) {
     time_t currentTime;
     int i;
-    
+
     time(&currentTime);
-    
+
     // Check each secret course in memory
     for (i = 0; i < g_numSecretCourses; i++) {
         if (currentTime >= g_secretCourses[i].secret_until) {
             SC_LogExpiredSecretCourse(g_secretCourses[i].coursename);
+            SC_ArchiveExpiredCourseDemos(g_secretCourses[i].coursename);
             SC_RemoveSecretCourse(g_secretCourses[i].coursename, qtrue);
         }
     }
