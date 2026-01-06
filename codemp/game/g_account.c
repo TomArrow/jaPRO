@@ -1862,8 +1862,12 @@ void Cmd_Unlocks_f(gentity_t *ent) {
 	char styleString[32];
 	char timeStr[32];
 	unsigned int playerUnlocks = client->pers.unlocks;
+	char buffer[1024] = {0};  // Chunk buffer (stay under engine limit)
+	char line[256];
+	char *colorCode;
+	int bufferLen = 0;
 
-	// Parse locked/unlocked filter argument
+	// Parse filter argument
 	if (trap->Argc() > 1) {
 		trap->Argv(1, filter, sizeof(filter));
 		Q_strlwr(filter);
@@ -1875,23 +1879,22 @@ void Cmd_Unlocks_f(gentity_t *ent) {
 		}
 	}
 
-	// Header
+	// Build header
 	if (!isLoggedIn) {
-		trap->SendServerCommand(ent - g_entities, "print \"^5Cosmetic unlock requirements (^3not logged in^7):\n\"");
+		Q_strcat(buffer, sizeof(buffer), "^5Cosmetic unlock requirements (^3not logged in^7):\n");
 	} else if (!showLocked) {
-		trap->SendServerCommand(ent - g_entities, "print \"^5Your unlocked cosmetics:\n\"");
+		Q_strcat(buffer, sizeof(buffer), "^5Your unlocked cosmetics:\n");
 	} else if (!showUnlocked) {
-		trap->SendServerCommand(ent - g_entities, "print \"^5Locked cosmetics:\n\"");
+		Q_strcat(buffer, sizeof(buffer), "^5Locked cosmetics:\n");
 	} else {
-		trap->SendServerCommand(ent - g_entities, "print \"^5Cosmetic unlocks:\n\"");
+		Q_strcat(buffer, sizeof(buffer), "^5Cosmetic unlocks:\n");
 	}
+	bufferLen = strlen(buffer);
 
-	// Loop through all cosmetics
+	// Loop through all cosmetics and build output
 	for (i = 0; i < MAX_COSMETIC_UNLOCKS; i++) {
 		qboolean hasUnlock = isLoggedIn && (playerUnlocks & (1 << i));
 		qboolean found = qfalse;
-		char *colorCode;
-		char output[256];
 
 		// Apply filter
 		if (hasUnlock && !showUnlocked) continue;
@@ -1906,33 +1909,52 @@ void Cmd_Unlocks_f(gentity_t *ent) {
 				found = qtrue;
 				IntegerToRaceName(cosmeticUnlocks[j].style, styleString, sizeof(styleString));
 
-				// Format output
+				// Format line (show requirements for both locked and unlocked)
 				if (cosmeticUnlocks[j].duration) {
 					TimeToString(cosmeticUnlocks[j].duration, timeStr, sizeof(timeStr));
-					Com_sprintf(output, sizeof(output),
-						"print \"^7%2d %s %s(requires %s %s in under %s)\n\"",
+					Com_sprintf(line, sizeof(line),
+						"^7%2d %s %s(requires %s %s in under %s)\n",
 						i, cosmeticNames[i], colorCode,
 						cosmeticUnlocks[j].mapname, styleString, timeStr);
 				} else {
-					Com_sprintf(output, sizeof(output),
-						"print \"^7%2d %s %s(requires %s %s)\n\"",
+					Com_sprintf(line, sizeof(line),
+						"^7%2d %s %s(requires %s %s)\n",
 						i, cosmeticNames[i], colorCode,
 						cosmeticUnlocks[j].mapname, styleString);
 				}
 
-				trap->SendServerCommand(ent - g_entities, output);
+				// Check if adding this line would exceed safe buffer size
+				if (bufferLen + strlen(line) > 800) {
+					// Send current chunk and start new one
+					trap->SendServerCommand(ent - g_entities, va("print \"%s\"", buffer));
+					buffer[0] = '\0';
+					bufferLen = 0;
+				}
+
+				Q_strcat(buffer, sizeof(buffer), line);
+				bufferLen += strlen(line);
 				count++;
 				break;
 			}
 		}
 
-		// If no unlock requirement found, show cosmetic anyway (if logged out or it matches filter)
+		// If no unlock requirement found
 		if (!found) {
 			if (!isLoggedIn || (hasUnlock && showUnlocked)) {
-				Com_sprintf(output, sizeof(output),
-					"print \"^7%2d %s%s\n\"",
+				Com_sprintf(line, sizeof(line),
+					"^7%2d %s%s\n",
 					i, cosmeticNames[i], !isLoggedIn ? " ^3(no requirement set)" : "");
-				trap->SendServerCommand(ent - g_entities, output);
+
+				// Check if adding this line would exceed safe buffer size
+				if (bufferLen + strlen(line) > 800) {
+					// Send current chunk and start new one
+					trap->SendServerCommand(ent - g_entities, va("print \"%s\"", buffer));
+					buffer[0] = '\0';
+					bufferLen = 0;
+				}
+
+				Q_strcat(buffer, sizeof(buffer), line);
+				bufferLen += strlen(line);
 				count++;
 			}
 		}
@@ -1941,14 +1963,43 @@ void Cmd_Unlocks_f(gentity_t *ent) {
 	// Footer
 	if (count == 0) {
 		if (!showLocked) {
-			trap->SendServerCommand(ent - g_entities, "print \"^3You haven't unlocked any cosmetics yet.\n\"");
+			Com_sprintf(line, sizeof(line), "^3You haven't unlocked any cosmetics yet.\n");
 		} else if (!showUnlocked) {
-			trap->SendServerCommand(ent - g_entities, "print \"^2You've unlocked all cosmetics!\n\"");
+			Com_sprintf(line, sizeof(line), "^2You've unlocked all cosmetics!\n");
 		}
+
+		if (bufferLen + strlen(line) > 800) {
+			trap->SendServerCommand(ent - g_entities, va("print \"%s\"", buffer));
+			buffer[0] = '\0';
+			bufferLen = 0;
+		}
+		Q_strcat(buffer, sizeof(buffer), line);
+		bufferLen += strlen(line);
 	}
 
-	trap->SendServerCommand(ent - g_entities, "print \"^7Type ^3/cosmetics [id]^7 to apply an unlocked cosmetic.\n\"");
-	trap->SendServerCommand(ent - g_entities, "print \"^7Type ^3/unlocks [locked/unlocked] ^7 to filter unlocks. /ul [u/l] also works as a shorthand.\n\"");
+	// Add usage instructions
+	Com_sprintf(line, sizeof(line), "^7Type ^3/cosmetics [id]^7 to apply an unlocked cosmetic.\n");
+	if (bufferLen + strlen(line) > 800) {
+		trap->SendServerCommand(ent - g_entities, va("print \"%s\"", buffer));
+		buffer[0] = '\0';
+		bufferLen = 0;
+	}
+	Q_strcat(buffer, sizeof(buffer), line);
+	bufferLen += strlen(line);
+
+	Com_sprintf(line, sizeof(line), "^7Type ^3/unlocks [locked/unlocked] ^7 to filter unlocks. /ul [u/l] also works as a shorthand.\n");
+	if (bufferLen + strlen(line) > 800) {
+		trap->SendServerCommand(ent - g_entities, va("print \"%s\"", buffer));
+		buffer[0] = '\0';
+		bufferLen = 0;
+	}
+	Q_strcat(buffer, sizeof(buffer), line);
+	bufferLen += strlen(line);
+
+	// Send final chunk if there's anything left
+	if (bufferLen > 0) {
+		trap->SendServerCommand(ent - g_entities, va("print \"%s\"", buffer));
+	}
 }
 
 void StripWhitespace(char *s);
