@@ -8875,6 +8875,7 @@ void Cmd_Haste_f(gentity_t* ent);
 void SC_Cmd_AddSecret_f(gentity_t *ent);
 void SC_Cmd_RemoveSecret_f(gentity_t *ent);
 void SC_Cmd_ListSecret_f(gentity_t *ent);
+void Cmd_Unlocks_f(gentity_t *ent);
 
 /* This array MUST be sorted correctly by alphabetical name field */
 command_t commands[] = {
@@ -9090,6 +9091,8 @@ command_t commands[] = {
 	{ "trace",				Cmd_Trace_f,				CMD_NOINTERMISSION },
 
 	{ "t_use",				Cmd_TargetUse_f,			CMD_CHEAT|CMD_NOINTERMISSION|CMD_ALIVE },
+	{ "ul",					Cmd_Unlocks_f,				CMD_NOINTERMISSION },
+	{ "unlocks",			Cmd_Unlocks_f,				CMD_NOINTERMISSION },
 	{ "vgs_cmd",			Cmd_VGSCommand_f,			CMD_NOINTERMISSION },//vgs
 	{ "voice_cmd",			Cmd_VoiceCommand_f,			0 },
 	{ "vote",				Cmd_Vote_f,					CMD_NOINTERMISSION },

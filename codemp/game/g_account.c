@@ -31,7 +31,43 @@ static char LOCAL_DB_PATH[MAX_QPATH];
             fprintf (stderr, "%s failed with status %d: %s\n",  \
                      #f, i, sqlite3_errmsg (db));               \
         }                                                       \
-    }   
+    }
+
+// Cosmetic names (synced from cgame/cg_consolecmds.c)
+static const char *cosmeticNames[MAX_COSMETIC_UNLOCKS] = {
+	"Santa hat",                    // 0
+	"Jack-o'-lantern",             // 1
+	"Bass Pro Shops baseball cap", // 2
+	"Indiana Jones",               // 3
+	"Kane's Kringe Kap",          // 4
+	"Sombrero",                    // 5
+	"Top hat",                     // 6
+	"Mask",                        // 7
+	"Graduation cap",              // 8
+	"Goose",                       // 9
+	"Black fedora",                // 10
+	"Blue fedora",                 // 11
+	"Pimp hat",                    // 12
+	"Headcrab",                    // 13
+	"Vader Cape",                  // 14
+	"Shoulder Yoda",               // 15
+	"Horns",                       // 16
+	"Metal Helm",                  // 17
+	"Afro",                        // 18
+	"AK47",                        // 19
+	"Bucket",                      // 20
+	"Crowbar",                     // 21
+	"Crown",                       // 22
+	"Royal Cape",                  // 23
+	"Beard",                       // 24
+	"Grogu",                       // 25
+	"Plague Mask",                 // 26
+	"Glasses",                     // 27
+	"Mario",                       // 28
+	"Rocket Launcher",             // 29
+	"Predator",                    // 30
+	"Super Saiyan"                 // 31
+};
 
 #if 0
 typedef struct RaceRecord_s {
@@ -1814,6 +1850,105 @@ void SV_RebuildUnlocks_f(void) {
 	CALL_SQLITE(finalize(stmt));
 
 	CALL_SQLITE(close(db));
+}
+
+void Cmd_Unlocks_f(gentity_t *ent) {
+	gclient_t *client = ent->client;
+	int i, j;
+	char filter[16] = {0};
+	qboolean showLocked = qtrue, showUnlocked = qtrue;
+	qboolean isLoggedIn = (client->pers.userName[0] != '\0');
+	int count = 0;
+	char styleString[32];
+	char timeStr[32];
+	unsigned int playerUnlocks = client->pers.unlocks;
+
+	// Parse locked/unlocked filter argument
+	if (trap->Argc() > 1) {
+		trap->Argv(1, filter, sizeof(filter));
+		Q_strlwr(filter);
+
+		if (!Q_stricmp(filter, "locked") || !Q_stricmp(filter, "l")) {
+			showUnlocked = qfalse;
+		} else if (!Q_stricmp(filter, "unlocked") || !Q_stricmp(filter, "u")) {
+			showLocked = qfalse;
+		}
+	}
+
+	// Header
+	if (!isLoggedIn) {
+		trap->SendServerCommand(ent - g_entities, "print \"^5Cosmetic unlock requirements (^3not logged in^7):\n\"");
+	} else if (!showLocked) {
+		trap->SendServerCommand(ent - g_entities, "print \"^5Your unlocked cosmetics:\n\"");
+	} else if (!showUnlocked) {
+		trap->SendServerCommand(ent - g_entities, "print \"^5Locked cosmetics:\n\"");
+	} else {
+		trap->SendServerCommand(ent - g_entities, "print \"^5Cosmetic unlocks:\n\"");
+	}
+
+	// Loop through all cosmetics
+	for (i = 0; i < MAX_COSMETIC_UNLOCKS; i++) {
+		qboolean hasUnlock = isLoggedIn && (playerUnlocks & (1 << i));
+		qboolean found = qfalse;
+		char *colorCode;
+		char output[256];
+
+		// Apply filter
+		if (hasUnlock && !showUnlocked) continue;
+		if (!hasUnlock && !showLocked) continue;
+
+		// Determine color: Green = unlocked, Yellow = locked
+		colorCode = hasUnlock ? "^2" : "^3";
+
+		// Find unlock requirement
+		for (j = 0; j < MAX_COSMETIC_UNLOCKS; j++) {
+			if (cosmeticUnlocks[j].bitvalue == i && cosmeticUnlocks[j].active) {
+				found = qtrue;
+				IntegerToRaceName(cosmeticUnlocks[j].style, styleString, sizeof(styleString));
+
+				// Format output
+				if (cosmeticUnlocks[j].duration) {
+					TimeToString(cosmeticUnlocks[j].duration, timeStr, sizeof(timeStr));
+					Com_sprintf(output, sizeof(output),
+						"print \"^7%2d %s %s(requires %s %s in under %s)\n\"",
+						i, cosmeticNames[i], colorCode,
+						cosmeticUnlocks[j].mapname, styleString, timeStr);
+				} else {
+					Com_sprintf(output, sizeof(output),
+						"print \"^7%2d %s %s(requires %s %s)\n\"",
+						i, cosmeticNames[i], colorCode,
+						cosmeticUnlocks[j].mapname, styleString);
+				}
+
+				trap->SendServerCommand(ent - g_entities, output);
+				count++;
+				break;
+			}
+		}
+
+		// If no unlock requirement found, show cosmetic anyway (if logged out or it matches filter)
+		if (!found) {
+			if (!isLoggedIn || (hasUnlock && showUnlocked)) {
+				Com_sprintf(output, sizeof(output),
+					"print \"^7%2d %s%s\n\"",
+					i, cosmeticNames[i], !isLoggedIn ? " ^3(no requirement set)" : "");
+				trap->SendServerCommand(ent - g_entities, output);
+				count++;
+			}
+		}
+	}
+
+	// Footer
+	if (count == 0) {
+		if (!showLocked) {
+			trap->SendServerCommand(ent - g_entities, "print \"^3You haven't unlocked any cosmetics yet.\n\"");
+		} else if (!showUnlocked) {
+			trap->SendServerCommand(ent - g_entities, "print \"^2You've unlocked all cosmetics!\n\"");
+		}
+	}
+
+	trap->SendServerCommand(ent - g_entities, "print \"^7Type ^3/cosmetics [id]^7 to apply an unlocked cosmetic.\n\"");
+	trap->SendServerCommand(ent - g_entities, "print \"^7Type ^3/unlocks [locked/unlocked] ^7 to filter unlocks. /ul [u/l] also works as a shorthand.\n\"");
 }
 
 void StripWhitespace(char *s);
