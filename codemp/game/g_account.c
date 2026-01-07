@@ -1694,6 +1694,8 @@ void PrintRaceTime(char *username, char *playername, char *message, char *style,
 		// Q_strncpyz(privateTimeStr, timeStr, sizeof(privateTimeStr));
 		trap->SendServerCommand(clientNum, va("cp \"Your time: %s\n\n\n\n\n\n\n\n\n\n\"", timeStr));
         Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
+		topspeed = 0;
+		average = 0;
     }
 
 	trap->SendServerCommand( -1, va("print \"%s in ^3%-12s^%i max:^3%-10i^%i avg:^3%-10i^%i style:^3%-10s^%i by ^%i%s %s^7\n\"",
@@ -4829,7 +4831,7 @@ void Cmd_AccountStats_f(gentity_t *ent) { //Should i bother to cache player stat
 					if (!SC_IsTimeSecret( (char*)sqlite3_column_text(stmt, 0) )) {
 						TimeToString(sqlite3_column_int(stmt, 4), timeStr, sizeof(timeStr));
 					} else {
-						Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
+						Q_strncpyz(timeStr	, "SECRET", sizeof(timeStr));
 					}
 
 					getDateTime(sqlite3_column_int(stmt, 5), dateStr, sizeof(dateStr));
@@ -5769,6 +5771,7 @@ void Cmd_DFFind_f(gentity_t *ent) {
 		sqlite3_stmt * stmt;
 		int s;
 		char dateStr[64] = {0}, dateStrColored[64] = {0}, timeStr[32], msg[1024-128] = {0};
+		int topspeed, average;
 		time_t	rawtime;
 
 		CALL_SQLITE (open (LOCAL_DB_PATH, & db));
@@ -5832,8 +5835,12 @@ void Cmd_DFFind_f(gentity_t *ent) {
 				// blank out time if course is secret
 				if (!SC_IsTimeSecret( fullCourseName )) {
 					TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr));
+					topspeed = sqlite3_column_int(stmt, 2);
+					average = sqlite3_column_int(stmt, 3);
 				} else {
 					Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
+					topspeed = 0;
+					average = 0;
 				}
 				
 				getDateTime(sqlite3_column_int(stmt, 4), dateStr, sizeof(dateStr));
@@ -5843,7 +5850,7 @@ void Cmd_DFFind_f(gentity_t *ent) {
 				else {
 					Q_strncpyz(dateStrColored, dateStr, sizeof(dateStrColored));
 				}
-				tmpMsg = va("    ^3%-8i %-12s %-11i %-12i %s\n", sqlite3_column_int(stmt, 0), timeStr, sqlite3_column_int(stmt, 2), sqlite3_column_int(stmt, 3), dateStrColored);
+				tmpMsg = va("    ^3%-8i %-12s %-11i %-12i %s\n", sqlite3_column_int(stmt, 0), timeStr, topspeed, average, dateStrColored);
 				if (strlen(msg) + strlen(tmpMsg) >= sizeof( msg)) {
 					trap->SendServerCommand( ent-g_entities, va("print \"%s\"", msg));
 					msg[0] = '\0';
@@ -6568,6 +6575,7 @@ void Cmd_DFTop10_f(gentity_t *ent) {
 		int row = 1;
 		int s;
 		char dateStr[64] = {0}, dateStrColored[64] = {0}, timeStr[32], msg[1024-128] = {0};
+		int topspeed, average;
 		time_t	rawtime;
 
 		CALL_SQLITE (open (LOCAL_DB_PATH, & db));
@@ -6632,8 +6640,12 @@ void Cmd_DFTop10_f(gentity_t *ent) {
 				// blank out time if course is secret
 				if (!SC_IsTimeSecret( fullCourseName ) || !Q_stricmp(ent->client->pers.userName, (char*)sqlite3_column_text(stmt, 0))) {
 					TimeToString(sqlite3_column_int(stmt, 1), timeStr, sizeof(timeStr));
+					topspeed = sqlite3_column_int(stmt, 2);
+					average = sqlite3_column_int(stmt, 3);
 				} else {
 					Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
+					topspeed = 0;
+					average = 0;
 				}
 				
 				getDateTime(sqlite3_column_int(stmt, 4), dateStr, sizeof(dateStr));
@@ -6646,7 +6658,7 @@ void Cmd_DFTop10_f(gentity_t *ent) {
 				//if (sqlite3_column_int(stmt, 5) == 1) //temp, make flagged runs red until we can figure out how to handle them
 					//tmpMsg = va("^5%2i^3: ^3%-18s ^1%-12s ^3%-11i ^3%-12i %s\n", row+start, sqlite3_column_text(stmt, 0), timeStr, sqlite3_column_int(stmt, 2), sqlite3_column_int(stmt, 3), dateStrColored);
 				//else
-					tmpMsg = va("^5%2i^3: ^3%-18s ^3%-12s ^3%-11i ^3%-12i %s\n", row + start, sqlite3_column_text(stmt, 0), timeStr, sqlite3_column_int(stmt, 2), sqlite3_column_int(stmt, 3), dateStrColored);
+					tmpMsg = va("^5%2i^3: ^3%-18s ^3%-12s ^3%-11i ^3%-12i %s\n", row + start, sqlite3_column_text(stmt, 0), timeStr, topspeed, average, dateStrColored);
 				if (strlen(msg) + strlen(tmpMsg) >= sizeof( msg)) {
 					trap->SendServerCommand( ent-g_entities, va("print \"%s\"", msg));
 					msg[0] = '\0';
