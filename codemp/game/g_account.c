@@ -8092,6 +8092,7 @@ static void SC_ArchiveExpiredCourseDemos(const char *coursename) {
 void SC_CleanupSecretCourses(void) {
     time_t currentTime;
     int i;
+    qboolean anyExpired = qfalse;
 
     time(&currentTime);
 
@@ -8100,8 +8101,14 @@ void SC_CleanupSecretCourses(void) {
         if (currentTime >= g_secretCourses[i].secret_until) {
             SC_LogExpiredSecretCourse(g_secretCourses[i].coursename);
             SC_ArchiveExpiredCourseDemos(g_secretCourses[i].coursename);
-            SC_RemoveSecretCourse(g_secretCourses[i].coursename, qtrue);
+            SC_RemoveSecretCourse(g_secretCourses[i].coursename, qtrue, qfalse);
+            anyExpired = qtrue;
         }
+    }
+
+    // Reload in-memory array once at the end if any courses were expired
+    if (anyExpired) {
+        SC_LoadSecretCourses();
     }
 }
 
@@ -8214,7 +8221,7 @@ void SC_AddSecretCourse(const char *coursename, time_t secret_until)
 	trap->Print("--SCLOG-START-- COURSE_ADDED: %s | %d --SCLOG-END--\n", coursename, secret_until);
 }
 
-void SC_RemoveSecretCourse(const char *coursename, qboolean suppressSCLog)
+void SC_RemoveSecretCourse(const char *coursename, qboolean suppressSCLog, qboolean reloadAfter)
 {
 	sqlite3 *db;
 	char *sql;
@@ -8246,7 +8253,9 @@ void SC_RemoveSecretCourse(const char *coursename, qboolean suppressSCLog)
 	}
 
 	// Reload the memory array to reflect the change
-	SC_LoadSecretCourses();
+	if (reloadAfter) {
+		SC_LoadSecretCourses();
+	}
 }
 
 // SC Admin commands
@@ -8398,7 +8407,7 @@ void SC_Cmd_RemoveSecret_f(gentity_t *ent) {
     CALL_SQLITE(close(db));
 
     // Remove from database
-    SC_RemoveSecretCourse(fullCourseName, qfalse);
+    SC_RemoveSecretCourse(fullCourseName, qfalse, qtrue);
 
     trap->SendServerCommand(ent - g_entities, 
         va("print \"Secret course removed: ^3%s^7\n\"", fullCourseName));
