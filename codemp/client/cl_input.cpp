@@ -1446,7 +1446,7 @@ void CL_CreateNewCommands( void ) {
 	const int REAL_CMD_MASK = (cl_commandsize->integer >= 4 && cl_commandsize->integer <= 512) ? (cl_commandsize->integer - 1) : (CMD_MASK);//Loda - FPS UNLOCK ENGINE
 
 	// no need to create usercmds until we have a gamestate
-	if ( cls.state < CA_PRIMED )
+	if ( cls.state < CA_PRIMED || cl_nomove->integer)
 		return;
 
 	frame_msec = com_frameTime - old_com_frameTime;
@@ -1605,6 +1605,9 @@ void CL_WritePacket( void ) {
 	if ( count > MAX_PACKET_USERCMDS ) {
 		count = MAX_PACKET_USERCMDS;
 		Com_Printf("MAX_PACKET_USERCMDS\n");
+	}
+	if (cl_nomove->integer) {
+		count = 0;
 	}
 	if ( count >= 1 ) {
 		const int REAL_CMD_MASK = (cl_commandsize->integer >= 4 && cl_commandsize->integer <= 512) ? (cl_commandsize->integer - 1) : (CMD_MASK);//Loda - FPS UNLOCK ENGINE
@@ -1825,6 +1828,7 @@ void CL_InitInput( void ) {
 	Cmd_AddCommandList( inputCmds );
 
 	cl_nodelta = Cvar_Get ("cl_nodelta", "0", 0);
+	cl_nomove = Cvar_Get ("cl_nomove", "0", 0);
 	cl_debugMove = Cvar_Get ("cl_debugMove", "0", 0);
 
 	cl_idrive = Cvar_Get ("cl_idrive", "0", CVAR_ARCHIVE);//JAPRO ENGINE
