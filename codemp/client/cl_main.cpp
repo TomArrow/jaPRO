@@ -43,6 +43,7 @@ cvar_t *cl_name;
 cvar_t	*cl_renderer;
 
 cvar_t	*cl_nodelta;
+cvar_t	*cl_nomove;
 cvar_t	*cl_debugMove;
 
 cvar_t	*cl_noprint;

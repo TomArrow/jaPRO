@@ -803,7 +803,7 @@ void Hunk_Clear( void ) {
 	VM_Clear();
 
 //See if any ghoul2 stuff was leaked, at this point it should be all cleaned up.
-#ifdef _FULL_G2_LEAK_CHECKING
+#ifdef _FULL_G2_LEAK_CHECKING // any difference here with dynamic hunk?
 	assert(g_Ghoul2Allocations == 0 && g_G2ClientAlloc == 0 && g_G2ServerAlloc == 0);
 	if (g_Ghoul2Allocations)
 	{
