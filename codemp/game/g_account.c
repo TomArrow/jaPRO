@@ -1690,7 +1690,7 @@ void PrintRaceTime(char *username, char *playername, char *message, char *style,
     
 	SC_ConstructFullCourseName(fullCourseName, sizeof(fullCourseName), message);
 
-	msgTemplate = "print \"%s in ^3%-12s^%i max:^3%-10i^%i avg:^3%-10i^%i style:^3%-10s^%i by ^%i%s %s^7\n\" %s"; // last %s is for msgType, a hidden extra argument to the print command, indicating what kind of raceprint we are looking at (secret visible, secret hidden, normal)
+	msgTemplate = "print \"%s in ^3%-12s^%i max:^3%-10i^%i avg:^3%-10i^%i style:^3%-10s^%i by ^%i%s %s%s^7\n\" %s"; // last %s is for msgType, a hidden extra argument to the print command, indicating what kind of raceprint we are looking at (secret visible, secret hidden, normal)
 
     // blank out time if course is secret
     if (SC_IsTimeSecret(fullCourseName)) {
@@ -1698,7 +1698,7 @@ void PrintRaceTime(char *username, char *playername, char *message, char *style,
 		// Q_strncpyz(privateTimeStr, timeStr, sizeof(privateTimeStr));
 		trap->SendServerCommand(clientNum, va("cp \"Your time: %s\n\n\n\n\n\n\n\n\n\n\"", timeStr));
 		trap->SendServerCommand(clientNum, va(msgTemplate,
-			messageStr, timeStr, color, topspeed, color, average, color, style, color, nameColor, nameStr, awardString, "dffinish_japro_secret_visible"));
+			messageStr, timeStr, color, topspeed, color, average, color, style, color, nameColor, nameStr, awardString, " ^3(SECRET)", "dffinish_japro_secret_visible"));
         Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
 		topspeed = 0;
 		average = 0;
@@ -1707,7 +1707,7 @@ void PrintRaceTime(char *username, char *playername, char *message, char *style,
     }
 
 	G_SendServerCommandExcept( msgClientExcept, va(msgTemplate,
-				messageStr, timeStr, color, topspeed, color, average, color, style, color, nameColor, nameStr, awardString, msgType));
+				messageStr, timeStr, color, topspeed, color, average, color, style, color, nameColor, nameStr, awardString, "", msgType));
 }
 
 void G_UpdatePlaytime(sqlite3 *db, char *username, int seconds ) {
