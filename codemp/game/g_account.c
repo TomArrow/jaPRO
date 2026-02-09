@@ -1591,6 +1591,8 @@ void SC_ConstructFullCourseName(char *fullCourseName, size_t bufferSize, const c
 void PrintRaceTime(char *username, char *playername, char *message, char *style, int topspeed, int average, char *timeStr, int clientNum, int season_newRank, qboolean spb, int global_newRank, qboolean loggedin, qboolean valid, int season_oldRank, int global_oldRank, float addedScore, int awesomenoise, int worldrecordnoise) {
 	int nameColor, color;
 	char awardString[28] = {0}, messageStr[64] = {0}, nameStr[32] = {0};
+	int msgClientExcept = -1;
+	const char* msgTemplate = "", *msgType = "dffinish_japro_ranked";
 
 	//Com_Printf("SOldrank %i SNewrank %i GOldrank %i GNewrank %i Addscore %.1f\n", season_oldRank, season_newRank, global_oldRank, global_newRank, addedScore);
 
@@ -1687,19 +1689,25 @@ void PrintRaceTime(char *username, char *playername, char *message, char *style,
 	char fullCourseName[40] = {0};
     
 	SC_ConstructFullCourseName(fullCourseName, sizeof(fullCourseName), message);
-    
+
+	msgTemplate = "print \"%s in ^3%-12s^%i max:^3%-10i^%i avg:^3%-10i^%i style:^3%-10s^%i by ^%i%s %s^7\n\" %s"; // last %s is for msgType, a hidden extra argument to the print command, indicating what kind of raceprint we are looking at (secret visible, secret hidden, normal)
+
     // blank out time if course is secret
     if (SC_IsTimeSecret(fullCourseName)) {
 		// char privateTimeStr[32];
 		// Q_strncpyz(privateTimeStr, timeStr, sizeof(privateTimeStr));
 		trap->SendServerCommand(clientNum, va("cp \"Your time: %s\n\n\n\n\n\n\n\n\n\n\"", timeStr));
+		trap->SendServerCommand(clientNum, va(msgTemplate,
+			messageStr, timeStr, color, topspeed, color, average, color, style, color, nameColor, nameStr, awardString, "dffinish_japro_secret_visible"));
         Q_strncpyz(timeStr, "SECRET", sizeof(timeStr));
 		topspeed = 0;
 		average = 0;
+		msgClientExcept = clientNum;
+		msgType = "dffinish_japro_secret_hidden";
     }
 
-	trap->SendServerCommand( -1, va("print \"%s in ^3%-12s^%i max:^3%-10i^%i avg:^3%-10i^%i style:^3%-10s^%i by ^%i%s %s^7\n\"",
-				messageStr, timeStr, color, topspeed, color, average, color, style, color, nameColor, nameStr, awardString));
+	G_SendServerCommandExcept( msgClientExcept, va(msgTemplate,
+				messageStr, timeStr, color, topspeed, color, average, color, style, color, nameColor, nameStr, awardString, msgType));
 }
 
 void G_UpdatePlaytime(sqlite3 *db, char *username, int seconds ) {
