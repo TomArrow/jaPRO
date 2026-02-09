@@ -331,6 +331,8 @@ extern	cvar_t	*sv_demoPreRecordKeyframeDistance;
 extern	cvar_t	*sv_demoWriteMeta;
 #endif
 
+extern	cvar_t	*sv_specAllEnts;
+
 extern	cvar_t	*sv_snapShotDuelCull;
 
 extern	cvar_t	*sv_pingFix;

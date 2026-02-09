@@ -2526,6 +2526,15 @@ void G_UpdateClientBroadcasts( gentity_t *self ) {
 			continue;
 		}
 
+		if ( self->client->pers.noFollow ) {
+			if (G_AdminAllowed(other, JAPRO_ACCOUNTFLAG_A_SEEHIDDEN, qfalse, qfalse, NULL)) {
+				send = qtrue;
+			}
+			else {
+				continue;
+			}
+		}
+
 		if (g_removeSpectatorPortals.integer && other->client->sess.sessionTeam == TEAM_SPECTATOR) {
 			send = qtrue;
 		}
