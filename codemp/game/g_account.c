@@ -1592,7 +1592,7 @@ void PrintRaceTime(char *username, char *playername, char *message, char *style,
 	int nameColor, color;
 	char awardString[28] = {0}, messageStr[64] = {0}, nameStr[32] = {0};
 	int msgClientExcept = -1;
-	const char* msgTemplate = "", *msgType = "dffinish_japro_ranked";
+	const char* msgTemplate = "", *msgType = "dffinish_japro_normal";
 
 	//Com_Printf("SOldrank %i SNewrank %i GOldrank %i GNewrank %i Addscore %.1f\n", season_oldRank, season_newRank, global_oldRank, global_newRank, addedScore);
 
@@ -1625,12 +1625,18 @@ void PrintRaceTime(char *username, char *playername, char *message, char *style,
 	else if (nameColor > 7 || nameColor == 5)
 		nameColor = 7;
 
-	if (valid && loggedin)
+	if (valid && loggedin) {
 		color = 5;
-	else if (valid)
+		msgType = "dffinish_japro_validranked";
+	}
+	else if (valid) {
 		color = 2;
-	else
+		msgType = "dffinish_japro_valid";
+	}
+	else {
 		color = 1;
+		msgType = "dffinish_japro_invalid";
+	}
 
 	if (username)
 		Com_sprintf(nameStr, sizeof(nameStr), "%s", username);
