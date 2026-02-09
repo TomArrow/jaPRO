@@ -7001,11 +7001,14 @@ static void Cmd_Hide_f(gentity_t *ent)
 
 	if (ent->client->sess.raceMode && g_allowNoFollow.integer > 1) { // > 1 makes them invis ingame as well if racemode
 		if (ent->client->pers.noFollow) {
-			ent->r.svFlags |= SVF_SINGLECLIENT;
-			ent->r.singleClient = ent->s.number;
+			// change: we can have this sent to people with "see hidden" rights as well. this flag hides from everyone except ppl set in r.broadcastClients.
+			// we update this in G_UpdateClientBroadcasts
+			ent->r.svFlags |= SVF_BROADCASTCLIENTS; 
+			//ent->r.singleClient = ent->s.number;
 		}
-		else
-			ent->r.svFlags &= ~SVF_SINGLECLIENT;
+		else {
+			ent->r.svFlags &= ~SVF_BROADCASTCLIENTS;
+		}
 	}
 
 	if (ent->client->pers.noFollow)
