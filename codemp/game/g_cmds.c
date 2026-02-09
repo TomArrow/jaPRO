@@ -7715,7 +7715,7 @@ void Cmd_Race_f(gentity_t *ent)
 
 			ent->client->pers.noFollow = qfalse;
 			ent->client->pers.practice = qfalse;
-			ent->r.svFlags &= ~SVF_SINGLECLIENT; //ehh?
+			ent->r.svFlags &= ~SVF_BROADCASTCLIENTS; //ehh?
 			ent->s.weapon = WP_SABER; //Dont drop our weapon
 			Cmd_ForceChanged_f(ent);//Make sure their jump level is valid.. if leaving racemode :S
 
@@ -7738,7 +7738,7 @@ void Cmd_Race_f(gentity_t *ent)
 		ent->client->sess.raceMode = qfalse;
 		ent->client->pers.noFollow = qfalse;
 		ent->client->pers.practice = qfalse;
-		ent->r.svFlags &= ~SVF_SINGLECLIENT; //ehh?
+		ent->r.svFlags &= ~SVF_BROADCASTCLIENTS; //ehh?
 		ent->s.weapon = WP_SABER; //Dont drop our weapon
 		Cmd_ForceChanged_f(ent);//Make sure their jump level is valid.. if leaving racemode :S
 		trap->SendServerCommand(ent-g_entities, "print \"^5Race mode toggled off.\n\"");

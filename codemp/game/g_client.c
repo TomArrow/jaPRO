@@ -2953,7 +2953,7 @@ char *ClientConnect( int clientNum, qboolean firstTime, qboolean isBot ) {
 		ClientDisconnect( clientNum );
 	}
 
-	ent->r.svFlags &= ~SVF_SINGLECLIENT; //ehh?
+	ent->r.svFlags &= ~SVF_BROADCASTCLIENTS; //ehh?
 
 	// they can connect
 	client = &level.clients[ clientNum ];
@@ -3222,7 +3222,7 @@ void ClientBegin( int clientNum, qboolean allowTeamReset ) {
 	client->ps.persistant[PERS_CAMERA_SETTINGS] = client->pers.cameraSettings;
 
 	client->pers.noFollow = qfalse;
-	ent->r.svFlags &= ~SVF_SINGLECLIENT;
+	ent->r.svFlags &= ~SVF_BROADCASTCLIENTS;
 
 	if ( ent->ghoul2 && ent->client )
 		ent->client->renderInfo.lastG2 = NULL; //update the renderinfo bolts next update.
