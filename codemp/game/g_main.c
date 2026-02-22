@@ -2632,6 +2632,33 @@ void CheckExitRules( void ) {
 	}
 }
 
+/*
+========================================================================
+
+HELPER FUNCTIONS
+
+========================================================================
+*/
+/*
+=================
+G_SendServerCommandExcept
+
+Like trap_SendServerCommand, but the clientNum specifies a client
+the command should NOT be sent to. The behavior of -1 is the same: broadcast.
+=================
+*/
+void G_SendServerCommandExcept(int clientNum, const char* text) {
+	int i;
+	if (clientNum == -1) {
+		trap->SendServerCommand(-1, text);
+		return;
+	}
+	for (i = 0; i < level.maxclients; i++) {
+		if (i == clientNum) continue;
+		// we could do more checks here for connected or ->inuse etc. but server engine actually just loops through all anyway and does checks later. so let's keep this consistent with the normal trap call that way.
+		trap->SendServerCommand(i, text);
+	}
+}
 
 
 /*

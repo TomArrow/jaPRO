@@ -85,6 +85,8 @@ cvar_t	*sv_demoPreRecordKeyframeDistance; // A demo can only start with a gamest
 cvar_t	*sv_demoWriteMeta; // Enables writing metadata to demos, which can be set by the server/game. This is invisible to normal clients and can be used for storing information about when the demo was recorded, start of the recording, and so on.
 #endif
 
+cvar_t	*sv_specAllEnts;
+
 cvar_t	*sv_snapShotDuelCull;
 
 cvar_t	*sv_pingFix;

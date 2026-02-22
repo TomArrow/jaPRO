@@ -7001,11 +7001,14 @@ static void Cmd_Hide_f(gentity_t *ent)
 
 	if (ent->client->sess.raceMode && g_allowNoFollow.integer > 1) { // > 1 makes them invis ingame as well if racemode
 		if (ent->client->pers.noFollow) {
-			ent->r.svFlags |= SVF_SINGLECLIENT;
-			ent->r.singleClient = ent->s.number;
+			// change: we can have this sent to people with "see hidden" rights as well. this flag hides from everyone except ppl set in r.broadcastClients.
+			// we update this in G_UpdateClientBroadcasts
+			ent->r.svFlags |= SVF_BROADCASTCLIENTS; 
+			//ent->r.singleClient = ent->s.number;
 		}
-		else
-			ent->r.svFlags &= ~SVF_SINGLECLIENT;
+		else {
+			ent->r.svFlags &= ~SVF_BROADCASTCLIENTS;
+		}
 	}
 
 	if (ent->client->pers.noFollow)
@@ -7712,7 +7715,7 @@ void Cmd_Race_f(gentity_t *ent)
 
 			ent->client->pers.noFollow = qfalse;
 			ent->client->pers.practice = qfalse;
-			ent->r.svFlags &= ~SVF_SINGLECLIENT; //ehh?
+			ent->r.svFlags &= ~SVF_BROADCASTCLIENTS; //ehh?
 			ent->s.weapon = WP_SABER; //Dont drop our weapon
 			Cmd_ForceChanged_f(ent);//Make sure their jump level is valid.. if leaving racemode :S
 
@@ -7735,7 +7738,7 @@ void Cmd_Race_f(gentity_t *ent)
 		ent->client->sess.raceMode = qfalse;
 		ent->client->pers.noFollow = qfalse;
 		ent->client->pers.practice = qfalse;
-		ent->r.svFlags &= ~SVF_SINGLECLIENT; //ehh?
+		ent->r.svFlags &= ~SVF_BROADCASTCLIENTS; //ehh?
 		ent->s.weapon = WP_SABER; //Dont drop our weapon
 		Cmd_ForceChanged_f(ent);//Make sure their jump level is valid.. if leaving racemode :S
 		trap->SendServerCommand(ent-g_entities, "print \"^5Race mode toggled off.\n\"");
