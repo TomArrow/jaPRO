@@ -5717,7 +5717,8 @@ void Cmd_Aminfo_f(gentity_t *ent)
 	Q_strcat(buf, sizeof(buf), "changepassword ");
 	Q_strcat(buf, sizeof(buf), "stats ");
 	Q_strcat(buf, sizeof(buf), "top ");
-	Q_strcat(buf, sizeof(buf), "whois");
+	Q_strcat(buf, sizeof(buf), "whois ");
+	Q_strcat(buf, sizeof(buf), "unlocks");
 	trap->SendServerCommand(ent-g_entities, va("print \"%s\n\"", buf));
 
 	if (g_allowRegistration.integer > 1) {
@@ -5780,6 +5781,7 @@ void Cmd_Aminfo_f(gentity_t *ent)
 		Q_strcat(buf, sizeof(buf), "haste ");
 		Q_strcat(buf, sizeof(buf), "hide ");
 		Q_strcat(buf, sizeof(buf), "practice ");
+		Q_strcat(buf, sizeof(buf), "maxforce ");
 		Q_strcat(buf, sizeof(buf), "launch ");
 		Q_strcat(buf, sizeof(buf), "ysal ");
 		Q_strcat(buf, sizeof(buf), "warpList ");
@@ -7223,6 +7225,48 @@ static void Cmd_Launch_f(gentity_t *ent)
 	ent->client->pers.stats.coopStarted = qtrue;
 }
 
+static void Cmd_MaxForce_f(gentity_t *ent)
+{
+	char arg[8];
+	int maxForce;
+
+	if (!ent->client)
+		return;
+
+	if (!ent->client->pers.practice) {
+		trap->SendServerCommand(ent - g_entities, "print \"You must be in practice mode to use this command.\n\"");
+		return;
+	}
+
+	if (trap->Argc() < 2) {
+		if (ent->client->pers.practiceMaxForce > 0)
+			trap->SendServerCommand(ent - g_entities, va("print \"Max force is set to %i. Use /maxforce 0 to disable.\n\"", ent->client->pers.practiceMaxForce));
+		else
+			trap->SendServerCommand(ent - g_entities, "print \"Max force is not limited (full 100). Use /maxforce <1-100> to limit.\n\"");
+		return;
+	}
+
+	trap->Argv(1, arg, sizeof(arg));
+	maxForce = atoi(arg);
+
+	if (maxForce < 0 || maxForce > 100) {
+		trap->SendServerCommand(ent - g_entities, "print \"Usage: /maxforce <0-100> (0 = no limit)\n\"");
+		return;
+	}
+
+	ent->client->pers.practiceMaxForce = maxForce;
+
+	if (maxForce > 0) {
+		ent->client->ps.fd.forcePowerMax = maxForce;
+		if (ent->client->ps.fd.forcePower > maxForce)
+			ent->client->ps.fd.forcePower = maxForce;
+		trap->SendServerCommand(ent - g_entities, va("print \"Max force set to %i.\n\"", maxForce));
+	} else {
+		ent->client->ps.fd.forcePowerMax = 100;
+		trap->SendServerCommand(ent - g_entities, "print \"Max force limit disabled (full 100).\n\"");
+	}
+}
+
 static void Cmd_Practice_f(gentity_t *ent)
 {
 	if (!ent->client)
@@ -7247,6 +7291,11 @@ static void Cmd_Practice_f(gentity_t *ent)
 	ent->client->pers.haste = qfalse;
 
 	if (ent->client->pers.practice) {
+		if (ent->client->pers.practiceMaxForce > 0) {
+			ent->client->ps.fd.forcePowerMax = ent->client->pers.practiceMaxForce;
+			if (ent->client->ps.fd.forcePower > ent->client->pers.practiceMaxForce)
+				ent->client->ps.fd.forcePower = ent->client->pers.practiceMaxForce;
+		}
 		if (ent->client->pers.stats.startTime || ent->client->pers.stats.startTimeFlag) {
 			trap->SendServerCommand(ent-g_entities, "print \"Practice mode enabled: timer reset.\n\"");
 			ResetPlayerTimers(ent, qtrue);
@@ -7258,6 +7307,7 @@ static void Cmd_Practice_f(gentity_t *ent)
 	}
 	else {
 		ent->client->ps.powerups[PW_YSALAMIRI] = 0;
+		ent->client->ps.fd.forcePowerMax = 100;
 		if (ent->client->pers.stats.startTime || ent->client->pers.stats.startTimeFlag) {
 			trap->SendServerCommand(ent-g_entities, "print \"Practice mode disabled: timer reset.\n\"");
 			ResetPlayerTimers(ent, qtrue);
@@ -9022,6 +9072,9 @@ command_t commands[] = {
 
 	{ "master",				Cmd_AddMaster_f,			CMD_NOINTERMISSION },
 	{ "masterList",			Cmd_ListMasters_f,			CMD_NOINTERMISSION },
+
+	{ "maxforce",			Cmd_MaxForce_f,				CMD_NOINTERMISSION },
+	{ "mf",					Cmd_MaxForce_f,				CMD_NOINTERMISSION },
 
 	{ "modversion",			Cmd_ModVersion_f,			0 },
 	{ "move",				Cmd_MovementStyle_f,		CMD_NOINTERMISSION},
