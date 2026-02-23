@@ -811,6 +811,30 @@ argv(0) noclip
 ==================
 */
 
+static qboolean DefragDoubleTapSafety(gentity_t *ent, doubleTapType_t type, const char *cmd) {
+	if (!g_defragKillSafetyMinSecs.integer) {
+		return qtrue;
+	}
+	if (!ent->client->sess.raceMode || ent->client->pers.practice || !ent->client->pers.stats.startTime ||
+		(level.time - g_defragKillSafetyMinSecs.integer * 1000) < ent->client->pers.stats.startTime) {
+		// not in an active run, in practice mode, or run hasn't reached the safety threshold yet
+		memset(&ent->client->pers.doubleTap, 0, sizeof(ent->client->pers.doubleTap));
+		return qtrue;
+	}
+	if (ent->client->pers.doubleTap.lastType == type &&
+		(level.time - 500) < ent->client->pers.doubleTap.lastTime &&
+		ent->client->pers.doubleTap.lastTime < level.time) {
+		// confirmed double-tap
+		memset(&ent->client->pers.doubleTap, 0, sizeof(ent->client->pers.doubleTap));
+		return qtrue;
+	}
+	trap->SendServerCommand(ent - g_entities, va("cp \"^3You are more than ^1%d ^3seconds into a run.\n^3Double-tap your ^7/%s^3 bind to confirm.\n\n\n\n\n\n\n\n\"",
+		g_defragKillSafetyMinSecs.integer, cmd));
+	ent->client->pers.doubleTap.lastType = type;
+	ent->client->pers.doubleTap.lastTime = level.time;
+	return qfalse;
+}
+
 void Cmd_Noclip_f( gentity_t *ent ) {
 	int allowed;
 	if (ent->client && ent->client->ps.duelInProgress && ent->client->pers.lastUserName[0]) {
@@ -845,6 +869,8 @@ void Cmd_Noclip_f( gentity_t *ent ) {
 			return;
 		}
 		if (trap->Argc() == 1) {
+			if (!DefragDoubleTapSafety(ent, DOUBLETAP_NOCLIP, "noclip"))
+				return;
 			if (ent->client->ps.m_iVehicleNum)
 				return;
 			trap->SendServerCommand(ent-g_entities, va("print \"%s\n\"", ent->client->noclip ? "noclip OFF" : "noclip ON"));
@@ -857,6 +883,8 @@ void Cmd_Noclip_f( gentity_t *ent ) {
 		}
 	}
 	else if (allowed == 2) { //Race only
+		if (!DefragDoubleTapSafety(ent, DOUBLETAP_NOCLIP, "noclip"))
+			return;
 		if (ent->client->ps.m_iVehicleNum)
 			return;
 		trap->SendServerCommand(ent-g_entities, va("print \"%s\n\"", ent->client->noclip ? "noclip OFF" : "noclip ON"));
@@ -1011,6 +1039,9 @@ void Cmd_Kill_f( gentity_t *ent ) {
 		trap->SendServerCommand(ent - g_entities, va("print \"%s\n\"", G_GetStringEdString("MP_SVGAME", "ATTEMPTDUELKILL")));
 		return;
 	}
+
+	if (!DefragDoubleTapSafety(ent, DOUBLETAP_KILL, "kill"))
+		return;
 
 	G_Kill( ent );
 }
@@ -7541,6 +7572,8 @@ void Cmd_Amtele_f(gentity_t *ent)
 
 		if (trap->Argc() == 1)//Amtele to telemark
 		{
+			if (!DefragDoubleTapSafety(ent, DOUBLETAP_TELEPORT, "amtele"))
+				return;
 			if (ent->client->pers.telemarkOrigin[0] != 0 || ent->client->pers.telemarkOrigin[1] != 0 || ent->client->pers.telemarkOrigin[2] != 0 || ent->client->pers.telemarkAngle != 0)
 			{
 				angles[YAW] = ent->client->pers.telemarkAngle;
@@ -7704,6 +7737,8 @@ void Cmd_Amtele_f(gentity_t *ent)
 
 	}
 	else if (allowed) { //Cheat or racemode
+		if (!DefragDoubleTapSafety(ent, DOUBLETAP_TELEPORT, "amtele"))
+			return;
 		Cmd_RaceTele_f(ent, qfalse);
 		return;
 	}

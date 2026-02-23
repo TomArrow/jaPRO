@@ -341,6 +341,9 @@ XCVAR_DEF( g_newBotAITarget,			"-1",			NULL,				CVAR_ARCHIVE,									qfalse )
 XCVAR_DEF( bot_maxbots,					"0",			NULL,				CVAR_ARCHIVE,									qfalse )
 XCVAR_DEF( bot_team,					"0",			NULL,				CVAR_ARCHIVE,									qtrue )
 
+//JAPRO EXTENSIONS
+XCVAR_DEF( g_defragKillSafetyMinSecs,	"240",			NULL,				CVAR_ARCHIVE,									qtrue )
+
 //testing
 
 XCVAR_DEF( bot_s1,						"16",			NULL,				CVAR_ARCHIVE,									qtrue )

@@ -119,6 +119,7 @@
 #### Race/Accounts 
 	g_raceMode					0	//0=Noracemode, 1=forcedracemode, 2=player can toggle race mode with /racecommand.
 	g_allowRaceTele				0//1=Allow amtele in racemode. 2=Also allow noclip.
+	g_defragKillSafetyMinSecs	240 - in race mode, after starting a timer and having it run for g_defragKillSafetyMinSecs seconds, noclip, amtele and kill need to be double tapped to prevent accidental timer stop
 	g_allowRegistration			1=Allow registration. 2=also allow clan joining. 3=also allow clan creation
 	sv_pluginKey				0	
 	g_forceLogin				0//1=Force players to login in order to be ingame. 2=also block them from chatting until logging in.  3=also block them from renaming until logging in.

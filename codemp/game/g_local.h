@@ -794,6 +794,13 @@ typedef struct {//JAPRO - Serverside - Stats
 	int maxFpsAtStart;   // maxFPS value snapshot at timer start
 } stats_t;
 
+typedef enum doubleTapType_s {
+	DOUBLETAP_NONE,
+	DOUBLETAP_KILL,
+	DOUBLETAP_NOCLIP,
+	DOUBLETAP_TELEPORT,
+} doubleTapType_t;
+
 // client data that stays across multiple respawns, but is cleared
 // on each level change or team change at ClientBegin()
 typedef struct clientPersistant_s {
@@ -880,6 +887,11 @@ typedef struct clientPersistant_s {
 	short		activeCapRoute;
 
 	stats_t		stats;
+
+	struct {
+		doubleTapType_t lastType;
+		int				lastTime;
+	} doubleTap;
 } clientPersistant_t;
 
 typedef struct renderInfo_s
