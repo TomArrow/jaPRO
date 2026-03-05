@@ -7256,6 +7256,92 @@ static void Cmd_Launch_f(gentity_t *ent)
 	ent->client->pers.stats.coopStarted = qtrue;
 }
 
+static void Cmd_Savepos_f(gentity_t *ent)
+{
+	if (!ent->client)
+		return;
+
+	if (!ent->client->pers.practice) {
+		trap->SendServerCommand(ent - g_entities, "print \"savepos is only available in practice mode.\n\"");
+		return;
+	}
+
+	if (ent->client->noclip) {
+		trap->SendServerCommand(ent - g_entities, "print \"Can't save position during noclip.\n\"");
+		return;
+	}
+
+	if (ent->health <= 0) {
+		trap->SendServerCommand(ent - g_entities, "print \"You must be alive to save position.\n\"");
+		return;
+	}
+
+	VectorCopy(ent->client->ps.origin,     ent->client->pers.savePosPosition);
+	VectorCopy(ent->client->ps.velocity,   ent->client->pers.savePosVelocity);
+	VectorCopy(ent->client->ps.viewangles, ent->client->pers.savePosAngle);
+	ent->client->pers.savePosForce = ent->client->ps.fd.forcePower;
+
+	if (ent->client->pers.stats.startTime) {
+		ent->client->pers.savePosTimerElapsed        = trap->Milliseconds() - ent->client->pers.stats.startTime;
+		ent->client->pers.savePosLevelTimeElapsed    = level.time - ent->client->pers.stats.startLevelTime;
+		ent->client->pers.savePosStartLag            = ent->client->pers.startLag;
+		ent->client->pers.savePosDisplacement        = ent->client->pers.stats.displacement;
+		ent->client->pers.savePosDisplacementSamples = ent->client->pers.stats.displacementSamples;
+		ent->client->pers.savePosTopSpeed            = ent->client->pers.stats.topSpeed;
+		ent->client->pers.savePosCheckpoints         = ent->client->pers.stats.checkpoints;
+	} else {
+		ent->client->pers.savePosTimerElapsed = 0;
+	}
+
+	ent->client->pers.savePosUsed = qtrue;
+	trap->SendServerCommand(ent - g_entities, "print \"Position saved.\n\"");
+}
+
+static void Cmd_Respos_f(gentity_t *ent)
+{
+	if (!ent->client)
+		return;
+
+	if (!ent->client->pers.practice) {
+		trap->SendServerCommand(ent - g_entities, "print \"respos is only available in practice mode.\n\"");
+		return;
+	}
+
+	if (ent->client->noclip) {
+		trap->SendServerCommand(ent - g_entities, "print \"Can't restore position during noclip.\n\"");
+		return;
+	}
+
+	if (!ent->client->pers.savePosUsed) {
+		trap->SendServerCommand(ent - g_entities, "print \"Cannot restore position: none saved.\n\"");
+		return;
+	}
+
+	VectorCopy(ent->client->pers.savePosPosition, ent->client->ps.origin);
+	VectorCopy(ent->client->pers.savePosVelocity, ent->client->ps.velocity);
+	SetClientViewAngle(ent, ent->client->pers.savePosAngle);
+	ent->client->ps.eFlags ^= EF_TELEPORT_BIT;
+	ent->client->ps.fd.forcePower = ent->client->pers.savePosForce < ent->client->ps.fd.forcePowerMax ? ent->client->pers.savePosForce : ent->client->ps.fd.forcePowerMax;
+
+	if (ent->client->pers.savePosTimerElapsed) {
+		ent->client->pers.stats.startTime           = trap->Milliseconds() - ent->client->pers.savePosTimerElapsed;
+		ent->client->pers.stats.startLevelTime      = level.time - ent->client->pers.savePosLevelTimeElapsed;
+		ent->client->pers.startLag                  = ent->client->pers.savePosStartLag;
+		ent->client->pers.stats.displacement        = ent->client->pers.savePosDisplacement;
+		ent->client->pers.stats.displacementSamples = ent->client->pers.savePosDisplacementSamples;
+		ent->client->pers.stats.topSpeed            = ent->client->pers.savePosTopSpeed;
+		ent->client->pers.stats.checkpoints         = ent->client->pers.savePosCheckpoints;
+		ent->client->pers.stats.lastCheckpointTime  = 0;
+		ent->client->ps.duelTime                    = level.time - ent->client->pers.savePosLevelTimeElapsed;
+	} else {
+		// timer was not running at savepos — clear any run that started after the save
+		// (can't use ResetSpecificPlayerTimers: it clears velocity and overrides force for some styles)
+		ent->client->pers.stats.startTime      = 0;
+		ent->client->pers.stats.startLevelTime = 0;
+		ent->client->ps.duelTime               = 0;
+	}
+}
+
 static void Cmd_MaxForce_f(gentity_t *ent)
 {
 	char arg[8];
@@ -9136,6 +9222,8 @@ command_t commands[] = {
 
 	{ "removesecretcourse",	SC_Cmd_RemoveSecret_f,  	0 }, //SC
 
+	{ "respos",				Cmd_Respos_f,				CMD_NOINTERMISSION },
+
 	{ "rfind",				Cmd_DFFind_f,				CMD_NOINTERMISSION },
 	{ "rhardest",			Cmd_DFHardest_f,			CMD_NOINTERMISSION },
 	{ "rlatest",			Cmd_DFRecent_f,				CMD_NOINTERMISSION },
@@ -9148,6 +9236,7 @@ command_t commands[] = {
 	{ "rworst",				Cmd_DFTodo_f,				CMD_NOINTERMISSION },
 
 	{ "saber",				Cmd_Saber_f,				CMD_NOINTERMISSION },
+	{ "savepos",			Cmd_Savepos_f,				CMD_NOINTERMISSION },
 	{ "say",				Cmd_Say_f,					0 },
 	{ "say_team",			Cmd_SayTeam_f,				0 },
 	{ "say_team_mod",		Cmd_SayTeamMod_f,			0 },

@@ -892,6 +892,21 @@ typedef struct clientPersistant_s {
 		doubleTapType_t lastType;
 		int				lastTime;
 	} doubleTap;
+
+	// savepos/respos state (practice mode only)
+	qboolean	savePosUsed;
+	vec3_t		savePosPosition;
+	vec3_t		savePosVelocity;
+	vec3_t		savePosAngle;
+	int			savePosForce;
+	// timer snapshot at savepos time (savePosTimerElapsed == 0 means timer was not running)
+	int			savePosTimerElapsed;		// trap->Milliseconds() - stats.startTime
+	int			savePosLevelTimeElapsed;	// level.time - stats.startLevelTime
+	int			savePosStartLag;
+	float		savePosDisplacement;
+	int			savePosDisplacementSamples;
+	float		savePosTopSpeed;
+	int			savePosCheckpoints;
 } clientPersistant_t;
 
 typedef struct renderInfo_s
