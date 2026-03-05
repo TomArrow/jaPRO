@@ -40,6 +40,8 @@ extern int DuelCull(sharedEntity_t *a, sharedEntity_t *b);
 
 #define	MAX_ENT_CLUSTERS	16
 
+#define	MAX_SNAPSHOT_ENTITIES_SERVER	1023	// for clients that accept more than 256, and to prioritize better on very crowded maps. 1023 is the EOF, so can only do max of 1023 for sure
+
 typedef struct svEntity_s {
 	struct worldSector_s *worldSector;
 	struct svEntity_s *nextEntityInWorldSector;
@@ -207,6 +209,8 @@ typedef struct client_s {
 
 	int				oldServerTime;
 	qboolean		csUpdated[MAX_CONFIGSTRINGS];
+
+	int				customSnapEntCount; // client requested to not have the snapshot entity count limited to 256
 
 #ifdef DEDICATED
 	demoInfo_t		demo;
