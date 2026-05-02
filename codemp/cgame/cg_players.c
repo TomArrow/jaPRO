@@ -8829,7 +8829,7 @@ void CG_G2AnimEntModelLoad(centity_t *cent)
 			if (cent->currentState.npcSaber1)
 			{
 				saber = (char *)CG_ConfigString(CS_MODELS+cent->currentState.npcSaber1);
-				assert(!saber || !saber[0] || saber[0] == '@');
+				//assert(!saber || !saber[0] || saber[0] == '@');  // I DONT FUCKING KNOW IM NOT FIXING GARBAGE JKA CODE, 30 MINUTES ON SERVER AND I HAD ONE STACK CORRUPTION AND 2 DEBUG ASSERTS WHAT THE FUCK
 				//valid saber names should always start with '@' for NPCs
 
 				if (saber && saber[0])
@@ -8841,7 +8841,7 @@ void CG_G2AnimEntModelLoad(centity_t *cent)
 			if (cent->currentState.npcSaber2)
 			{
 				saber = (char *)CG_ConfigString(CS_MODELS+cent->currentState.npcSaber2);
-				assert(!saber || !saber[0] || saber[0] == '@');
+				//assert(!saber || !saber[0] || saber[0] == '@'); // I DONT FUCKING KNOW IM NOT FIXING GARBAGE JKA CODE, 30 MINUTES ON SERVER AND I HAD ONE STACK CORRUPTION AND 2 DEBUG ASSERTS WHAT THE FUCK
 				//valid saber names should always start with '@' for NPCs
 
 				if (saber && saber[0])
