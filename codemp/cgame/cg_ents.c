@@ -1749,8 +1749,11 @@ Ghoul2 Insert End
 
 		ScaleModelAxis(&ent);
 	}
-	if (cent->currentState.modelGhoul2 || cg_noFX.integer <= 3)
-		trap->R_AddRefEntityToScene (&ent);
+	if (cent->currentState.modelGhoul2 || cg_noFX.integer <= 3) {
+		if (ent.hModel || ent.ghoul2 || ent.customShader) { // what the fuck is this shit, why is it sending stuff without any model to the renderer sometimes
+			trap->R_AddRefEntityToScene(&ent);
+		}
+	}
 
 	if (cent->bolt3 == 999)
 	{ //this is an in-flight saber being rendered manually
