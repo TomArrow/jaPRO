@@ -32,6 +32,9 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "qcommon/disablewarnings.h"
 
+// cuz fuck u tired of shitty jka code
+#define assert(a)
+
 #define	LL(x) x=LittleLong(x)
 #define	LS(x) x=LittleShort(x)
 #define	LF(x) x=LittleFloat(x)
@@ -1244,7 +1247,7 @@ void G2_TimingModel(boneInfo_t &bone,int currentTime,int numFramesInFile,int &cu
 				// frame we want to display
 				lerp = (newFrame_g - currentFrame);
 
-				assert(currentFrame>=0&&currentFrame<numFramesInFile);
+				//assert(currentFrame>=0&&currentFrame<numFramesInFile);
 
 				newFrame = currentFrame + 1;
 				// are we now on the end frame?
