@@ -3,6 +3,7 @@ Author: Blackwolf
 Discord Integration with some usefull functions, have fun.
 You need to link the static library also 'discord_rpc.lib'.
 */
+#undef DISCORD
 #if defined DISCORD && !(_DEBUG)
 #include <discord_rpc.h>
 #include <discord_register.h>
@@ -445,7 +446,7 @@ void CL_DiscordInitialize(void)
 
 	Discord_UpdateHandlers( &handlers );
 
-	cl_discordRichPresenceSharePassword = Cvar_Get("cl_discordRichPresenceSharePassword", "1", CVAR_ARCHIVE_ND, "If set, sends password to Discord friends who request to join your game");
+	cl_discordRichPresenceSharePassword = Cvar_Get("cl_discordRichPresenceSharePassword", "0", CVAR_ARCHIVE_ND, "If set, sends password to Discord friends who request to join your game");
 
 	Q_strncpyz(cl.discord.hostName, "*Jedi*", sizeof(cl.discord.hostName));
 	Q_strncpyz(cl.discord.mapName, "menu", sizeof(cl.discord.mapName));

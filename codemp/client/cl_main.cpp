@@ -3398,7 +3398,7 @@ void CL_Init( void ) {
 	cl_drawRecording = Cvar_Get("cl_drawRecording", "1", CVAR_ARCHIVE);
 
 	// enable the ja_guid player identifier in userinfo by default in OpenJK
-	cl_enableGuid = Cvar_Get("cl_enableGuid", "1", CVAR_ARCHIVE_ND, "Enable GUID userinfo identifier" );
+	cl_enableGuid = Cvar_Get("cl_enableGuid", "0", CVAR_ARCHIVE_ND, "Enable GUID userinfo identifier" );
 	cl_guidServerUniq = Cvar_Get ("cl_guidServerUniq", "1", CVAR_ARCHIVE_ND, "Use a unique guid value per server" );
 
 	// ~ and `, as keys and characters
@@ -3461,7 +3461,7 @@ void CL_Init( void ) {
 	cl_pureBaseBypass = Cvar_Get("cl_pureBaseBypass", "1", CVAR_ARCHIVE, "Bypass pure checks on pure base servers, takes effect on next connect");
 
 #if defined(DISCORD) && !defined(_DEBUG)
-	cl_discordRichPresence = Cvar_Get("cl_discordRichPresence", "1", CVAR_ARCHIVE, "Allow/disallow sharing current game information on Discord profile status");
+	cl_discordRichPresence = Cvar_Get("cl_discordRichPresence", "0", CVAR_ARCHIVE, "Allow/disallow sharing current game information on Discord profile status");
 #endif
 
 	//

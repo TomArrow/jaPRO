@@ -22,6 +22,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 ===========================================================================
 */
 
+#ifdef DISCORD
+#undef DISCORD
+#endif
+
 #pragma once
 
 // q_shared.h -- included first by ALL program modules.
