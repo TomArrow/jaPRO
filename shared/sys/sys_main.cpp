@@ -40,6 +40,7 @@ cvar_t *com_unfocused;
 cvar_t *com_maxfps;
 cvar_t *com_maxfpsMinimized;
 cvar_t *com_maxfpsUnfocused;
+cvar_t *com_physicsFps;
 cvar_t *com_unpackLibraries;
 
 cvar_t *com_waitingForKey; // Waiting to bind a new key in the UI
@@ -175,6 +176,7 @@ void Sys_Init( void ) {
 #endif
 	com_maxfpsUnfocused = Cvar_Get( "com_maxfpsUnfocused", "0", CVAR_ARCHIVE_ND );
 	com_maxfpsMinimized = Cvar_Get( "com_maxfpsMinimized", "50", CVAR_ARCHIVE_ND );
+	com_physicsFps = Cvar_Get( "com_physicsFps", "0", CVAR_ARCHIVE_ND );
 
 	com_unpackLibraries = Cvar_Get( "com_unpackLibraries", "0", CVAR_INIT|CVAR_PROTECTED );
 

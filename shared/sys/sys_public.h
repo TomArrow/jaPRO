@@ -88,6 +88,7 @@ extern cvar_t *com_unfocused;
 extern cvar_t *com_maxfps;
 extern cvar_t *com_maxfpsMinimized;
 extern cvar_t *com_maxfpsUnfocused;
+extern cvar_t *com_physicsFps;
 
 extern cvar_t *com_waitingForKey; // Waiting to bind a new key in the UI
 
